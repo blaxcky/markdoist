@@ -21,8 +21,43 @@ Je Meilenstein: was geprüft wurde, wie, und Abweichungen von [V]-Vorschlägen a
 - Release-Signatur über ein eigenes Config-Plugin (`apps/mobile/plugins/withReleaseSigning.js`); ohne Keystore wird ein Release-Build nie mit dem Debug-Schlüssel signiert.
 - Eigene AVD `Markdoist_API_36` statt der vorhandenen AVD eines anderen Projekts.
 
-**Offen in M0:**
-- Drei schnelle Pushes → drei Releases, Rerun-No-op, Latest-Prüfung: nach dem ersten Push auf GitHub.
-- APK-Update im Emulator (gleiche Signatur, höherer versionCode) mit der Release-APK aus GitHub.
-- Obtainium-Auswahl im Emulator.
-- **Expo-MCP (Screenshot/Tap):** braucht die einmalige Anmeldung `pnpm --filter mobile exec expo login` durch dich (Plan 10.2). Bis dahin prüfe ich per `adb`-Screenshot und Logcat.
+**Auslieferung (GitHub):**
+- Repository `blaxcky/markdoist` (öffentlich, keine Lizenz), Secrets für den Keystore, Variable `MARKDOIST_CERT_SHA256`. Der lokale Remote heißt `markdoist`; der ältere private Remote `origin` (`blaxcky/local-first-todo`) bleibt unverändert.
+- Erstes Release **v0.1.1** (Commit `ea44b3f`): genau eine APK und ein RPM, Tag auf dem auslösenden Commit, Latest. **Rerun** des fertigen Laufs: Release-Job meldet „bereits veröffentlicht – nichts zu tun“, kein zweites Release.
+- **Expo-MCP (Emulator):** Screenshot und Tap (`choose-folder`, `tab-inbox`, Zeile, `priority-high`) gegen den Development-Build funktionieren, nachdem Metro mit `platform-tools` im `PATH` gestartet wurde.
+
+**Offen in M0:** drei schnelle Pushes → drei Releases; APK-Update im Emulator; Obtainium-Auswahl im Emulator.
+
+## M1 – Dateizugriff und frühe Abbruchtests
+
+- **Desktop** (`apps/desktop/src/main/fsAdapter.ts`): Temp-Datei + `fsync` + `rename` + Ordner-`fsync`; exklusive Neuanlage per `link()`; Verschieben per `link()` + Quellprüfung + `unlink`; Journal unter `~/.config/markdoist/journal/<ordner-hash>/`. 20 Vitest-Tests, darunter Abbruch an jeder Phase für Schreiben, Neuanlage, Papierkorb und Umbenennen (AK-22), dritter Inhalt wird nicht überschrieben, Unterordner/Symlinks/versteckte Dateien werden nicht gelesen (AK-28).
+- **Android** (`apps/mobile/modules/saf-storage`, Kotlin; `apps/mobile/src/storage/safAdapter.ts`): Ordnerwahl mit dauerhafter Freigabe nur für `com.android.externalstorage.documents`, Schreiben mit `"wt"` + `flush` + `sync` + Zurücklesen, Neuanlage mit `application/octet-stream` und Namensprüfung (`.md.txt` wird zurückbenannt), Journal und Schlüssel-Wert-Speicher im app-privaten Speicher. 21 Vitest-Tests mit simulierter SAF-Schicht (Abbruch an jeder Phase, voller Speicher, Journal nicht schreibbar, fehlende Freigabe).
+- **Emulator:** Ordnerwahl über den SAF-Dialog, Lesen, chirurgisches Schreiben (nur `priority` und `dateModified` geändert), keine Temp-Reste.
+- **[V]-Abweichungen:** Android verschiebt in den Papierkorb ausschließlich über den geprüften Weg Kopieren → Zurücklesen → Quelle erneut prüfen → Löschen; providerseitiges `moveDocument` wird nicht genutzt (einfacher, gleiche Garantien). Umbenennen nutzt `renameDocument` mit Namensprüfung.
+- **Noch nicht im Emulator geprüft:** Berechtigung nach Geräteneustart (AK-23), entzogene Freigabe während der Nutzung, gleichzeitige externe Änderung per adb während des Schreibens.
+
+## M2 – Dateiformat und Wiederherstellung
+
+- Chirurgisches Schreiben mit Selbstprüfung (Golden-Test AK-07), Lese-Standards und Diagnosen nach 3.2, Formatversion (höher = schreibgeschützt, AK-37), Dateinamen (AK-43), Papierkorb (AK-24), Undo-Journal (50 Einträge, überdauert Neustart), lokale Entwürfe (AK-36), vollständiger Abgleich (AK-34), Einlesen schreibt nie (AK-08/09), Konfliktvarianten (AK-11, AK-33). `packages/core` und `packages/app`: zusammen über 140 Vitest-Tests.
+
+## M3 – Datums- und Wiederholungskern
+
+- `RecurrenceEngine` über rrule.js, eigener Tokenizer mit Positivliste (AK-19), Serienzustand und alle Aktionen aus 5.4, Abschnittsarchiv (AK-29, AK-41), Completion-Kollision (AK-30), COUNT/UNTIL (AK-32), stabiles Einlesen (AK-16), Idempotenz (AK-15), Eigenschaftstest Historienreihenfolge (AK-14), Monatsenden gegen python-dateutil-Fixtures (23 Regeln, AK-17), Sommerzeit (AK-18), Heute-Matrix (AK-04/05), Suche/Filter (AK-25). Alle Kern-Tests laufen in vier Zeitzonen.
+- **[V]-Abweichung:** Die Regelvorschau läuft synchron statt in einem abbrechbaren Worker. Sie ist durch den rrule-Patch und den Suchhorizont begrenzt; gemessen: unmögliche Tagesregel ≤ 200 ms unter Hermes (Debug-Build), auf dem Desktop deutlich darunter. Ein Abbruch meldet „Berechnung zu aufwendig“, beendet nie eine Serie und schreibt nichts (AK-38).
+- **Noch offen:** Offset-Importe (`due` mit `Z`) im Zusammenspiel mit Serien (AK-18, Teil „Completion-Basen behalten ihren Aktionstag“ ist im Kern getestet).
+
+## M4 – Desktop-Oberfläche v1
+
+- Seitenleiste mit Zählern, Listen, Detail mit Feldern, CodeMirror-Editor und Vorschau (Checkboxen zeilengenau), Filter, Suche, Tastaturbedienung nach 4.5, hell/dunkel, Snackbar mit Undo, Probleme-Ansicht mit Übernahme und Konfliktdialog (Feldvergleich und Body-Diff), Papierkorb. **13 Playwright-E2E-Tests grün** (`pnpm e2e:desktop`, Testuhr 12.10.2026).
+
+## M5 – Android-Oberfläche v1 (Emulator)
+
+- Untere Navigation, Suche, Plus-Button, Ziehen zum Neueinlesen, Wischgesten (rechts erledigt, links Aktionen), native Datums-/Zeitwahl mit „Uhrzeit hinzufügen“, WebView-Vorschau mit Checkboxen, App-Verknüpfung „Neue Aufgabe“ (`shortcuts.xml`, registriert laut `dumpsys shortcut`; Deep-Link `markdoist://capture`).
+- **7 Maestro-Flows grün (Emulator, Development-Build)**: Ordnerwahl über den SAF-Dialog, Erfassung (AK-01), Verknüpfung/Deep-Link (AK-26), Wischen + Undo, Serie fortschreiben, Detail mit Autosave und Vorschau, Probleme (AK-09). Anschließende Dateiprüfung per adb (`apps/mobile/e2e/run.sh`). Testdaten werden relativ zum heutigen Datum erzeugt.
+- **Gefundene und behobene Fehler:** Wischrichtung (Gesture Handler 3 meldet die Bewegungsrichtung), Notiz unter der Tastatur.
+- **[V]-Abweichungen:** Farben als eigene Material-3-Palette statt `Color` aus `expo-router` (Expo Router ist laut Plan ausgeschlossen). Text innerhalb der WebView ist für Maestro nicht sichtbar; das Umschalten einer Checkbox in der Vorschau wurde per adb-Tap geprüft.
+- **Offen:** Maestro gegen die Release-APK; Update der installierten Release-APK durch eine höhere Version.
+
+## M6 – Wiederholungs-UI
+
+- Gemeinsames Formularmodell (`packages/app/src/ruleForm.ts`, Tests): einfache Optionen, Monatsende-Abfrage (29./30./31., 29.02.), Ende nie/Datum/Anzahl, Art Kalender/ab Erledigung, Bezugsfeld, Abstand, erweiterte RRULE-Eingabe mit Validierung, Vorschau der nächsten 10 Termine, deutsche Beschreibung, „ab jetzt neu zählen“. Editor auf Desktop (E2E: wöchentlich 5-mal) und Android. Historienansicht mit Archivabschnitten auf beiden Plattformen; „Serie beenden“, „wiederöffnen“, „Wiederholung entfernen“.
