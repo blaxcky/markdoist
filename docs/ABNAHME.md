@@ -26,7 +26,12 @@ Je Meilenstein: was geprüft wurde, wie, und Abweichungen von [V]-Vorschlägen a
 - Erstes Release **v0.1.1** (Commit `ea44b3f`): genau eine APK und ein RPM, Tag auf dem auslösenden Commit, Latest. **Rerun** des fertigen Laufs: Release-Job meldet „bereits veröffentlicht – nichts zu tun“, kein zweites Release.
 - **Expo-MCP (Emulator):** Screenshot und Tap (`choose-folder`, `tab-inbox`, Zeile, `priority-high`) gegen den Development-Build funktionieren, nachdem Metro mit `platform-tools` im `PATH` gestartet wurde.
 
-**Offen in M0:** drei schnelle Pushes → drei Releases; APK-Update im Emulator; Obtainium-Auswahl im Emulator.
+- **Drei schnelle Pushes** (3635449, 324cbb0, 119483a, je einzeln innerhalb weniger Sekunden): alle drei Läufe wurden in die Warteschlange aufgenommen, keiner ersetzt (`queue: max`); Lauf 2 → **v0.1.2** veröffentlicht.
+- **APK-Update (Emulator):** v0.1.1 aus GitHub installiert, dann v0.1.2 aus GitHub mit `adb install -r` darüber: Erfolg, versionCode 1 → 2, gleiche Signatur.
+- **Obtainium 1.7.0 (Emulator, offizielles x86_64-Release, SHA-256 geprüft):** Markdoist per Deep-Link `obtainium://app/<config>` mit `verifyLatestTag: true` eingetragen; zeigt v0.1.2 als installiert und aktuell.
+- **Laufzeit:** Der Android-Release-Build dauert mit Reanimated/Worklets, Screens und WebView für vier ABIs rund 25–30 Minuten.
+
+**Offen in M0:** verspätetes niedrigeres Release (Lauf 4 bewusst abgebrochen und nach v0.1.5 nachgeholt, muss `--latest=false` erhalten; Obtainium darf es nicht anbieten).
 
 ## M1 – Dateizugriff und frühe Abbruchtests
 
@@ -56,7 +61,8 @@ Je Meilenstein: was geprüft wurde, wie, und Abweichungen von [V]-Vorschlägen a
 - **7 Maestro-Flows grün (Emulator, Development-Build)**: Ordnerwahl über den SAF-Dialog, Erfassung (AK-01), Verknüpfung/Deep-Link (AK-26), Wischen + Undo, Serie fortschreiben, Detail mit Autosave und Vorschau, Probleme (AK-09). Anschließende Dateiprüfung per adb (`apps/mobile/e2e/run.sh`). Testdaten werden relativ zum heutigen Datum erzeugt.
 - **Gefundene und behobene Fehler:** Wischrichtung (Gesture Handler 3 meldet die Bewegungsrichtung), Notiz unter der Tastatur.
 - **[V]-Abweichungen:** Farben als eigene Material-3-Palette statt `Color` aus `expo-router` (Expo Router ist laut Plan ausgeschlossen). Text innerhalb der WebView ist für Maestro nicht sichtbar; das Umschalten einer Checkbox in der Vorschau wurde per adb-Tap geprüft.
-- **Offen:** Maestro gegen die Release-APK; Update der installierten Release-APK durch eine höhere Version.
+- **Release-APK v0.1.2 (Emulator):** alle 8 Maestro-Flows (inkl. Wiederholungseditor) und alle anschließenden Dateiprüfungen grün.
+- **AK-23 (Emulator):** nach `adb reboot` startet die App direkt mit der Aufgabenliste; die SAF-Freigabe blieb erhalten. Dateiname exakt `X.md`, keine Restbytes (Fake-Tests), externe Änderung beim Zurückwechseln: über den vollständigen Abgleich bei `AppState=active`.
 
 ## M6 – Wiederholungs-UI
 
