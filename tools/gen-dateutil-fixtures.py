@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""Erzeugt Golden-Fixtures mit python-dateutil (nur Entwicklung, Abschnitt 2.2).
+Aufruf: python3 tools/gen-dateutil-fixtures.py > packages/core/test/fixtures/dateutil.json"""
+import json
+from datetime import datetime
+from dateutil.rrule import rrulestr
+
+CASES = [
+    ("FREQ=DAILY", "2026-10-12"),
+    ("FREQ=DAILY;INTERVAL=3", "2026-10-12"),
+    ("FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR", "2026-10-12"),
+    ("FREQ=WEEKLY;BYDAY=MO", "2026-10-05"),
+    ("FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,TH", "2026-10-13"),
+    ("FREQ=WEEKLY;INTERVAL=2;BYDAY=SU;WKST=SU", "2026-10-11"),
+    ("FREQ=WEEKLY;INTERVAL=2;BYDAY=SU;WKST=MO", "2026-10-11"),
+    ("FREQ=MONTHLY;BYMONTHDAY=31", "2026-10-31"),
+    ("FREQ=MONTHLY;BYMONTHDAY=-1", "2026-10-31"),
+    ("FREQ=MONTHLY;BYMONTHDAY=28,29,30;BYSETPOS=-1", "2026-10-30"),
+    ("FREQ=MONTHLY;BYDAY=2TU", "2026-10-13"),
+    ("FREQ=MONTHLY;BYDAY=-1FR", "2026-10-30"),
+    ("FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=15", "2026-10-15"),
+    ("FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1", "2026-10-30"),
+    ("FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29", "2028-02-29"),
+    ("FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=-1", "2027-02-28"),
+    ("FREQ=YEARLY;BYYEARDAY=100", "2026-04-10"),
+    ("FREQ=YEARLY;BYWEEKNO=1;BYDAY=MO", "2026-12-28"),
+    ("FREQ=YEARLY;BYDAY=1MO;BYMONTH=9", "2026-09-07"),
+    ("FREQ=YEARLY;INTERVAL=2", "2026-10-12"),
+    ("FREQ=WEEKLY;BYDAY=MO;COUNT=5", "2026-10-12"),
+    ("FREQ=DAILY;UNTIL=20261020", "2026-10-12"),
+    ("FREQ=MONTHLY;BYDAY=FR;BYMONTHDAY=13", "2026-11-13"),
+]
+
+out = []
+for rule, start in CASES:
+    dt = datetime.strptime(start, "%Y-%m-%d")
+    r = rrulestr(rule, dtstart=dt)
+    dates = []
+    for d in r:
+        dates.append(d.strftime("%Y-%m-%d"))
+        if len(dates) >= 24:
+            break
+    out.append({"rule": rule, "start": start, "dates": dates})
+print(json.dumps(out, indent=1))
