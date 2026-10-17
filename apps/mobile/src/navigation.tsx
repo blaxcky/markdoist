@@ -16,6 +16,7 @@ import { SettingsScreen } from "./screens/settings-screen";
 import { RecurrenceScreen } from "./screens/recurrence-screen";
 import { useRepoState, systemClock } from "./repo";
 import { useTheme } from "./theme";
+import { filterActive, FilterProvider, FilterSheet, useFilter } from "./filter";
 
 export type Tabs = { Inbox: undefined; Today: undefined; All: undefined; Done: undefined };
 export type RootStack = {
@@ -42,6 +43,7 @@ function HeaderButtons() {
   const state = useRepoState();
   const c = useTheme();
   const problems = problemsView(state.index).length + state.recovery.length + state.drafts.filter((d) => !state.files.has(d.ref)).length;
+  const f = useFilter();
   const btn = (label: string, to: keyof RootStack, testID: string, color = c.fg) => (
     <Pressable onPress={() => nav.navigate(to as never)} hitSlop={8} testID={testID} accessibilityLabel={testID} style={{ paddingHorizontal: 10 }}>
       <Text style={{ fontSize: 20, color }}>{label}</Text>
@@ -50,6 +52,9 @@ function HeaderButtons() {
   return (
     <View style={{ flexDirection: "row", alignItems: "center" }}>
       {problems > 0 && btn(`⚠ ${problems}`, "Problems", "nav-problems", c.warn)}
+      <Pressable onPress={() => f.setOpen(true)} hitSlop={8} testID="nav-filter" accessibilityLabel="Filter und Sortierung" style={{ paddingHorizontal: 10 }}>
+        <Text style={{ fontSize: 20, color: filterActive(f.filter, f.sort) ? c.primary : c.fg }}>⏷</Text>
+      </Pressable>
       {btn("⌕", "Search", "nav-search")}
       {btn("⋮", "Settings", "nav-settings")}
     </View>
@@ -91,6 +96,20 @@ function TabsNav() {
 }
 
 export function RootNavigator() {
+  return (
+    <FilterProvider>
+      <RootStackNavigator />
+      <FilterSheetHost />
+    </FilterProvider>
+  );
+}
+
+function FilterSheetHost() {
+  const state = useRepoState();
+  return <FilterSheet today={state.index.today} />;
+}
+
+function RootStackNavigator() {
   const c = useTheme();
   const opts = { headerStyle: { backgroundColor: c.surface }, headerTintColor: c.fg, contentStyle: { backgroundColor: c.bg } };
   return (

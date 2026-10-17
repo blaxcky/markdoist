@@ -1,0 +1,21 @@
+# Filter (4.3): Priorität „hoch“ in „Alle“ zeigt nur passende Aufgaben; Zurücksetzen.
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-all
+- tapOn:
+    id: nav-filter
+- tapOn:
+    id: priority-hoch
+- tapOn:
+    id: filter-close
+- assertVisible: ".*Zahnarzttermin vereinbaren"
+- assertNotVisible: "Maestro Aufgabe"
+- tapOn:
+    id: nav-filter
+- tapOn:
+    id: filter-reset
+- tapOn:
+    id: filter-close
+- assertVisible: "Maestro Aufgabe"

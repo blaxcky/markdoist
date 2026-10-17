@@ -5,7 +5,8 @@ import { FlashList } from "@shopify/flash-list";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { T } from "@markdoist/app";
-import { allOpenView, describeOccurrence, doneView, inboxView, todayView, type TaskView } from "@markdoist/core";
+import { allOpenView, describeOccurrence, doneView, inboxView, matchesFilter, sortViews, todayView, type TaskView } from "@markdoist/core";
+import { useFilter } from "../filter";
 import { TaskRow } from "../components/task-row";
 import { ActionsSheet } from "../components/actions-sheet";
 import { useRepo, useRepoState, systemClock } from "../repo";
@@ -27,12 +28,18 @@ export function ListScreen({ kind }: { kind: ListKind }) {
   const c = useTheme();
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
   const [actions, setActions] = useState<TaskView | null>(null);
+  const { filter, sort } = useFilter();
   const idx = state.index;
   const tz = systemClock().timeZone;
 
   const items: Item[] = useMemo(() => {
     const tasks = (list: TaskView[], hint = false): Item[] =>
-      list.map((v) => ({ type: "task", key: v.task.ref, view: v, scheduledHint: hint && !!v.scheduled }));
+      sortViews(list.filter((v) => matchesFilter(v, filter, idx.today)), sort, tz).map((v) => ({
+        type: "task",
+        key: v.task.ref,
+        view: v,
+        scheduledHint: hint && !!v.scheduled,
+      }));
     switch (kind) {
       case "inbox":
         return tasks(inboxView(idx, tz));
@@ -40,8 +47,9 @@ export function ListScreen({ kind }: { kind: ListKind }) {
         const t = todayView(idx, tz);
         const out: Item[] = [];
         const sec = (title: string, list: TaskView[], hint = false) => {
-          if (!list.length) return;
-          out.push({ type: "header", key: `h-${title}`, title, count: list.length }, ...tasks(list, hint));
+          const items = tasks(list, hint);
+          if (!items.length) return;
+          out.push({ type: "header", key: `h-${title}`, title, count: items.length }, ...items);
         };
         sec(T.today.due, t.due, true);
         sec(T.today.plannedToday, t.plannedToday);
@@ -62,7 +70,7 @@ export function ListScreen({ kind }: { kind: ListKind }) {
         return out;
       }
     }
-  }, [idx, kind, tz]);
+  }, [idx, kind, tz, filter, sort]);
 
   const toggle = (v: TaskView) => {
     const done = v.task.fields.status === "done";
