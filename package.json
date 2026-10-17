@@ -13,7 +13,8 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "vitest run",
-    "test:tz": "node scripts/test-tz-matrix.mjs"
+    "test:tz": "node scripts/test-tz-matrix.mjs",
+    "e2e:desktop": "pnpm --filter desktop build && pnpm --filter desktop exec playwright test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

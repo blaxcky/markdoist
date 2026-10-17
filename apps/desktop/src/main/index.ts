@@ -64,8 +64,17 @@ function createWindow(): void {
   });
   win.webContents.on("will-navigate", (e) => e.preventDefault());
   win.on("focus", () => win?.webContents.send("app:focus"));
-  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else void win.loadFile(join(__dirname, "../renderer/index.html"));
+  // Testuhr nur für E2E-Tests (MARKDOIST_TEST_NOW=2026-10-12T10:00, MARKDOIST_TEST_TZ=Europe/Berlin).
+  const query: Record<string, string> = {};
+  if (process.env.MARKDOIST_TEST_NOW) {
+    query.now = process.env.MARKDOIST_TEST_NOW;
+    query.tz = process.env.MARKDOIST_TEST_TZ ?? "Europe/Berlin";
+  }
+  if (process.env.ELECTRON_RENDERER_URL) {
+    const u = new URL(process.env.ELECTRON_RENDERER_URL);
+    for (const [k, v] of Object.entries(query)) u.searchParams.set(k, v);
+    void win.loadURL(u.toString());
+  } else void win.loadFile(join(__dirname, "../renderer/index.html"), { query });
 }
 
 function registerIpc() {
