@@ -1,7 +1,8 @@
-# Priorität setzen, Notiz bearbeiten (Autosave), Checkbox in der WebView-Vorschau.
+# Priorität setzen, Notiz bearbeiten (Autosave), WebView-Vorschau öffnen.
+# Text in der WebView sieht Maestro nicht; Checkbox-Umschalten ist per adb-Tap geprüft (docs/ABNAHME.md).
 appId: de.markdoist.aufgaben
 ---
-- launchApp
+- runFlow: ../launch.yaml
 - tapOn:
     id: tab-inbox
 - tapOn: "Zahnarzttermin vereinbaren"
@@ -13,13 +14,15 @@ appId: de.markdoist.aufgaben
 - tapOn:
     id: editor
 - inputText: " Neu"
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: save-state
 - extendedWaitUntil:
     visible: "Gespeichert"
     timeout: 8000
 - tapOn:
     id: tab-preview
-- extendedWaitUntil:
-    visible: "Anrufen"
-    timeout: 8000
-- tapOn: "Anrufen"
+- assertVisible:
+    id: preview
 - back

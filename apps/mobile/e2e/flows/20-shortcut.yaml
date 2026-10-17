@@ -1,6 +1,7 @@
 # AK-26: App-Verknüpfung „Neue Aufgabe“ (Deep-Link markdoist://capture) öffnet die Erfassung.
 appId: de.markdoist.aufgaben
 ---
+- runFlow: ../launch.yaml
 - openLink: "markdoist://capture"
 - tapOn:
     id: capture-title

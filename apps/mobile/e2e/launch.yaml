@@ -1,0 +1,43 @@
+# Hilfsflow: App starten; im Development-Build über den Launcher mit Metro verbinden (MAESTRO_DEV=true).
+appId: de.markdoist.aufgaben
+---
+- launchApp:
+    stopApp: true
+- runFlow:
+    when:
+      true: ${MAESTRO_DEV == 'true'}
+    commands:
+      - runFlow:
+          when:
+            visible: "Development Build"
+          commands:
+            - runFlow:
+                when:
+                  visible: "http://.*:8081"
+                commands:
+                  - tapOn: "http://.*:8081"
+            - runFlow:
+                when:
+                  visible: "Connect"
+                commands:
+                  - tapOn: "http://"
+                  - inputText: "http://localhost:8081"
+                  - hideKeyboard
+                  - tapOn: "Connect"
+      - extendedWaitUntil:
+          notVisible: "Development Build"
+          timeout: 30000
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - runFlow:
+          when:
+            visible: "Runtime version.*"
+          commands:
+            - tapOn:
+                text: "Continue"
+                optional: true
+            - runFlow:
+                when:
+                  visible: "Runtime version.*"
+                commands:
+                  - pressKey: back

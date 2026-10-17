@@ -1,6 +1,6 @@
 // Detailansicht Android (4.4): Felder, Serie, Notiz mit Autosave und WebView-Vorschau.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Linking, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Linking, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { WebView } from "react-native-webview";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
@@ -166,6 +166,7 @@ export function DetailScreen() {
   })();
 
   return (
+    <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: c.bg }}>
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 60 }} keyboardShouldPersistTaps="handled" testID="detail">
       <TextInput
         value={title}
@@ -260,6 +261,7 @@ export function DetailScreen() {
         </View>
       )}
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

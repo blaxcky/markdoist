@@ -184,11 +184,12 @@ export class SafAdapter implements StorageAdapter {
 
   /** Neuanlage: exklusiver Name, MIME application/octet-stream, tatsächlichen Namen übernehmen. */
   async create(name: string, text: string): Promise<WriteResult> {
+    let j: Journal | null = null;
     try {
       await this.list("tasks");
       if (this.exists("tasks", name)) return { status: "exists", message: name };
       const ref = `tasks/${name}`;
-      const j = await this.begin("create", ref, ref, null, text, null);
+      j = await this.begin("create", ref, ref, null, text, null);
       const doc = await this.createChecked(this.rootDocId, name, j);
       if (doc.status !== "ok") return doc.result;
       this.hook("create", "after-create");
@@ -200,8 +201,14 @@ export class SafAdapter implements StorageAdapter {
       return { status: "ok", ref, name, hash: after };
     } catch (e) {
       if (e instanceof CrashSimulation) throw e;
+      await this.finishUntouched(j);
       return mapError(e);
     }
+  }
+
+  /** Fehler, bevor ein Dokument angelegt wurde: Vorgang abschließen statt Scheinfall zu melden. */
+  private async finishUntouched(j: Journal | null) {
+    if (j && j.dstUri === null) await this.finish(j).catch(() => {});
   }
 
   /** Legt ein Dokument an und stellt den exakten Namen sicher (`.md` darf nicht zu `.md.txt` werden). */
@@ -251,6 +258,7 @@ export class SafAdapter implements StorageAdapter {
 
   /** Kopieren/Löschen: Ziel vollständig schreiben und prüfen, Quelle erneut prüfen, dann löschen (7.3). */
   private async copyMove(kind: OpKind, ref: string, to: Scope, expectedHash: string): Promise<WriteResult> {
+    let j: Journal | null = null;
     try {
       const { scope } = this.split(ref);
       const srcUri = await this.uriOf(ref, true);
@@ -261,7 +269,7 @@ export class SafAdapter implements StorageAdapter {
       await this.list(to);
       const name = this.freeName(to, this.split(ref).name);
       const dstRef = `${to}/${name}`;
-      const j = await this.begin(kind, ref, dstRef, { text: cur.text, hash: cur.hash }, cur.text, srcUri);
+      j = await this.begin(kind, ref, dstRef, { text: cur.text, hash: cur.hash }, cur.text, srcUri);
       const doc = await this.createChecked(parent, name, j);
       if (doc.status !== "ok") return doc.result;
       this.hook(kind, "after-create");
@@ -283,6 +291,7 @@ export class SafAdapter implements StorageAdapter {
       return { status: "ok", ref: dstRef, name, hash: after };
     } catch (e) {
       if (e instanceof CrashSimulation) throw e;
+      await this.finishUntouched(j);
       return mapError(e);
     }
   }
@@ -303,7 +312,14 @@ export class SafAdapter implements StorageAdapter {
       const cur = await this.native.readFile(uri);
       if (cur.hash !== expectedHash) return { status: "conflict", currentHash: cur.hash };
       const j = await this.begin("rename", ref, `tasks/${newName}`, { text: cur.text, hash: cur.hash }, null, uri);
-      const r = await this.native.renameDocument(uri, newName);
+      let r;
+      try {
+        r = await this.native.renameDocument(uri, newName);
+      } catch (e) {
+        // Anbieter hat abgelehnt: Quelle unverändert, Vorgang abschließen.
+        if ((await this.hashOf(uri)) === expectedHash) await this.finish(j);
+        throw e;
+      }
       j.dstUri = r.uri;
       if (r.name !== newName) return { status: "unknown", message: `Anbieter vergab ${r.name}` };
       await this.finish(j);

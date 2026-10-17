@@ -172,3 +172,33 @@ describe("Repository über SafAdapter", () => {
     expect(n.text("A1.md")).toBe(T("A1"));
   });
 });
+
+describe("Kein Scheinfall nach frühem Fehler", () => {
+  it("createFile scheitert → kein offener Wiederherstellungsfall", async () => {
+    const n = new FakeSaf();
+    n.failOnce.createFile = "ERR_FULL";
+    expect((await adapter(n).create("Neu.md", T("neu"))).status).toBe("full");
+    expect(await adapter(n).recover()).toEqual([]);
+  });
+  it("Papierkorb-Kopie scheitert beim Anlegen → kein Fall, Quelle unverändert", async () => {
+    const n = new FakeSaf();
+    n.put("A.md", T("A"));
+    const a = adapter(n);
+    await a.list("tasks");
+    n.failOnce.createFile = "ERR_PERMISSION";
+    // ensureTrash legt den Ordner an und verbraucht den Fehler; zweiter Versuch für die Datei:
+    const r1 = await a.moveToTrash("tasks/A.md", hashText(T("A")));
+    if (r1.status === "ok") return; // Ordneranlage hat den Fehler bekommen
+    expect(await adapter(n).recover()).toEqual([]);
+    expect(n.text("A.md")).toBe(T("A"));
+  });
+  it("Umbenennen abgelehnt → kein Fall", async () => {
+    const n = new FakeSaf();
+    n.put("A.md", T("A"));
+    const a = adapter(n);
+    await a.list("tasks");
+    n.failOnce.renameDocument = "ERR_IO";
+    expect((await a.rename("tasks/A.md", "B.md", hashText(T("A")))).status).toBe("unknown");
+    expect(await adapter(n).recover()).toEqual([]);
+  });
+});

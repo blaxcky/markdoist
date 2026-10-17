@@ -1,13 +1,14 @@
 # Erledigen per Wischen nach rechts und Rückgängig über die Snackbar.
 appId: de.markdoist.aufgaben
 ---
-- launchApp
+- runFlow: ../launch.yaml
 - tapOn:
     id: tab-inbox
 - swipe:
     from:
       id: "row-Zahnarzttermin vereinbaren"
     direction: RIGHT
+    duration: 250
 - assertVisible:
     id: snackbar
 - tapOn:

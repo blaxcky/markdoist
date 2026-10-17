@@ -1,8 +1,8 @@
 # Ordner über den SAF-Dialog wählen (Emulator, API 36). Maestro bedient den Systemdialog.
 appId: de.markdoist.aufgaben
 ---
-- launchApp:
-    clearState: true
+- clearState
+- runFlow: ../launch.yaml
 - tapOn:
     id: choose-folder
 - extendedWaitUntil:

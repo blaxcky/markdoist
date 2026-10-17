@@ -1,7 +1,7 @@
 # AK-01: Erfassung aus Heute landet im Eingang, nicht in Heute.
 appId: de.markdoist.aufgaben
 ---
-- launchApp
+- runFlow: ../launch.yaml
 - tapOn:
     id: tab-today
 - tapOn:

@@ -1,5 +1,6 @@
 // Listenzeile mit Wischgesten (4.5): nach rechts erledigt, nach links Aktionen.
 import { Pressable, Text, View } from "react-native";
+import { Pressable as GesturePressable } from "react-native-gesture-handler";
 import { useRef } from "react";
 import ReanimatedSwipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { T } from "@markdoist/app";
@@ -47,13 +48,16 @@ export function TaskRow({ view, today, tz, scheduledHint, onOpen, onToggle, onAc
       onSwipeableOpen={(dir) => {
         swipe.current?.close();
         if (view.readOnly) return;
-        if (dir === "left") onToggle();
+        // Gemeldet wird die Bewegungsrichtung (im Emulator geprüft):
+        // nach rechts = erledigen, nach links = Aktionen (4.5).
+        if (dir === "right") onToggle();
         else onActions();
       }}
     >
-      <Pressable
+      <GesturePressable
         onPress={onOpen}
         onLongPress={onActions}
+        delayLongPress={600}
         android_ripple={{ color: c.surfaceHigh }}
         style={{ flexDirection: "row", gap: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: c.bg, borderBottomWidth: 1, borderBottomColor: c.outline }}
         testID={`row-${f.title}`}
@@ -89,7 +93,7 @@ export function TaskRow({ view, today, tz, scheduledHint, onOpen, onToggle, onAc
             {warn && badge("⚠", c.warn)}
           </View>
         </View>
-      </Pressable>
+      </GesturePressable>
     </ReanimatedSwipeable>
   );
 }
