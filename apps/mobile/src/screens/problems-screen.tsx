@@ -1,5 +1,6 @@
 // Probleme (4.3) und Konfliktvarianten (7.4) auf Android.
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { diffLines } from "diff";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { T } from "@markdoist/app";
@@ -48,12 +49,33 @@ export function ProblemsScreen() {
           return (
             <View key={i} style={card} testID="problem-conflict">
               <Text selectable style={{ color: c.warn }}>{p.diagnostics[0]!.message}</Text>
+              {(() => {
+                const keys = [...new Set(files.flatMap((f) => Object.keys(f.data)))].filter(
+                  (k) => JSON.stringify(files[0]!.data[k]) !== JSON.stringify(files[1]?.data[k]),
+                );
+                return keys.length ? (
+                  <View style={{ gap: 2 }}>
+                    <Text style={{ color: c.muted, fontSize: 12 }}>Abweichende Felder</Text>
+                    {keys.map((k) => (
+                      <Text key={k} selectable style={{ color: c.fg, fontSize: 12 }}>
+                        {k}: {files.map((f) => (f.data[k] === undefined ? "–" : typeof f.data[k] === "string" ? f.data[k] : JSON.stringify(f.data[k]))).join("  ↔  ")}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null;
+              })()}
+              {files[1] && files[0]!.body !== files[1].body && (
+                <View style={{ borderWidth: 1, borderColor: c.outline, borderRadius: 6, padding: 6 }}>
+                  {diffLines(files[0]!.body, files[1].body).map((part, j) => (
+                    <Text key={j} selectable style={{ fontFamily: "monospace", fontSize: 12, color: c.fg, backgroundColor: part.added ? "rgba(46,125,50,0.2)" : part.removed ? "rgba(198,40,40,0.2)" : "transparent" }}>
+                      {part.value}
+                    </Text>
+                  ))}
+                </View>
+              )}
               {files.map((f) => (
                 <View key={f.ref} style={{ gap: 4 }}>
                   <Text selectable style={{ color: c.fg, fontWeight: "600" }}>{f.name}</Text>
-                  <Text selectable style={{ color: c.muted, fontSize: 12 }}>
-                    {T.fields.status}: {f.fields.status} · {T.fields.priority}: {f.fields.priority} · {T.fields.due}: {String(f.data.due ?? "–")}
-                  </Text>
                   {btn(T.actions.keepVariant, () => void repo.keepVariant(f.ref, files.filter((x) => x !== f).map((x) => x.ref)).then((o) => notify(o, "Variante behalten")), "keep-variant")}
                 </View>
               ))}
