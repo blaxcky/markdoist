@@ -40,6 +40,11 @@ Du willst eine persönliche, lokal arbeitende Todo-App mit einer Markdown-Datei 
 | F017 RPM über GitHub | ja, das RPM wird mitgebaut und an dasselbe Release gehängt | 10.1 |
 | F018 Handy und Tests | Android 16 (API 36). **Keine Prüflisten am Handy**: Alle Android-Prüfungen mache ich selbst im Emulator mit API 36 und kennzeichne sie so. Du nutzt die App einfach. | 8, 9, 10.2 |
 
+**Entscheidungen aus `.fragen/2026-10-17-1624-repo-und-lizenz.md` (17.10.2026):**
+- Repository-Anlage, Secrets und Push führt die Umsetzung aus; die Freigabe bestätigst du im Claude-Code-Dialog (der Auto-Modus blockiert öffentliche Aktionen sonst).
+- **Keine Lizenz** [F]: alle Rechte vorbehalten, keine Lizenzdatei; RPM-Lizenzfeld `UNLICENSED`. Später änderbar.
+- Expo-CLI ist angemeldet; der Expo-MCP kann für Emulator-Prüfungen genutzt werden (2.3).
+
 **Zusätzliche Entscheidung (Chat, 12.10.2026) [F]:** Wird eine Wiederholung auf „noch fünfmal“ geändert, gelten **ab der Änderung fünf weitere Vorkommen**. Frühere Erledigungen werden nicht angerechnet; die alte Historie bleibt in derselben Datei erhalten (3.2, 5.1, 5.4).
 
 Das Projektverzeichnis `/home/markus/GitHub/local-first-todo` enthält bislang nur die Planungsdokumente. Festgestellte Umgebung (in M0 erneut prüfen):
