@@ -1,0 +1,35 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+deleted file mode 100644
+index bfaae2edc85d2ac819c975cc8f72a98678a6ab21..0000000000000000000000000000000000000000
+diff --git a/dist/es5/rrule.js b/dist/es5/rrule.js
+index b671aaad592beda14cd0a778fe25b412a0effd89..9ebfa1ec4bf089da3984c76c12b643bb0d1bc60d 100644
+--- a/dist/es5/rrule.js
++++ b/dist/es5/rrule.js
+@@ -3046,6 +3046,11 @@ function iter(iterResult, options) {
+         if (counterDate.year > MAXYEAR) {
+             return emitResult(iterResult);
+         }
++        // Markdoist: Abbruch, sobald der Zählzeitraum sicher hinter UNTIL liegt
++        // (sonst laufen Regeln ohne Treffer bis zum Jahr 9999).
++        if (until && counterDate.year > until.getUTCFullYear() + 1) {
++            return emitResult(iterResult);
++        }
+         if (!freqIsDailyOrGreater(freq)) {
+             timeset = ii.gettimeset(freq)(counterDate.hour, counterDate.minute, counterDate.second, 0);
+         }
+diff --git a/dist/esm/iter/index.js b/dist/esm/iter/index.js
+index 2dbadcf4a4810ad5882162ad49815b1dffae61fa..3c777acd680dd7c73321320a889ddc0ae95d1901 100644
+--- a/dist/esm/iter/index.js
++++ b/dist/esm/iter/index.js
+@@ -77,6 +77,11 @@ export function iter(iterResult, options) {
+         if (counterDate.year > MAXYEAR) {
+             return emitResult(iterResult);
+         }
++        // Markdoist: Abbruch, sobald der Zählzeitraum sicher hinter UNTIL liegt
++        // (sonst laufen Regeln ohne Treffer bis zum Jahr 9999).
++        if (until && counterDate.year > until.getUTCFullYear() + 1) {
++            return emitResult(iterResult);
++        }
+         if (!freqIsDailyOrGreater(freq)) {
+             timeset = ii.gettimeset(freq)(counterDate.hour, counterDate.minute, counterDate.second, 0);
+         }

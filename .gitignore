@@ -1,0 +1,21 @@
+node_modules/
+dist/
+out/
+release/
+coverage/
+*.tsbuildinfo
+.DS_Store
+# Expo / Android
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/.expo/
+*.jks
+*.keystore
+# Electron
+apps/desktop/out/
+apps/desktop/release/
+# Playwright
+test-results/
+playwright-report/
+.env
+.env.*

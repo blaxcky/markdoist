@@ -1,0 +1,7 @@
+*.md
+pnpm-lock.yaml
+apps/mobile/android
+node_modules
+dist
+out
+release
