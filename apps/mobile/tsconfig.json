@@ -1,6 +1,11 @@
 {
-  "extends": "expo/tsconfig.base",
+  "extends": "expo/tsconfig.base.json",
   "compilerOptions": {
     "strict": true
-  }
+  },
+  "exclude": [
+    "test",
+    "android",
+    "node_modules"
+  ]
 }
