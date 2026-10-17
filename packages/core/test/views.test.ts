@@ -175,3 +175,14 @@ describe("Wählbare Sortierung (4.3)", () => {
     expect(sortViews(idx.tasks, "due", TZ).map((v) => v.task.fields.title)).toEqual(["Zitronen", "Äpfel", "Birnen"]);
   });
 });
+
+describe("AK-18: Offset-Importe behalten ihren Instant", () => {
+  it("due mit Z wird für Überfälligkeit als Instant ausgewertet und nicht umgeschrieben", () => {
+    const due = parseDateValue("2026-10-12T15:00:00Z")!; // 17:00 in Berlin
+    expect(isOverdue(due, clockAtLocal("2026-10-12T17:00", TZ))).toBe(false);
+    expect(isOverdue(due, clockAtLocal("2026-10-12T17:01", TZ))).toBe(true);
+    const idx = buildIndex([t("Z", ["due: 2026-10-12T15:00:00Z"])], clock);
+    expect(idx.tasks[0]!.dueDate?.toString()).toBe("2026-10-12");
+    expect((idx.tasks[0]!.task as { text: string }).text).toContain("due: 2026-10-12T15:00:00Z");
+  });
+});

@@ -340,3 +340,37 @@ describe("Cache mit vorgeparster Frontmatter", () => {
     expect(cached.hash).toBe(fresh.hash);
   });
 });
+
+describe("AK-21: Undo nach Serienfortschritt mit Checklisten-Reset", () => {
+  it("stellt den alten Zustand byte-genau wieder her", async () => {
+    const { repo, adapter } = setup();
+    const text = [
+      "---",
+      "id: 01K7C9V3QH2T8M4N6P0R5S1W99",
+      "title: Serie",
+      "status: open",
+      "inbox: false",
+      "due: 2026-10-12",
+      "recurrence: FREQ=WEEKLY;BYDAY=MO",
+      "recurrence_revision: R1",
+      "recurrence_start: 2026-10-05",
+      "recurrence_instance: 2026-10-12",
+      "---",
+      "- [x] erledigt",
+      "```",
+      "- [x] Code bleibt",
+      "```",
+      "",
+    ].join("\r\n");
+    adapter.tasks.set("S.md", { text, mtime: 1 });
+    await repo.open();
+    const r = await repo.perform("tasks/S.md", { type: "completeOccurrence", revision: "R1", instance: "2026-10-12" });
+    expect(r.status).toBe("ok");
+    const after = adapter.tasks.get("S.md")!.text;
+    expect(after).toContain("- [ ] erledigt");
+    expect(after).toContain("- [x] Code bleibt");
+    expect(after).toContain("due: 2026-10-19");
+    expect((await repo.undo()).status).toBe("ok");
+    expect(adapter.tasks.get("S.md")!.text).toBe(text);
+  });
+});
