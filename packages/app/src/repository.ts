@@ -113,6 +113,7 @@ export class Repository {
   private files = new TrackedMap<string, IndexedFile>();
   private indexCache: { version: number; clockTick: number; index: Index } | null = null;
   private clockTick = 0;
+  private progressOnly = false;
   private metas = new Map<string, FileMeta>();
   private trash: FileMeta[] = [];
   private undoStack: UndoEntry[] = [];
@@ -156,6 +157,8 @@ export class Repository {
   private currentIndex(): Index {
     const c = this.indexCache;
     if (c && c.version === this.files.version && c.clockTick === this.clockTick) return c.index;
+    // Reine Fortschrittsmeldungen eines Abgleichs bauen den Index nicht neu auf.
+    if (c && this.progressOnly) return c.index;
     const index = buildIndex([...this.files.values()], this.clock());
     this.indexCache = { version: this.files.version, clockTick: this.clockTick, index };
     return index;
@@ -327,7 +330,14 @@ export class Repository {
         }),
       );
       this.scanProgress = { done: Math.min(i + this.batchSize, toRead.length), total: toRead.length };
-      if (toRead.length > this.batchSize) this.emit();
+      if (toRead.length > this.batchSize) {
+        this.progressOnly = true;
+        try {
+          this.emit();
+        } finally {
+          this.progressOnly = false;
+        }
+      }
     }
     for (const ref of [...this.files.keys()]) {
       if (!seen.has(ref)) {
