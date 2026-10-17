@@ -1,4 +1,5 @@
 // Navigation (Plan 4.5): untere Leiste Eingang/Heute/Alle/Erledigt, Stack für Detail und Dialoge.
+import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -42,7 +43,10 @@ function HeaderButtons() {
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
   const state = useRepoState();
   const c = useTheme();
-  const problems = problemsView(state.index).length + state.recovery.length + state.drafts.filter((d) => !state.files.has(d.ref)).length;
+  const problems = useMemo(
+    () => problemsView(state.index).length + state.recovery.length + state.drafts.filter((d) => !state.files.has(d.ref)).length,
+    [state.index, state.recovery, state.drafts, state.files],
+  );
   const f = useFilter();
   const btn = (label: string, to: keyof RootStack, testID: string, color = c.fg) => (
     <Pressable onPress={() => nav.navigate(to as never)} hitSlop={8} testID={testID} accessibilityLabel={testID} style={{ paddingHorizontal: 10 }}>
@@ -65,7 +69,10 @@ function TabsNav() {
   const c = useTheme();
   const state = useRepoState();
   const tz = systemClock().timeZone;
-  const t = todayView(state.index, tz);
+  const counts = useMemo(() => {
+    const t = todayView(state.index, tz);
+    return { inbox: inboxView(state.index, tz).length, today: t.due.length + t.plannedToday.length + t.plannedEarlier.length };
+  }, [state.index, tz]);
   const icon = (s: string) => ({ color }: { color: string }) => <Text style={{ color, fontSize: 18 }}>{s}</Text>;
   return (
     <Tab.Navigator
@@ -79,10 +86,10 @@ function TabsNav() {
         tabBarInactiveTintColor: c.muted,
       }}
     >
-      <Tab.Screen name="Inbox" options={{ title: T.views.inbox, tabBarIcon: icon("📥"), tabBarBadge: inboxView(state.index, tz).length || undefined, tabBarButtonTestID: "tab-inbox" }}>
+      <Tab.Screen name="Inbox" options={{ title: T.views.inbox, tabBarIcon: icon("📥"), tabBarBadge: counts.inbox || undefined, tabBarButtonTestID: "tab-inbox" }}>
         {() => <ListScreen kind="inbox" />}
       </Tab.Screen>
-      <Tab.Screen name="Today" options={{ title: T.views.today, tabBarIcon: icon("☀"), tabBarBadge: t.due.length + t.plannedToday.length + t.plannedEarlier.length || undefined, tabBarButtonTestID: "tab-today" }}>
+      <Tab.Screen name="Today" options={{ title: T.views.today, tabBarIcon: icon("☀"), tabBarBadge: counts.today || undefined, tabBarButtonTestID: "tab-today" }}>
         {() => <ListScreen kind="today" />}
       </Tab.Screen>
       <Tab.Screen name="All" options={{ title: "Alle", tabBarIcon: icon("☰"), tabBarButtonTestID: "tab-all" }}>

@@ -152,14 +152,14 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const flat = sections.flatMap((s) => s.items);
   const selectedView = idx.tasks.find((v) => v.task.ref === selected) ?? null;
   const occurrences = view === "done" && !query ? doneView(idx).occurrences : [];
-  const problems = problemsView(idx).length + state.recovery.length + state.drafts.filter((d) => !state.files.has(d.ref)).length;
-  const counts = {
-    inbox: inboxView(idx, tz).length,
-    today: (() => {
-      const t = todayView(idx, tz);
-      return t.due.length + t.plannedToday.length + t.plannedEarlier.length;
-    })(),
-  };
+  const problems = useMemo(
+    () => problemsView(idx).length + state.recovery.length + state.drafts.filter((d) => !state.files.has(d.ref)).length,
+    [idx, state.recovery, state.drafts, state.files],
+  );
+  const counts = useMemo(() => {
+    const t = todayView(idx, tz);
+    return { inbox: inboxView(idx, tz).length, today: t.due.length + t.plannedToday.length + t.plannedEarlier.length };
+  }, [idx, tz]);
 
   const selectIndex = (i: number) => {
     const v = flat[Math.max(0, Math.min(flat.length - 1, i))];

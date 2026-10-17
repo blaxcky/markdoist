@@ -168,10 +168,19 @@ export class Repository {
     return index;
   }
 
+  private filesCache: { version: number; map: Map<string, IndexedFile> } | null = null;
+
+  private filesCopy(): Map<string, IndexedFile> {
+    if (this.filesCache && this.filesCache.version === this.files.version) return this.filesCache.map;
+    const map = new Map(this.files);
+    this.filesCache = { version: this.files.version, map };
+    return map;
+  }
+
   private snapshot(): RepoState {
     return {
       index: this.currentIndex(),
-      files: new Map(this.files),
+      files: this.filesCopy(),
       trash: [...this.trash],
       unverified: this.unverified,
       scanning: this.scanning !== null,
@@ -323,6 +332,7 @@ export class Repository {
     }
     let readFailures = 0;
     let readMs = 0;
+    let lastProgress = 0;
     let parseMs = 0;
     this.scanProgress = { done: 0, total: toRead.length };
     for (let i = 0; i < toRead.length; i += this.batchSize) {
@@ -355,7 +365,9 @@ export class Repository {
       });
       parseMs += Date.now() - tParse;
       this.scanProgress = { done: Math.min(i + this.batchSize, toRead.length), total: toRead.length };
-      if (toRead.length > this.batchSize) {
+      // Fortschritt höchstens alle 300 ms melden; jede Meldung lässt die Oberfläche rendern.
+      if (toRead.length > this.batchSize && Date.now() - lastProgress >= 300) {
+        lastProgress = Date.now();
         this.progressOnly = true;
         try {
           this.emit();

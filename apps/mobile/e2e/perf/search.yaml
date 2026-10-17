@@ -1,0 +1,12 @@
+appId: de.markdoist.aufgaben
+---
+- back
+- tapOn:
+    id: nav-search
+- tapOn:
+    id: search-input
+- inputText: "bettwasche schritt"
+- extendedWaitUntil:
+    visible:
+      id: search-stats
+    timeout: 10000

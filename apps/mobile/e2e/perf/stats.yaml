@@ -1,0 +1,13 @@
+# Wartet auf das Ende des Abgleichs, öffnet die Einstellungen (Kennzahlen) und führt eine Suche aus.
+appId: de.markdoist.aufgaben
+---
+- extendedWaitUntil:
+    notVisible:
+      id: scan-progress
+    timeout: 180000
+- tapOn:
+    id: nav-settings
+- extendedWaitUntil:
+    visible:
+      id: last-scan
+    timeout: 180000

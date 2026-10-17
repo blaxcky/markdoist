@@ -92,6 +92,26 @@ class SafStorageModule : Module() {
 
   private fun dir(name: String) = File(context.filesDir, name)
 
+  private val readPool = java.util.concurrent.Executors.newFixedThreadPool(6)
+
+  private fun readOne(uri: String): Map<String, Any?>? =
+    try {
+      val bytes = readBytes(Uri.parse(uri))
+      val decoder = Charsets.UTF_8.newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT)
+      var invalid = false
+      val text = try {
+        decoder.decode(ByteBuffer.wrap(bytes)).toString()
+      } catch (e: CharacterCodingException) {
+        invalid = true
+        String(bytes, Charsets.UTF_8)
+      }
+      mapOf("text" to text, "hash" to sha256(bytes), "invalidUtf8" to invalid, "mtime" to null, "size" to bytes.size.toDouble())
+    } catch (e: Exception) {
+      null
+    }
+
   private fun safeKey(key: String): String =
     MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }.substring(0, 40)
 
@@ -212,24 +232,8 @@ class SafStorageModule : Module() {
 
     // Stapelweise lesen (7.1 Vollabgleich): ein Aufruf je Stapel, keine Metadaten-Abfrage je Datei.
     AsyncFunction("readFiles") { uris: List<String> ->
-      uris.map { uri ->
-        try {
-          val bytes = readBytes(Uri.parse(uri))
-          val decoder = Charsets.UTF_8.newDecoder()
-            .onMalformedInput(CodingErrorAction.REPORT)
-            .onUnmappableCharacter(CodingErrorAction.REPORT)
-          var invalid = false
-          val text = try {
-            decoder.decode(ByteBuffer.wrap(bytes)).toString()
-          } catch (e: CharacterCodingException) {
-            invalid = true
-            String(bytes, Charsets.UTF_8)
-          }
-          mapOf("text" to text, "hash" to sha256(bytes), "invalidUtf8" to invalid, "mtime" to null, "size" to bytes.size.toDouble())
-        } catch (e: Exception) {
-          null
-        }
-      }
+      // Parallel lesen: jeder Zugriff ist ein IPC-Aufruf an den Dokumentanbieter.
+      uris.map { uri -> readPool.submit<Map<String, Any?>?> { readOne(uri) } }.map { it.get() }
     }
 
     AsyncFunction("hashFile") { uri: String ->

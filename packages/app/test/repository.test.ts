@@ -269,7 +269,7 @@ describe("Abgleich: Fortschritt und Abbruch (7.1)", () => {
     repo.subscribe(() => {
       const p = repo.getState().scanProgress;
       if (p) seen.push(p.done);
-      if (p && p.done >= 30) repo.cancelScan();
+      if (p && p.done > 0) repo.cancelScan();
     });
     await repo.scan({ full: true });
     expect(seen.some((d) => d > 0 && d < 120)).toBe(true);
