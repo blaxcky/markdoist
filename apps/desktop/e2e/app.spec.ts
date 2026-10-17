@@ -295,3 +295,13 @@ test("Sortierung wählbar und Zeitraum-Filter (4.3)", async () => {
   await page.getByLabel("bis").first().fill("2026-10-12");
   await expect(page.locator("[data-testid=task-row]")).toHaveCount(2); // Zahnarzt und Wochenrückblick
 });
+
+test("Ausnahme: künftigen Termin überspringen (5.4)", async () => {
+  await row("Wochenrückblick").click();
+  await page.getByTestId("exceptions").locator("summary").click();
+  await page.getByTestId("exception-2026-10-19").click();
+  await expect(page.getByTestId("exception-2026-10-19")).toBeChecked();
+  await expect.poll(() => file("Wochenrückblick.md")).toContain("skipped_instances:\n  - 2026-10-19");
+  await page.getByTestId("series-complete").click();
+  await expect.poll(() => file("Wochenrückblick.md")).toContain("due: 2026-10-26");
+});

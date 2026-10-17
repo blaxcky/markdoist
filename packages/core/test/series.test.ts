@@ -345,3 +345,24 @@ describe("Serie anlegen", () => {
     expect(t.data.format_version).toBe(1);
   });
 });
+
+describe("Ausnahmen (5.4)", () => {
+  it("künftiges Vorkommen überspringen und wieder aufnehmen; Fortschreiben lässt es aus", async () => {
+    const { upcomingForExceptions } = await import("../src");
+    const base = weekly("calendar", "FREQ=WEEKLY;BYDAY=MO", "2026-10-12");
+    let s = readSeries(task(base))!;
+    expect(upcomingForExceptions(s, 3).map((u) => u.date.toString())).toEqual(["2026-10-19", "2026-10-26", "2026-11-02"]);
+    const a = run(base, { type: "setException", revision: "REV1", date: "2026-10-19", skipped: true }, ctxAt("2026-10-12T10:00"));
+    s = readSeries(task(a.text))!;
+    expect(upcomingForExceptions(s, 2)).toEqual([
+      { date: expect.anything(), skipped: true },
+      { date: expect.anything(), skipped: false },
+    ]);
+    const done = run(a.text, { type: "completeOccurrence", revision: "REV1", instance: "2026-10-12" }, ctxAt("2026-10-12T11:00"));
+    expect(task(done.text).data.due).toBe("2026-10-26");
+    const back = run(a.text, { type: "setException", revision: "REV1", date: "2026-10-19", skipped: false }, ctxAt("2026-10-12T10:00"));
+    expect(task(back.text).data.skipped_instances).toEqual([]);
+    // Kein Regeltermin → blockiert
+    expect(run(base, { type: "setException", revision: "REV1", date: "2026-10-20", skipped: true }, ctxAt("2026-10-12T10:00")).plan.kind).toBe("blocked");
+  });
+});

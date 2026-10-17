@@ -6,6 +6,7 @@ import {
   describeRule,
   parseKey,
   Temporal,
+  upcomingForExceptions,
   type Priority,
   type Status,
   type TaskAction,
@@ -282,6 +283,28 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
               </button>
             )}
           </div>
+          {upcomingForExceptions(s).length > 0 && (
+            <details style={{ marginTop: 6 }} data-testid="exceptions">
+              <summary>Ausnahmen (nächste Termine)</summary>
+              {upcomingForExceptions(s).map((u) => (
+                <label key={u.date.toString()} style={{ display: "block", color: "var(--fg)" }}>
+                  <input
+                    type="checkbox"
+                    checked={u.skipped}
+                    disabled={ro}
+                    data-testid={`exception-${u.date}`}
+                    onChange={(e) =>
+                      void act(
+                        { type: "setException", revision: s.revisionKey, date: u.date.toString(), skipped: e.target.checked },
+                        e.target.checked ? "Termin wird übersprungen" : "Ausnahme entfernt",
+                      )
+                    }
+                  />{" "}
+                  {describeOccurrence(u.date)} überspringen
+                </label>
+              ))}
+            </details>
+          )}
         </div>
       )}
       {!s && (

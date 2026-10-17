@@ -323,3 +323,11 @@ export function previewDates(
 ): { dates: Temporal.PlainDate[]; exhausted: boolean; aborted: boolean } {
   return queryOccurrences({ rule, start, from, limit });
 }
+
+/** Nächste Regeltermine nach dem aktuellen Vorkommen für die Ausnahmen-Auswahl (5.4).
+ *  Nur für Kalenderserien; bereits übersprungene Termine sind enthalten und markiert. */
+export function upcomingForExceptions(s: Series, limit = 8): { date: Temporal.PlainDate; skipped: boolean }[] {
+  if (s.anchor !== "calendar" || !s.rule || !s.start || !s.instance || s.phase !== "active") return [];
+  const r = queryOccurrences({ rule: s.rule, start: s.start.date, time: s.start.time, after: s.instance, limit });
+  return r.dates.map((d) => ({ date: d, skipped: s.S.has(d.toString()) }));
+}

@@ -1,6 +1,7 @@
 // Papierkorb (4.4, F004): Wiederherstellen; Leeren nur ausdrücklich und ohne Undo.
 import { useState } from "react";
 import { T, type Outcome, type Repository, type RepoState } from "@markdoist/app";
+import { useDialog } from "../dialog";
 
 interface Props {
   repo: Repository;
@@ -31,34 +32,42 @@ export function Trash({ repo, state, onOutcome }: Props) {
         </div>
       )}
       {confirm && (
-        <div className="modal-back" onClick={() => setConfirm(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={T.actions.emptyTrash}>
+        <ConfirmEmpty
+          count={confirm.length}
+          names={confirm.map((c) => c.name)}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            const list = confirm;
+            setConfirm(null);
+            void repo.emptyTrash(list).then((o) => onOutcome(o, T.actions.emptyTrash));
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConfirmEmpty({ count, names, onCancel, onConfirm }: { count: number; names: string[]; onCancel(): void; onConfirm(): void }) {
+  const ref = useDialog<HTMLDivElement>(onCancel);
+  return (
+        <div className="modal-back" onClick={onCancel}>
+          <div ref={ref} className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={T.actions.emptyTrash}>
             <h2>{T.actions.emptyTrash}</h2>
             <p>
-              {confirm.length} Datei(en) werden <b>endgültig</b> gelöscht. Das lässt sich nicht rückgängig machen. Inzwischen geänderte Dateien bleiben erhalten.
+              {count} Datei(en) werden <b>endgültig</b> gelöscht. Das lässt sich nicht rückgängig machen. Inzwischen geänderte Dateien bleiben erhalten.
             </p>
             <ul style={{ maxHeight: 200, overflow: "auto" }}>
-              {confirm.map((c) => (
-                <li key={c.ref}>{c.name}</li>
+              {names.map((n) => (
+                <li key={n}>{n}</li>
               ))}
             </ul>
             <div className="buttons">
-              <button className="btn" onClick={() => setConfirm(null)}>Abbrechen</button>
-              <button
-                className="btn danger"
-                onClick={() => {
-                  const list = confirm;
-                  setConfirm(null);
-                  void repo.emptyTrash(list).then((o) => onOutcome(o, T.actions.emptyTrash));
-                }}
-                data-testid="confirm-empty"
-              >
+              <button className="btn" onClick={onCancel}>Abbrechen</button>
+              <button className="btn danger" onClick={onConfirm} data-testid="confirm-empty">
                 Endgültig löschen
               </button>
             </div>
           </div>
         </div>
-      )}
-    </div>
   );
 }

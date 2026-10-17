@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Android-E2E im Emulator (API 36): Testdaten anlegen, Maestro-Flows ausführen, Dateien prüfen.
-# Voraussetzung: laufender Emulator, installierte App (Release- oder Debug-Build mit Metro).
+# Voraussetzung: laufender Emulator (englische Systemsprache für den SAF-Dialog in Flow 00),
+# installierte App (Release-Build, oder Debug-Build mit Metro und MAESTRO_DEV=true).
 set -euo pipefail
 cd "$(dirname "$0")"
 export PATH="$PATH:$HOME/Android/Sdk/platform-tools:$HOME/.local/opt/maestro/bin"
@@ -14,6 +15,7 @@ K=$(date -d "$(( ($(date +%u) - 1) )) days ago" +%F)
 START=$(date -d "$K -7 days" +%F)
 NEXT=$(date -d "$K +7 days" +%F)
 NEXT_LABEL="Mo $(date -d "$NEXT" +%d.%m.%Y)"
+SKIP_KEY=$(date -d "$K +14 days" +%F)   # nach Flow 40 ist NEXT aktuell; der Termin danach wird übersprungen
 TMP=$(mktemp -d)
 cat > "$TMP/Wochenrueckblick.md" <<SEED
 ---
@@ -37,7 +39,7 @@ rm -rf "$TMP"
 fail=0
 for flow in flows/*.yaml; do
   echo "== $flow"
-  maestro test -e NEXT_LABEL="$NEXT_LABEL" -e MAESTRO_DEV="${MAESTRO_DEV:-false}" "$flow" || { fail=1; break; }
+  maestro test -e NEXT_LABEL="$NEXT_LABEL" -e SKIP_KEY="$SKIP_KEY" -e MAESTRO_DEV="${MAESTRO_DEV:-false}" "$flow" || { fail=1; break; }
 done
 check() { # Datei, erwarteter Text
   if adb shell "cat '$DIR/$1'" | grep -qF -- "$2"; then echo "OK   $1 enthält: $2"; else echo "FEHL $1 enthält nicht: $2"; fail=1; fi
@@ -48,6 +50,7 @@ if [ $fail = 0 ]; then
   check "Per Verknuepfung.md" "inbox: true"
   check "Wochenrueckblick.md" "due: $NEXT"
   check "Wochenrueckblick.md" "inbox: false"
+  check "Wochenrueckblick.md" "  - $SKIP_KEY"
   check "Zahnarzt.md" "priority: high"
   check "Zahnarzt.md" "Neu"
   check "Zahnarzt.md" "status: open"

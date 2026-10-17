@@ -10,6 +10,7 @@ import {
   describeOccurrence,
   describeRule,
   parseKey,
+  upcomingForExceptions,
   type Priority,
   type Status,
   type TaskAction,
@@ -220,6 +221,29 @@ export function DetailScreen() {
           {btn(s ? "Regel bearbeiten" : "Wiederholung …", () => nav.navigate("Recurrence", { ref }), "edit-recurrence")}
           {s && btn("Wiederholung entfernen", () => act({ type: "removeRecurrence", revision: s.revisionKey }, "Wiederholung entfernt"))}
         </View>
+        {s && upcomingForExceptions(s).length > 0 && (
+          <View style={{ gap: 6 }} testID="exceptions">
+            <Text style={{ color: c.muted, fontSize: 13 }}>Ausnahmen – nächste Termine (antippen zum Überspringen)</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {upcomingForExceptions(s).map((u) => (
+                <Chip
+                  key={u.date.toString()}
+                  c={c}
+                  disabled={ro}
+                  active={u.skipped}
+                  testID={`exception-${u.date}`}
+                  label={`${u.skipped ? "✕ " : ""}${describeOccurrence(u.date).slice(0, 9)}`}
+                  onPress={() =>
+                    act(
+                      { type: "setException", revision: s.revisionKey, date: u.date.toString(), skipped: !u.skipped },
+                      u.skipped ? "Ausnahme entfernt" : "Termin wird übersprungen",
+                    )
+                  }
+                />
+              ))}
+            </View>
+          </View>
+        )}
         {history.map((h, i) => (
           <View key={i}>
             <Text style={{ color: c.muted, fontSize: 13 }}>{h.label}</Text>

@@ -9,7 +9,11 @@ Spezifikation und Entwicklungsplan: [`PLAN1.md`](PLAN1.md). Dateiformat: [`docs/
 Jeder Push auf `main` erzeugt ein [GitHub-Release](https://github.com/blaxcky/markdoist/releases) mit genau einer APK und einem RPM.
 
 - **Fedora:** RPM von der Release-Seite laden, dann `sudo dnf install ./markdoist-<version>.x86_64.rpm`. Updates mit demselben Befehl.
-- **Android (Obtainium):** App hinzufügen mit der Quelle `https://github.com/blaxcky/markdoist`. In den Obtainium-Einstellungen der App die Option zur Beachtung von GitHubs „Latest“-Markierung aktivieren, damit nachgeholte ältere Releases nie als Update angeboten werden.
+- **Android (Obtainium):** Am Handy diesen Link öffnen (oder in Obtainium „Import“ verwenden); er legt Markdoist mit aktivierter Prüfung von GitHubs „Latest“-Markierung (`verifyLatestTag`) an, damit nachgeholte ältere Releases nie als Update angeboten werden:
+
+  `obtainium://app/%7B%22id%22%3A%22de.markdoist.aufgaben%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fblaxcky%2Fmarkdoist%22%2C%22author%22%3A%22blaxcky%22%2C%22name%22%3A%22Markdoist%22%2C%22additionalSettings%22%3A%22%7B%5C%22verifyLatestTag%5C%22%3Atrue%7D%22%7D`
+
+  Alternativ in Obtainium von Hand: Quelle `https://github.com/blaxcky/markdoist` und in den App-Einstellungen die Latest-Prüfung einschalten. Im Emulator geprüft: Obtainium bietet nur die höchste veröffentlichte Version an.
 
 ## Bedienung
 
