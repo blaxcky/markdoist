@@ -62,6 +62,7 @@ Je Meilenstein: was geprüft wurde, wie, und Abweichungen von [V]-Vorschlägen a
 - **Gefundene und behobene Fehler:** Wischrichtung (Gesture Handler 3 meldet die Bewegungsrichtung), Notiz unter der Tastatur.
 - **[V]-Abweichungen:** Farben als eigene Material-3-Palette statt `Color` aus `expo-router` (Expo Router ist laut Plan ausgeschlossen). Text innerhalb der WebView ist für Maestro nicht sichtbar; das Umschalten einer Checkbox in der Vorschau wurde per adb-Tap geprüft.
 - **Release-APK v0.1.2 (Emulator):** alle 8 Maestro-Flows (inkl. Wiederholungseditor) und alle anschließenden Dateiprüfungen grün.
+- **Tastatur (Release-APK, Emulator):** Beim Tippen in die Notiz rückt der Inhalt über die Tastatur, kein doppelter Versatz durch `KeyboardAvoidingView`.
 - **AK-23 (Emulator):** nach `adb reboot` startet die App direkt mit der Aufgabenliste; die SAF-Freigabe blieb erhalten. Dateiname exakt `X.md`, keine Restbytes (Fake-Tests), externe Änderung beim Zurückwechseln: über den vollständigen Abgleich bei `AppState=active`.
 
 ## M6 – Wiederholungs-UI
