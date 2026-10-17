@@ -1,0 +1,9 @@
+de.markdoist.safstorage.saf-storage-pngs-0 /home/markus/GitHub/local-first-todo/apps/mobile/modules/saf-storage/android/build/generated/res/pngs/debug
+de.markdoist.safstorage.saf-storage-updated_navigation_xml-1 /home/markus/GitHub/local-first-todo/apps/mobile/modules/saf-storage/android/build/generated/updated_navigation_xml/debug
+de.markdoist.safstorage.saf-storage-mergeDebugResources-2 /home/markus/GitHub/local-first-todo/apps/mobile/modules/saf-storage/android/build/intermediates/incremental/debug/mergeDebugResources/merged.dir
+de.markdoist.safstorage.saf-storage-mergeDebugResources-3 /home/markus/GitHub/local-first-todo/apps/mobile/modules/saf-storage/android/build/intermediates/incremental/debug/mergeDebugResources/stripped.dir
+de.markdoist.safstorage.saf-storage-debug-4 /home/markus/GitHub/local-first-todo/apps/mobile/modules/saf-storage/android/build/intermediates/merged_res/debug/mergeDebugResources
+de.markdoist.safstorage.saf-storage-debug-5 /home/markus/GitHub/local-first-todo/apps/mobile/modules/saf-storage/android/build/intermediates/packaged_res/debug/packageDebugResources
+de.markdoist.safstorage.saf-storage-debug-6 /home/markus/GitHub/local-first-todo/apps/mobile/modules/saf-storage/android/src/debug/res
+de.markdoist.safstorage.saf-storage-main-7 /home/markus/GitHub/local-first-todo/apps/mobile/modules/saf-storage/android/src/main/res
+gradleHome-0 /home/markus/.gradle

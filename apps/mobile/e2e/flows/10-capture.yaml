@@ -1,0 +1,17 @@
+# AK-01: Erfassung aus Heute landet im Eingang, nicht in Heute.
+appId: de.markdoist.aufgaben
+---
+- launchApp
+- tapOn:
+    id: tab-today
+- tapOn:
+    id: fab-capture
+- tapOn:
+    id: capture-title
+- inputText: "Maestro Aufgabe"
+- tapOn:
+    id: capture-submit
+- assertNotVisible: "Maestro Aufgabe"
+- tapOn:
+    id: tab-inbox
+- assertVisible: "Maestro Aufgabe"

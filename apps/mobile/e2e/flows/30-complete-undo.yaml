@@ -1,0 +1,15 @@
+# Erledigen per Wischen nach rechts und Rückgängig über die Snackbar.
+appId: de.markdoist.aufgaben
+---
+- launchApp
+- tapOn:
+    id: tab-inbox
+- swipe:
+    from:
+      id: "row-Zahnarzttermin vereinbaren"
+    direction: RIGHT
+- assertVisible:
+    id: snackbar
+- tapOn:
+    id: snackbar-undo
+- assertVisible: "Zahnarzttermin vereinbaren"

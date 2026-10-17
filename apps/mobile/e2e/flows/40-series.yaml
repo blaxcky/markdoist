@@ -1,0 +1,11 @@
+# Serie: Vorkommen erledigen schreibt den nächsten Montag (AK-12/13 im Emulator).
+appId: de.markdoist.aufgaben
+---
+- launchApp
+- tapOn:
+    id: tab-all
+- tapOn: "Wochenrückblick"
+- tapOn:
+    id: series-complete
+- assertVisible: "Aktuelles Vorkommen: Mo 19.10.2026"
+- back

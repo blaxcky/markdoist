@@ -1,0 +1,25 @@
+# Priorität setzen, Notiz bearbeiten (Autosave), Checkbox in der WebView-Vorschau.
+appId: de.markdoist.aufgaben
+---
+- launchApp
+- tapOn:
+    id: tab-inbox
+- tapOn: "Zahnarzttermin vereinbaren"
+- tapOn:
+    id: priority-high
+- scrollUntilVisible:
+    element:
+      id: editor
+- tapOn:
+    id: editor
+- inputText: " Neu"
+- extendedWaitUntil:
+    visible: "Gespeichert"
+    timeout: 8000
+- tapOn:
+    id: tab-preview
+- extendedWaitUntil:
+    visible: "Anrufen"
+    timeout: 8000
+- tapOn: "Anrufen"
+- back

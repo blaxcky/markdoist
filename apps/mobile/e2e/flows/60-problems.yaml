@@ -1,0 +1,7 @@
+# AK-09: ungültige Datei erscheint unter Probleme.
+appId: de.markdoist.aufgaben
+---
+- launchApp
+- tapOn:
+    id: nav-problems
+- assertVisible: "Kaputt.md"

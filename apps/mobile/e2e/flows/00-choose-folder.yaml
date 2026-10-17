@@ -1,0 +1,20 @@
+# Ordner über den SAF-Dialog wählen (Emulator, API 36). Maestro bedient den Systemdialog.
+appId: de.markdoist.aufgaben
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: choose-folder
+- extendedWaitUntil:
+    visible: "Documents"
+    timeout: 15000
+- tapOn: "Documents"
+- tapOn: "MarkdoistTest"
+- tapOn:
+    text: "(?i)use this folder|diesen ordner verwenden"
+- tapOn:
+    text: "(?i)allow|zulassen"
+- extendedWaitUntil:
+    visible:
+      id: tab-today
+    timeout: 15000

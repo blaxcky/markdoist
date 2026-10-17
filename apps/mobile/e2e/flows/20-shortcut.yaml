@@ -1,0 +1,12 @@
+# AK-26: App-Verknüpfung „Neue Aufgabe“ (Deep-Link markdoist://capture) öffnet die Erfassung.
+appId: de.markdoist.aufgaben
+---
+- openLink: "markdoist://capture"
+- tapOn:
+    id: capture-title
+- inputText: "Per Verknuepfung"
+- tapOn:
+    id: capture-submit
+- tapOn:
+    id: tab-inbox
+- assertVisible: "Per Verknuepfung"
