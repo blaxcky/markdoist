@@ -48,6 +48,8 @@ export interface StorageAdapter {
   /** Wirft bei Fehlern – eine fehlgeschlagene Auflistung ist nie ein leerer Ordner (7.1). */
   list(scope: Scope): Promise<FileMeta[]>;
   read(ref: string): Promise<ReadResult>;
+  /** Optional: mehrere Dateien in einem Aufruf lesen; null je Datei bei Fehler. */
+  readMany?(refs: string[]): Promise<(ReadResult | null)[]>;
   write(ref: string, text: string, expectedHash: string): Promise<WriteResult>;
   /** Exklusive Neuanlage in der obersten Ebene; liefert den tatsächlich vergebenen Namen. */
   create(name: string, text: string): Promise<WriteResult>;

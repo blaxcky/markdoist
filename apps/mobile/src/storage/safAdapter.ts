@@ -109,6 +109,25 @@ export class SafAdapter implements StorageAdapter {
     return { text: r.text, hash: r.hash, mtime: r.mtime, invalidUtf8: r.invalidUtf8 };
   }
 
+  async readMany(refs: string[]): Promise<(ReadResult | null)[]> {
+    const docs = refs.map((ref) => {
+      try {
+        const { scope, name } = this.split(ref);
+        return this.docs[scope].get(name) ?? null;
+      } catch {
+        return null;
+      }
+    });
+    const uris = docs.filter((d): d is ChildDoc => d !== null).map((d) => d.uri);
+    const read = uris.length ? await this.native.readFiles(uris) : [];
+    let k = 0;
+    return docs.map((d) => {
+      if (!d) return null;
+      const r = read[k++];
+      return r ? { text: r.text, hash: r.hash, mtime: d.mtime, invalidUtf8: r.invalidUtf8 } : null;
+    });
+  }
+
   // ---------------------------------------------------------------- Journal
 
   private async journal(j: Journal) {

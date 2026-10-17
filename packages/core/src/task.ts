@@ -1,5 +1,6 @@
 // Aufgabenmodell: Einlesen einer Datei mit Lese-Standards und Diagnosen (3.2, 7.1).
 import { parseDateValue, type DateValue } from "./dates";
+import { parseSimpleFrontmatter } from "./fastyaml";
 import { parseFrontmatter, splitFile, type SplitFile, type YamlValue } from "./frontmatter";
 import { isUlid } from "./ulid";
 
@@ -131,9 +132,12 @@ export function readTaskFile(input: ReadInput): IndexedFile {
       ],
     };
   }
+  const simple = input.preParsed ? null : parseSimpleFrontmatter(split.yaml);
   const parsed = input.preParsed
     ? ({ ok: true, ...input.preParsed } as const)
-    : parseFrontmatter(split.yaml);
+    : simple
+      ? ({ ok: true, data: simple, hasAnchors: false } as const)
+      : parseFrontmatter(split.yaml);
   if (!parsed.ok) {
     const code: DiagnosticCode =
       parsed.error === "duplicate-key"

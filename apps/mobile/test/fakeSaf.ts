@@ -96,6 +96,9 @@ export class FakeSaf implements SafNative {
     }
     return { text, hash: sha(d.bytes), invalidUtf8: invalid, mtime: d.mtime, size: d.bytes.length };
   }
+  async readFiles(uris: string[]) {
+    return Promise.all(uris.map((u) => this.readFile(u).then((r) => ({ ...r, mtime: null })).catch(() => null)));
+  }
   async hashFile(uri: string) {
     return sha(this.docs.get(this.idOf(uri))!.bytes);
   }

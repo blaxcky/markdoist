@@ -210,6 +210,28 @@ class SafStorageModule : Module() {
       }
     }
 
+    // Stapelweise lesen (7.1 Vollabgleich): ein Aufruf je Stapel, keine Metadaten-Abfrage je Datei.
+    AsyncFunction("readFiles") { uris: List<String> ->
+      uris.map { uri ->
+        try {
+          val bytes = readBytes(Uri.parse(uri))
+          val decoder = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+          var invalid = false
+          val text = try {
+            decoder.decode(ByteBuffer.wrap(bytes)).toString()
+          } catch (e: CharacterCodingException) {
+            invalid = true
+            String(bytes, Charsets.UTF_8)
+          }
+          mapOf("text" to text, "hash" to sha256(bytes), "invalidUtf8" to invalid, "mtime" to null, "size" to bytes.size.toDouble())
+        } catch (e: Exception) {
+          null
+        }
+      }
+    }
+
     AsyncFunction("hashFile") { uri: String ->
       mapped { sha256(readBytes(Uri.parse(uri))) }
     }

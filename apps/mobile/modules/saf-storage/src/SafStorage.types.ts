@@ -34,6 +34,8 @@ export interface SafNative {
   hasPermission(treeUri: string): boolean;
   listChildren(treeUri: string, parentDocId: string): Promise<ChildDoc[]>;
   readFile(uri: string): Promise<ReadDoc>;
+  /** Mehrere Dateien lesen; null je Datei bei Fehler; mtime ist hier null (kommt aus der Auflistung). */
+  readFiles(uris: string[]): Promise<(ReadDoc | null)[]>;
   hashFile(uri: string): Promise<string>;
   writeFile(uri: string, text: string): Promise<string>;
   createFile(treeUri: string, parentDocId: string, name: string, mime: string): Promise<CreatedDoc>;

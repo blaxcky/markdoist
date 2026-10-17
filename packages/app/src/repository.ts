@@ -22,7 +22,7 @@ import {
   type TaskAction,
   type YamlValue,
 } from "@markdoist/core";
-import type { FileMeta, KeyValueStore, RecoveryCase, StorageAdapter, WriteResult } from "./storage";
+import type { FileMeta, KeyValueStore, ReadResult, RecoveryCase, StorageAdapter, WriteResult } from "./storage";
 import { writeResultMessage } from "./texts";
 
 export type Outcome =
@@ -69,7 +69,7 @@ export interface RepoState {
   recovery: RecoveryCase[];
   drafts: Draft[];
   /** Kennzahlen des letzten Abgleichs (Anzeige und Leistungsmessung, M7) */
-  lastScan: { files: number; read: number; ms: number; full: boolean } | null;
+  lastScan: { files: number; read: number; ms: number; full: boolean; readMs: number; parseMs: number } | null;
   /** Dauer bis zur Anzeige aus dem Cache beim Öffnen (ms), null ohne Cache */
   cacheLoadMs: number | null;
   /** Fortschritt eines laufenden Abgleichs */
@@ -322,6 +322,8 @@ export class Repository {
       else this.metas.set(m.ref, m);
     }
     let readFailures = 0;
+    let readMs = 0;
+    let parseMs = 0;
     this.scanProgress = { done: 0, total: toRead.length };
     for (let i = 0; i < toRead.length; i += this.batchSize) {
       if (this.closed) return;
@@ -331,20 +333,27 @@ export class Repository {
         return;
       }
       const batch = toRead.slice(i, i + this.batchSize);
-      await Promise.all(
-        batch.map(async (m) => {
-          try {
-            const r = await this.adapter.read(m.ref);
-            this.metas.set(m.ref, { ...m, mtime: r.mtime ?? m.mtime });
-            this.files.set(
-              m.ref,
-              readTaskFile({ ref: m.ref, name: m.name, text: r.text, hash: r.hash, mtime: r.mtime ?? m.mtime, invalidUtf8: r.invalidUtf8 }),
-            );
-          } catch {
-            readFailures++;
-          }
-        }),
-      );
+      const tRead = Date.now();
+      // Stapelweise lesen, wenn der Adapter das kann (SAF: ein Native-Aufruf je Stapel).
+      const results: (ReadResult | null)[] = this.adapter.readMany
+        ? await this.adapter.readMany(batch.map((m) => m.ref))
+        : await Promise.all(batch.map((m) => this.adapter.read(m.ref).catch(() => null)));
+      readMs += Date.now() - tRead;
+      const tParse = Date.now();
+      batch.forEach((m, j) => {
+        const r = results[j];
+        if (!r) {
+          readFailures++;
+          return;
+        }
+        const mtime = r.mtime ?? m.mtime;
+        this.metas.set(m.ref, { ...m, mtime });
+        this.files.set(
+          m.ref,
+          readTaskFile({ ref: m.ref, name: m.name, text: r.text, hash: r.hash, mtime, invalidUtf8: r.invalidUtf8 }),
+        );
+      });
+      parseMs += Date.now() - tParse;
       this.scanProgress = { done: Math.min(i + this.batchSize, toRead.length), total: toRead.length };
       if (toRead.length > this.batchSize) {
         this.progressOnly = true;
@@ -363,7 +372,7 @@ export class Repository {
     }
     this.readError = readFailures ? `${readFailures} Datei(en) konnten nicht gelesen werden` : null;
     if (full && !readFailures) this.unverified = false;
-    this.lastScan = { files: metas.length, read: toRead.length, ms: Date.now() - t0, full };
+    this.lastScan = { files: metas.length, read: toRead.length, ms: Date.now() - t0, full, readMs, parseMs };
     await this.saveCache();
   }
 

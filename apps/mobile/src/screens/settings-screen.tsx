@@ -29,7 +29,7 @@ export function SettingsScreen() {
       {row(T.actions.rescan, () => void repo.scan({ full: true }))}
       {state.lastScan && (
         <Text selectable style={{ color: c.muted, fontSize: 13 }} testID="last-scan">
-          Letzter {state.lastScan.full ? "vollständiger " : ""}Abgleich: {state.lastScan.files} Dateien, {state.lastScan.read} gelesen, {state.lastScan.ms} ms
+          Letzter {state.lastScan.full ? "vollständiger " : ""}Abgleich: {state.lastScan.files} Dateien, {state.lastScan.read} gelesen, {state.lastScan.ms} ms (Lesen {state.lastScan.readMs} ms, Auswerten {state.lastScan.parseMs} ms)
           {state.cacheLoadMs !== null ? `; Anzeige aus Cache nach ${state.cacheLoadMs} ms` : ""}
         </Text>
       )}
