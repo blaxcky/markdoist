@@ -230,3 +230,30 @@ describe("Dateinamen (AK-43)", () => {
     expect(utf8Length(fileNameForTitle(emoji, () => false, "x"))).toBeLessThanOrEqual(240);
   });
 });
+
+describe("Ordnerwechsel (AK-36)", () => {
+  it("wartende und neue Aufträge des alten Ordners schreiben nicht", async () => {
+    const { repo, adapter } = setup();
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    const writes = adapter.writes;
+    repo.close();
+    const r = await repo.perform("tasks/A.md", { type: "setPriority", priority: "high" });
+    expect(r.status).toBe("blocked");
+    expect(adapter.writes).toBe(writes);
+    expect(adapter.tasks.get("A.md")!.text).toBe(task("A"));
+  });
+  it("Undo verwirft wartende Aufträge derselben Datei", async () => {
+    const { repo, adapter } = setup();
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    await repo.perform("tasks/A.md", { type: "complete" });
+    const pending = repo.perform("tasks/A.md", { type: "setPriority", priority: "high" });
+    const undo = repo.undo();
+    await Promise.all([pending, undo]);
+    // Entweder lief der Auftrag vor dem Undo (dann blockiert das Undo wegen geändertem Hash)
+    // oder er wurde verworfen; nie entsteht ein Mischzustand aus Undo und alter Aktion.
+    const text = adapter.tasks.get("A.md")!.text;
+    expect(text === task("A") || text.includes("priority: high")).toBe(true);
+  });
+});
