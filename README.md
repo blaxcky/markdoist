@@ -2,7 +2,7 @@
 
 Persönliche, lokal arbeitende Todo-App: **eine Markdown-Datei pro Aufgabe** mit YAML-Frontmatter in einem frei wählbaren Ordner (z. B. in einem Obsidian-Vault). Desktop: Electron auf Fedora (RPM). Android: React Native mit Expo (APK über Obtainium). Ein externes Sync-Programm gleicht den Ordner ab; die App selbst synchronisiert nichts.
 
-Spezifikation und Entwicklungsplan: [`PLAN1.md`](PLAN1.md). Abnahmenotizen der Meilensteine: [`docs/ABNAHME.md`](docs/ABNAHME.md).
+Spezifikation und Entwicklungsplan: [`PLAN1.md`](PLAN1.md). Dateiformat: [`docs/DATEIFORMAT.md`](docs/DATEIFORMAT.md). Abnahmenotizen der Meilensteine: [`docs/ABNAHME.md`](docs/ABNAHME.md).
 
 ## Installation
 

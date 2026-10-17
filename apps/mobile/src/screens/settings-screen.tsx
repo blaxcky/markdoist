@@ -4,7 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { T } from "@markdoist/app";
 import { use } from "react";
-import { useRepo } from "../repo";
+import { useRepo, useRepoState } from "../repo";
 import { useFolder } from "../folder";
 import { ThemeSettingContext, useTheme, type ThemeSetting } from "../theme";
 import type { RootStack } from "../navigation";
@@ -12,6 +12,7 @@ import type { RootStack } from "../navigation";
 export function SettingsScreen() {
   const c = useTheme();
   const repo = useRepo();
+  const state = useRepoState();
   const folder = useFolder();
   const theme = use(ThemeSettingContext);
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
@@ -26,6 +27,11 @@ export function SettingsScreen() {
       <Text selectable style={{ color: c.fg, fontSize: 16 }}>{folder.name}</Text>
       {row("Ordner wechseln / Freigabe erneuern", () => void folder.choose(), "change-folder")}
       {row(T.actions.rescan, () => void repo.scan({ full: true }))}
+      {state.lastScan && (
+        <Text selectable style={{ color: c.muted, fontSize: 13 }} testID="last-scan">
+          Letzter {state.lastScan.full ? "vollständiger " : ""}Abgleich: {state.lastScan.files} Dateien, {state.lastScan.read} gelesen, {state.lastScan.ms} ms
+        </Text>
+      )}
       {row(T.views.trash, () => nav.navigate("Trash"), "open-trash")}
       <Text style={{ color: c.muted, fontSize: 13, marginTop: 16 }}>Darstellung</Text>
       <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>

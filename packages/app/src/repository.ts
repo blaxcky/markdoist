@@ -67,6 +67,8 @@ export interface RepoState {
   undo: UndoEntry[];
   recovery: RecoveryCase[];
   drafts: Draft[];
+  /** Kennzahlen des letzten Abgleichs (Anzeige und Leistungsmessung, M7) */
+  lastScan: { files: number; read: number; ms: number; full: boolean } | null;
 }
 
 const UNDO_LIMIT = 50;
@@ -98,6 +100,7 @@ export class Repository {
   private unverified = true;
   private scanning: Promise<void> | null = null;
   private readError: string | null = null;
+  private lastScan: RepoState["lastScan"] = null;
   private listeners = new Set<() => void>();
   private queues = new Map<string, Promise<unknown>>();
   /** Generation je Datei: Undo/Ordnerwechsel machen wartende Aufträge ungültig */
@@ -138,6 +141,7 @@ export class Repository {
       undo: [...this.undoStack],
       recovery: [...this.recovery],
       drafts: [...this.drafts],
+      lastScan: this.lastScan,
     };
   }
 
@@ -238,6 +242,7 @@ export class Repository {
   }
 
   private async doScan(full: boolean) {
+    const t0 = Date.now();
     let metas: FileMeta[];
     try {
       metas = (await this.adapter.list("tasks")).filter(isTaskFileName);
@@ -289,6 +294,7 @@ export class Repository {
     }
     this.readError = readFailures ? `${readFailures} Datei(en) konnten nicht gelesen werden` : null;
     if (full && !readFailures) this.unverified = false;
+    this.lastScan = { files: metas.length, read: toRead.length, ms: Date.now() - t0, full };
     await this.saveCache();
   }
 
