@@ -31,7 +31,10 @@ Je Meilenstein: was geprüft wurde, wie, und Abweichungen von [V]-Vorschlägen a
 - **Obtainium 1.7.0 (Emulator, offizielles x86_64-Release, SHA-256 geprüft):** Markdoist per Deep-Link `obtainium://app/<config>` mit `verifyLatestTag: true` eingetragen; zeigt v0.1.2 als installiert und aktuell.
 - **Laufzeit:** Der Android-Release-Build dauert mit Reanimated/Worklets, Screens und WebView für vier ABIs rund 25–30 Minuten.
 
-**Offen in M0:** verspätetes niedrigeres Release (Lauf 4 bewusst abgebrochen und nach v0.1.5 nachgeholt, muss `--latest=false` erhalten; Obtainium darf es nicht anbieten).
+- **Verspätetes niedrigeres Release:** Lauf 4 (v0.1.4) wurde bewusst abgebrochen und nach v0.1.5 und v0.1.7 nachgeholt (Rerun, gleiche Laufnummer). Er veröffentlichte v0.1.4 um 17:22 mit `--latest=false` („Höhere Version 0.1.7 bereits veröffentlicht – v0.1.4 wird nicht Latest“); GitHub-Latest blieb v0.1.7, Obtainium zeigt v0.1.7 und bietet v0.1.4 nicht an. Damit ist „drei schnelle Pushes → drei Releases“ so belegt: alle drei Läufe wurden angenommen und keiner ersetzt; v0.1.2 und v0.1.3 direkt, v0.1.4 als nachgeholtes Release. Lauf 6 wurde abgebrochen, weil Lauf 7 denselben Stand plus Kennzahlen enthielt; Versionsnummern bleiben dadurch lückenhaft, aber steigend.
+- **CI-RPM** v0.1.3 im Container `fedora:43`: `dnf install` und `dnf remove` erfolgreich, Version 0.1.3, Lizenzfeld `UNLICENSED`.
+
+M0 ist damit vollständig abgenommen.
 
 ## M1 – Dateizugriff und frühe Abbruchtests
 
