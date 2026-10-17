@@ -29,7 +29,7 @@ export function Problems({ repo, state, onSelect, onOutcome }: Props) {
           <div className="actions" style={{ padding: "6px 0 0" }}>
             {r.desired !== null && (
               <button className="btn" onClick={() => void repo.applyRecovery(r.opId).then((o) => onOutcome(o, "Fassung übernommen"))} data-testid="apply-recovery">
-                Gewünschte Fassung übernehmen
+                {r.current === null ? "Gewünschte Fassung als Datei anlegen" : "Gewünschte Fassung übernehmen (überschreibt den aktuellen Stand)"}
               </button>
             )}
             <button className="btn" onClick={() => void repo.resolveRecovery(r.opId)}>Aktuellen Stand behalten</button>

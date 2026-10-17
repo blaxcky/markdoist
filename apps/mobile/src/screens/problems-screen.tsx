@@ -30,7 +30,7 @@ export function ProblemsScreen() {
           <Text selectable style={{ color: c.danger, fontWeight: "600" }}>Wiederherstellung: {r.name}</Text>
           <Text selectable style={{ color: c.fg }}>{r.message}</Text>
           {r.desired !== null && <Text selectable style={{ color: c.muted, fontFamily: "monospace", fontSize: 12 }} numberOfLines={12}>{r.desired}</Text>}
-          {r.desired !== null && btn("Gewünschte Fassung übernehmen", () => void repo.applyRecovery(r.opId).then((o) => notify(o, "Fassung übernommen")))}
+          {r.desired !== null && btn(r.current === null ? "Gewünschte Fassung als Datei anlegen" : "Gewünschte Fassung übernehmen (überschreibt den aktuellen Stand)", () => void repo.applyRecovery(r.opId).then((o) => notify(o, "Fassung übernommen")))}
           {btn("Aktuellen Stand behalten", () => void repo.resolveRecovery(r.opId))}
         </View>
       ))}
