@@ -102,6 +102,10 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const [toast, setToast] = useState<Toast | null>(null);
   const [focusField, setFocusField] = useState<{ field: "due" | "scheduled" | "priority" | "title"; nonce: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [version, setVersion] = useState("");
+  useEffect(() => {
+    void bridge().info().then((i) => setVersion(i.version));
+  }, []);
 
   const notify = useCallback((o: Outcome, label?: string) => {
     if (o.status === "ok") setToast({ text: o.message ?? label ?? "Gespeichert", undo: true, id: Date.now() });
@@ -310,6 +314,12 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           <button className="btn" style={{ marginTop: 6 }} onClick={() => void bridge().folder.choose().then(setSettings)}>
             Ordner wechseln
           </button>
+          {state.lastScan && (
+            <div style={{ marginTop: 6 }} data-testid="last-scan">
+              Abgleich: {state.lastScan.files} Dateien, {state.lastScan.ms} ms
+            </div>
+          )}
+          {version && <div>Version {version}</div>}
           <div style={{ marginTop: 6 }}>
             <select
               value={settings.theme}
