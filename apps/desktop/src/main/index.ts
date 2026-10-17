@@ -28,7 +28,15 @@ function journalDir(folder: string) {
 function openFolder(folder: string | null) {
   unwatch?.();
   unwatch = null;
-  adapter = folder ? new FsAdapter(folder, journalDir(folder)) : null;
+  // Nur für E2E-Abbruchtests: MARKDOIST_TEST_CRASH=write:before-rename beendet den Prozess hart.
+  const crash = process.env.MARKDOIST_TEST_CRASH;
+  const hook = crash
+    ? (kind: string, phase: string) => {
+        // Harter Abbruch wie bei einem Absturz; process.exit liefe in Electron noch weiter.
+        if (`${kind}:${phase}` === crash) process.kill(process.pid, "SIGKILL");
+      }
+    : undefined;
+  adapter = folder ? new FsAdapter(folder, journalDir(folder), hook) : null;
   if (adapter) {
     unwatch = adapter.watch((overflow) => win?.webContents.send("storage:changed", overflow));
   }

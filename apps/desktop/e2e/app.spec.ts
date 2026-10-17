@@ -249,3 +249,25 @@ test("Dialoge: Fokus beim Öffnen, Escape schließt, keine Aufgabenkürzel im Di
   await expect(page.getByTestId("recurrence-editor")).toHaveCount(0);
   expect(await file("Zahnarzt.md")).toBe(before);
 });
+
+test("Prozessabbruch beim Schreiben: alte Fassung bleibt, Wiederherstellung angeboten (AK-22, M7)", async () => {
+  const before = await file("Zahnarzt.md");
+  await app.close();
+  const env = { ...process.env, MARKDOIST_FOLDER: folder, MARKDOIST_DATA_DIR: join(base, "data"), MARKDOIST_TEST_NOW: "2026-10-12T10:00" };
+  const crashing = await electron.launch({ args: [join(appDir, "out/main/index.js")], env: { ...env, MARKDOIST_TEST_CRASH: "write:before-rename" } });
+  const p1 = await crashing.firstWindow();
+  await p1.getByTestId("list").waitFor();
+  await p1.locator('[data-testid=task-row][data-title="Zahnarzttermin vereinbaren"]').click();
+  const exited = new Promise((r) => crashing.process().on("exit", r));
+  await p1.getByTestId("field-priority").selectOption("high");
+  await exited;
+  expect(await file("Zahnarzt.md")).toBe(before);
+  // Neustart ohne Haken: Wiederherstellungsfall unter Probleme, Datei unverändert, keine Temp-Reste.
+  app = await electron.launch({ args: [join(appDir, "out/main/index.js")], env });
+  page = await app.firstWindow();
+  await page.getByTestId("list").waitFor();
+  await page.getByTestId("nav-problems").click();
+  await expect(page.getByText(/Änderung wurde nicht gespeichert/)).toBeVisible();
+  expect(await file("Zahnarzt.md")).toBe(before);
+  expect((await readdir(folder)).filter((n) => n.endsWith(".todo-tmp"))).toEqual([]);
+});
