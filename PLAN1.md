@@ -1,6 +1,6 @@
 # Plan: Markdoist – Markdown-Todo-App (Fedora/Electron + Android/React Native mit Expo)
 
-**Stand:** 2026-10-12. Alle Rückfragen aus FRAGEN.md (F001–F018) sind beantwortet und eingearbeitet.
+**Stand:** 2026-10-17. Alle Rückfragen aus FRAGEN.md (F001–F018) sind beantwortet und eingearbeitet. Neu seit 2026-10-12: Nutzung der Expo-Skills und des Expo-MCP (Abschnitt 2.3).
 
 ## Auftrag an die Umsetzung
 
@@ -9,7 +9,8 @@
 - Beginne mit Meilenstein M0 (Abschnitt 8) und arbeite die Meilensteine in Reihenfolge ab. Jeder Meilenstein endet mit grünen automatisierten Tests.
 - Freigegeben sind: Anlegen des öffentlichen Repositorys `blaxcky/markdoist` mit der GitHub CLI, Setzen der Secrets, Erzeugen des Signierschlüssels, Einrichten der Workflows, erster Push und erstes Release. Zusätzliche Werkzeuge dürfen installiert werden (F014).
 - Umfang von v1 ist nur, was nicht ausdrücklich als **„nach 1.0“** markiert ist. Abschnitt 12 listet alle zurückgestellten Punkte. Für zurückgestellte Punkte werden keine Gerüste vorab angelegt.
-- Bei echter fachlicher Unklarheit: Frage gesammelt in `FRAGEN.md` als neue Runde eintragen (Antwortblöcke nicht selbst füllen) und mit der nächstmöglichen unabhängigen Arbeit weitermachen.
+- Vor jeder Arbeit an `apps/mobile` (Expo/React Native) zuerst den Skill `expo:expo-overview` laden, dann den passenden Fach-Skill aus Abschnitt 2.3. Für aktuelle Expo-Doku und die Prüfung der laufenden App im Emulator den Expo-MCP nutzen (ebenfalls 2.3). Festlegungen dieses Plans haben Vorrang vor Skill-Standards.
+- Bei echter fachlicher Unklarheit: Fragen gesammelt über das Fragen-Tool stellen (Skill `fragen`, Dateien unter `.fragen/`, siehe `CLAUDE.md`), nie im Chat oder über AskUserQuestion. Bis zur Antwort mit der nächstmöglichen unabhängigen Arbeit weitermachen.
 - Mit **[F]** markierte Festlegungen sind nicht verhandelbar. Mit **[V]** markierte Vorschläge dürfen angepasst werden, wenn die Umsetzung es erfordert; die Abweichung wird kurz in der Abnahmenotiz des Meilensteins festgehalten.
 
 ## Kontext
@@ -49,7 +50,8 @@ Das Projektverzeichnis `/home/markus/GitHub/local-first-todo` enthält bislang n
 
 **Dokumente:**
 - `PLAN1.md` (diese Datei): Spezifikation und Entwicklungsplan.
-- `FRAGEN.md`: alle Rückfragen mit Antworten. Die Antwortblöcke füllt nur der Nutzer aus.
+- `FRAGEN.md`: Archiv der Rückfragen F001–F018 mit Antworten, wird nicht mehr erweitert.
+- `.fragen/`: neue Rückfragen über das Fragen-Tool (siehe `CLAUDE.md`).
 
 Technische Annahmen werden in den Meilensteinen überprüft; eine fertige Planung ersetzt diesen Nachweis nicht.
 
@@ -165,7 +167,7 @@ Dies ist eine Vertragsskizze, kein Anwendungscode. Schreiboperationen liefern di
 | YAML | `yaml` 2.x (eemeli) | Standard ist YAML 1.2 Core; `2026-10-14` bleibt dabei ein String. YAML 1.1 würde daraus ein UTC-`Date` machen, ein klassischer stiller Verschiebungsfehler. Quellbereiche (`range`) und CST ermöglichen chirurgische Änderungen (7.2). |
 | Markdown-Vorschau | `markdown-it` (`html: false`, linkify) + eigene Checkbox-Regel | Läuft in Electron und Hermes. Auf Android wird dasselbe HTML in einer WebView gezeigt, damit beide Vorschauen gleich aussehen. Checkboxen lassen sich zeilengenau umschalten. |
 | Desktop | aktuelles stabiles Electron (in M0 festgelegt), `electron-vite`, React 19, CodeMirror 6 (Markdown), `chokidar` 4, `electron-builder` (Ziel: nur RPM), Playwright (Electron-E2E) | Standardwerkzeuge. CodeMirror ist ein schlanker, erweiterbarer Editor. chokidar ist der robuste Watcher. electron-builder erzeugt das RPM. |
-| Android [F: Expo] | React Native über das **Expo SDK** (aktuelle stabile Version, gepinnt). Expo wird so genutzt: Continuous Native Generation (`expo prebuild`), Expo Modules API für das eigene Kotlin-Modul, Config-Plugins für native Einstellungen, `expo-dev-client` für Entwicklungs-Builds. **Kein Expo Go**: Expo Go kann keine eigenen nativen Module laden. **Kein EAS Build**: Releases baut GitHub Actions (siehe 10.2), ein Expo-Konto ist nicht nötig. | Expo ist von dir vorgegeben (F011/F014). Mit dem Expo-Modules-API lässt sich das SAF-Modul sauber einbinden; der Build bleibt mit Gradle reproduzierbar und läuft lokal wie in GitHub Actions. |
+| Android [F: Expo] | React Native über das **Expo SDK** (aktuelle stabile Version, gepinnt). Expo wird so genutzt: Continuous Native Generation (`expo prebuild`), Expo Modules API für das eigene Kotlin-Modul, Config-Plugins für native Einstellungen, `expo-dev-client` für Entwicklungs-Builds. **Kein Expo Go**: Expo Go kann keine eigenen nativen Module laden. **Kein EAS Build**: Releases baut GitHub Actions (siehe 10.2); für Build und Release ist kein Expo-Konto nötig. Das Konto wird nur für den Expo-MCP in der Entwicklung genutzt (2.3). | Expo ist von dir vorgegeben (F011/F014). Mit dem Expo-Modules-API lässt sich das SAF-Modul sauber einbinden; der Build bleibt mit Gradle reproduzierbar und läuft lokal wie in GitHub Actions. |
 | Android-Schnellerfassung | statische App-Verknüpfung „Neue Aufgabe“ (`shortcuts.xml` über ein eigenes kleines Config-Plugin), öffnet `markdoist://capture` | F009. Kein zusätzliches Paket nötig; der Deep-Link öffnet direkt den Erfassungsdialog. |
 | CI/Auslieferung | GitHub Actions: Prüfungen bei jedem Push; jeder Push auf `main` startet den Release-Workflow (F016). Er baut die signierte APK und das RPM (F017) und hängt beide an ein GitHub-Release; Obtainium verfolgt diese Releases. Repository und Secrets werden mit der GitHub CLI eingerichtet (F015). | F011. Der Signierschlüssel liegt nur als verschlüsseltes GitHub-Secret vor, nie im Repository. |
 | Android-Speicher | eigenes Kotlin-Modul `saf-storage` (Expo-Modul) | Kontrolliert Baumauswahl mit `takePersistableUriPermission`, Metadatenabfragen, `"wt"`-Schreiben, Journal, MIME-Typ, Verschieben und Umbenennen. Der Umfang ergibt sich aus den Fehler- und Wiederherstellungsfällen in M1; eine feste Zeilenzahl wird nicht zugesichert. |
@@ -176,6 +178,34 @@ Dies ist eine Vertragsskizze, kein Anwendungscode. Schreiboperationen liefern di
 | Tests | Vitest + fast-check (Eigenschaftstests) | Prüft unter anderem, dass die Reihenfolge der Historie egal ist und dass Aktionen idempotent sind. |
 
 **Electron-Sicherheit [V]:** `contextIsolation`, `sandbox` und kein `nodeIntegration`. Der Renderer erreicht über IPC nur ordnerbezogene Operationen. Links öffnen extern über `shell.openExternal` und nur für http(s).
+
+### 2.3 Expo-Skills und Expo-MCP in der Umsetzung [V]
+
+Für die Android-App nutzt die Umsetzung die Skills des Expo-Plugins und den Expo-MCP. Sie liefern aktuelle Expo-Muster und -Doku und erlauben, die laufende App im Emulator zu prüfen. Sie ändern keine Festlegung dieses Plans: [F]-Punkte und die Bibliotheksauswahl in 2.2 gehen den Standardempfehlungen der Skills vor. Will ein Skill etwas anderes (etwa `@expo/ui` statt `@react-native-community/datetimepicker` oder Expo Router statt React Navigation), wird das als [V]-Abweichung begründet und in der Abnahmenotiz festgehalten, nicht stillschweigend getauscht.
+
+**Skills und wo sie greifen:**
+
+| Skill | Einsatz | Meilenstein |
+|---|---|---|
+| `expo:expo-overview` | Einstieg vor jeder Expo-Aufgabe; gemeinsame Setup-Regeln (SDK-Pinning, `expo install` für passende Versionen) | alle mit `apps/mobile` |
+| `expo:expo-upgrade` | SDK-Version wählen und pinnen, Abhängigkeiten mit `expo install --check` abgleichen, spätere SDK-Updates | M0, laufend |
+| `expo:expo-dev-client` | lokaler Development-Build im Emulator (nur der lokale Teil; TestFlight/EAS entfällt) | M0, M1 |
+| `expo:expo-module` | Kotlin-Modul `saf-storage` mit der Expo Modules API; Config-Plugins (App-Verknüpfung, `shortcuts.xml`, Manifest) | M1, M5 |
+| `expo:expo-native-ui` | Android-gerechte Oberfläche, Farben, Bedienelemente, hell/dunkel | M5, M6 |
+| `expo:expo-design-system` | gemeinsame Tokens und Bausteine, damit alle Ansichten einheitlich wirken | M5, M6 |
+| `expo:expo-ui` | Prüfung, ob `@expo/ui` (Jetpack Compose) für Auswahl, Schalter, Menüs oder Bottom-Sheets besser passt; Abweichung von 2.2 nur wie oben beschrieben | M5, M6 |
+| `expo:expo-animation` | Wischgesten und Rückmeldungen mit Gesture Handler und Reanimated | M5 |
+| `expo:expo-skill-feedback` | Rückmeldung an Expo, wenn ein Skill fehlt, irreführt oder sich nicht bewährt hat | bei Bedarf |
+
+Nicht genutzt: alle `eas-*`-Skills (kein EAS Build, Update, Hosting, Workflows oder EAS-Simulator, siehe 10.2), `expo-router` und `expo-project-structure` (Navigation und Ordnerstruktur sind in 2.1/2.2 festgelegt), `expo-app-clip` und `expo-brownfield` (kein iOS, keine native Bestandsapp), `expo-data-fetching` (die App arbeitet ohne Netzwerk).
+
+**Expo-MCP (`plugin:expo:expo`):**
+- **Genutzt (Server):** `search_documentation` und `read_documentation` für aktuelle Expo-Doku, bevor Expo-APIs, Config-Plugins oder Prebuild-Einstellungen geschrieben werden; `add_library` als Alternative zu `pnpm expo install`.
+- **Genutzt (lokal, ab SDK 54):** `automation_take_screenshot`, `automation_tap`, `automation_find_view`, `collect_app_logs` und `open_devtools` gegen den Development-Build im API-36-Emulator. Damit prüft die Umsetzung Oberflächenänderungen während der Entwicklung selbst. Interaktive Elemente erhalten dafür stabile `testID`s, die auch Maestro nutzt. Lokale Werkzeuge gibt es auf Linux nur für Android; das passt zum Ziel.
+- **Nicht genutzt:** `build_*`, `workflow_*`, `simulator_*`, `sandbox_*`, `observe_*`, `testflight_*`, `appstore_*`, `playstore_*` und `usage_budget_*`. Sie gehören zu EAS bzw. den Stores, die der Plan ausschließt.
+- **Abnahme bleibt bei Maestro:** MCP-Screenshots und -Taps ersetzen die Maestro-Flows nicht. Abnahmekriterien gelten erst mit grünen Maestro-Flows.
+- **Datenschutz:** Lokale Screenshots und Logs laufen über den Expo-Server zurück zum Werkzeug. Im Emulator werden deshalb nur Testdaten verwendet, nie deine echten Aufgaben.
+- **Keine Abhängigkeit der Auslieferung:** `expo-mcp` ist nur Entwicklungsabhängigkeit. CI, Release-Workflow und die gebaute APK brauchen weder das Paket noch ein Expo-Konto. Fällt der MCP aus, geht die Umsetzung ohne ihn weiter (Doku im Browser, Prüfung über Maestro und adb).
 
 ## 3. Dateiformat
 
@@ -711,12 +741,12 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 
 | # | Inhalt | Ergebnis / Ausgang |
 |---|---|---|
-| **M0 Werkzeugkette + Auslieferung** | Monorepo, TS, Lint, Vitest, minimale Electron-/Expo-Apps. Nach ausdrücklichem Umsetzungsauftrag Repository/CI anlegen. Hermes-Spike für YAML, RRULE, Zeitzonenauflösung und abbrechbare Regelberechnung. Release-Warteschlange, SHA-Bindung, Versionsvergabe und Wiederholungsversuche prüfen. | Beide Apps starten. APK-Update mit gleicher Signatur/höherem versionCode im API-36-Emulator; RPM-Installation im Fedora-43-Container. Drei schnelle Pushes erzeugen drei vollständige Releases. Obtainium wählt den neuesten Versionsstand auch nach verspätetem Nachholen eines älteren Releases. |
+| **M0 Werkzeugkette + Auslieferung** | Monorepo, TS, Lint, Vitest, minimale Electron-/Expo-Apps. Nach ausdrücklichem Umsetzungsauftrag Repository/CI anlegen. Hermes-Spike für YAML, RRULE, Zeitzonenauflösung und abbrechbare Regelberechnung. Release-Warteschlange, SHA-Bindung, Versionsvergabe und Wiederholungsversuche prüfen. Expo-Werkzeuge nach 2.3 einrichten: SDK über `expo-upgrade` pinnen, `expo-mcp` als Entwicklungsabhängigkeit. | Beide Apps starten. Ein MCP-Screenshot und ein MCP-Tap gegen den Development-Build im Emulator funktionieren. APK-Update mit gleicher Signatur/höherem versionCode im API-36-Emulator; RPM-Installation im Fedora-43-Container. Drei schnelle Pushes erzeugen drei vollständige Releases. Obtainium wählt den neuesten Versionsstand auch nach verspätetem Nachholen eines älteren Releases. |
 | **M1 Durchgängiger Dateizugriff + frühe Abbruchtests** | Minimaler Lese-/Schreibpfad, Desktop-/SAF-Adapter, Operationsjournal, dauerhafte Berechtigung, Neuanlage, Umbenennen, Verschieben und Wiederherstellen; Minimal-UI mit Fehlerzuständen. | Ordner wählen, extern ändern, App/Emulator neu starten. Abbruch an jeder Journal-/Schreib-/Kopier-/Löschphase, fehlende Berechtigung und voller Speicher werden bereits hier geprüft. Externe Änderungen werden mit Editor und adb einschließlich gleichzeitiger Änderungen simuliert; dies prüft die Dateischnittstelle, keine Garantie für jedes reale Sync-Setup. Keine Handy-Prüfliste. |
 | **M2 Dateiformat und Wiederherstellung** | Vollständiges Schema einschließlich Formatversion und Abschnittsarchiv, Diagnosen, Serializer, Dateinamen, Papierkorb, Undo und lokale Entwürfe, vollständige Scans | Golden-Tests und AK-07 bis AK-11 sowie AK-22, AK-24, AK-34, AK-36, AK-37 grün; offene Journale/Entwürfe überstehen Neustart und Cache-Neuaufbau. |
 | **M3 Datums- und Wiederholungskern** | Ansichten, Filter, Suche, Datumstypen, RecurrenceEngine, semantischer Validator, Abschnittswechsel und alle Aktionen aus 5.4 | Eigenschaftstests für Reihenfolge und Aktionswiederholung, COUNT/UNTIL-Grenzen, stabile Lesereparatur, Konfliktvorbedingungen, dateutil-Fixtures und Zeitzonen-/Abbruchtests grün. |
 | **M4 Desktop-UI v1** | Ansichten, Schnellerfassung, Detail mit Feldern, CodeMirror + Vorschau, Filter und Suche, Tastatur, hell/dunkel, Undo, Probleme-Ansicht | Playwright-E2E grün |
-| **M5 Android-UI v1** | dieselben Funktionen mit Touch-Bedienung, WebView-Vorschau, Wischgesten, App-Verknüpfung „Neue Aufgabe“ | Maestro-Flows auf dem Emulator (API 36) grün; das Release-APK installiert sich als Update im Emulator |
+| **M5 Android-UI v1** | dieselben Funktionen mit Touch-Bedienung, WebView-Vorschau, Wischgesten, App-Verknüpfung „Neue Aufgabe“. Während der Entwicklung prüft die Umsetzung jede Ansicht per MCP-Screenshot und -Tap im Emulator (2.3). | Maestro-Flows auf dem Emulator (API 36) grün; das Release-APK installiert sich als Update im Emulator |
 | **M6 Wiederholungs-UI** | einfacher Editor, Monatsende-Abfrage, erweiterte Regeleingabe mit Validierung, Vorschau, deutscher Beschreibung, Historienansicht, Rücknahme, Serie beenden; beide Plattformen | Abnahme der Wiederholungskriterien |
 | **M7 Gesamtrobustheit und Leistung** | Konfliktansicht (ganze Variante wählen), integrierte Wiederholungen der frühen Abbruchtests mit echten Oberflächen, Leistung mit 2 000 Dateien, simulierte konkurrierende Änderungen auf Desktop und API-36-Emulator | Alle Kriterien aus Abschnitt 9. Ziel: Cache-Anzeige Desktop < 2 s, Android < 3 s, Android-Vollscan < 15 s und Suche < 100 ms bei 2 000 Aufgaben à höchstens 4 KiB. API-36-AVD mit 4 vCPU/4 GiB, Host und Messverfahren dokumentieren; keine Übertragung als Garantie auf dein Handy. |
 | **M8 Version 1.0** | RPM und signierte APK über den Release-Workflow, README und `docs/DATEIFORMAT.md` | Version 1.0 als GitHub-Release, über Obtainium und `dnf` installierbar |
@@ -819,7 +849,7 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 2. Ich lege ihn mit `gh secret set` als Secrets im Repository `blaxcky/markdoist` ab (Keystore als Base64, Passwörter getrennt). Ins Repository selbst kommt er nie. Bevor ich das Repository anlege, Secrets setze und den ersten Push mache, kündige ich das in M0 kurz an.
 3. **Du sicherst den Keystore**, z. B. im Passwortmanager. Ohne passenden Schlüssel ist ein normales Update nicht möglich. Bei Deinstallation bleiben Dateien in Documents zwar erhalten, app-private Entwürfe/Journale und Freigaben können jedoch verloren gehen; deshalb erst benötigte Wiederherstellungsfassungen sichern.
 
-**Ohne EAS, ohne Expo-Konto:** Expo wird als Framework genutzt (Prebuild, Modules, Config-Plugins). Gebaut wird mit Gradle in GitHub Actions.
+**Ohne EAS; Expo-Konto nur für die Entwicklung:** Expo wird als Framework genutzt (Prebuild, Modules, Config-Plugins). Gebaut wird mit Gradle in GitHub Actions; Build und Release brauchen kein Expo-Konto. Dein Expo-Konto wird nur für den Expo-MCP in der Entwicklung verwendet (2.3).
 
 **Prüf-Workflow `ci.yml` [V]:** Bei Pushes auf andere Zweige und bei Pull Requests laufen Lint, Typprüfung und Vitest mit der Zeitzonen-Matrix; auf `main` übernimmt das der Job `test` im Release-Workflow. Maestro- und Playwright-E2E laufen lokal, weil Android-Emulatoren in CI langsam und wackelig sind. Ich führe sie vor jedem Push auf `main` aus, der Android- oder Desktop-Oberfläche betrifft.
 
@@ -827,6 +857,8 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 - Vorhanden sind `~/Android/Sdk` (Plattformen 35/36, Build-Tools, Emulator-Images 36/37) und JDK 21.
 - Ich versuche zuerst JDK 21. Falls Gradle oder React Native damit scheitern, installiere ich Temurin 17 im Benutzerverzeichnis (erlaubt laut F014).
 - Für die Entwicklung gibt es einen Development-Build mit `expo-dev-client` im Emulator. Expo Go geht nicht, weil das Kotlin-Modul nativ ist.
+- Expo-MCP mit lokalen Werkzeugen (2.3): `pnpm --filter mobile exec expo install expo-mcp --dev` einmalig; zum Entwickeln `EXPO_UNSTABLE_MCP_SERVER=1 pnpm --filter mobile exec expo start` mit laufendem Emulator. Nach jedem Start oder Stopp des Dev-Servers wird die MCP-Verbindung in Claude Code neu verbunden (`/mcp`).
+- **Einmalige Anmeldung durch dich:** Die Expo-CLI muss mit demselben Konto angemeldet sein wie der MCP. Du führst dazu einmal `pnpm --filter mobile exec expo login` aus; ich gebe keine Zugangsdaten ein. Prüfen lässt sich die Anmeldung mit `expo whoami`.
 
 **Mindestversion:** die minSdk der gewählten React-Native/Expo-Version (aktuell 24, Android 7). `targetSdk` 36. Getestet wird im Emulator mit API 36, also Android 16 wie auf deinem Handy (F018). Prüfungen auf dem Handy selbst gibt es nicht.
 
@@ -846,6 +878,7 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | Neuer Lesetag verändert offene Termine / wiederverwendete Schlüssel | Dateibasierter aktueller Zustand, Sperre statt stiller Reparatur, getrennte Revisionen und Ausschluss bereits aufgelöster Schlüssel; AK-15/16/29/30/32. |
 | Abweichende Versionen auf Desktop und Handy | Formatversion prüfen; neuere Semantik schreibgeschützt anzeigen, keine automatische Rückmigration. |
 | Cache oder Speicherzugriff täuscht fehlende Aufgaben vor | Vollständiger Rescan, unbekannte Metadaten lesen, Fehler nicht als Löschung behandeln; AK-34/36. |
+| Expo-MCP oder seine lokalen Werkzeuge (`EXPO_UNSTABLE_MCP_SERVER`) sind instabil, ändern sich oder sind nicht erreichbar | Nur Entwicklungshilfe, keine Abhängigkeit von CI, Release oder APK (2.3). Abnahme über Maestro; Doku notfalls direkt auf docs.expo.dev. |
 | Release-Rerun oder geänderte Workflowzählung bietet alte APK als Update an | Stabile Commit-/Versionszuordnung, fortgesetzter versionCode, Latest-Prüfung und Obtainium-Nachweis; AK-27. |
 
 ## 12. Nach 1.0 zurückgestellt
@@ -866,4 +899,4 @@ Diese Punkte sind bewusst nicht Teil von v1. Es werden dafür keine Gerüste, Fe
 
 # TEIL B – Rückfragen
 
-Alle Rückfragen stehen in `FRAGEN.md` (F001–F018, alle beantwortet und oben eingearbeitet). Neue Rückfragen werden dort als weitere Runde gesammelt eingetragen; die Antwortblöcke füllt nur der Nutzer aus.
+Die bisherigen Rückfragen stehen in `FRAGEN.md` (F001–F018, alle beantwortet und oben eingearbeitet). Neue Rückfragen werden über das Fragen-Tool gestellt: gesammelt in einer Datei unter `.fragen/`, geöffnet mit `fragen-tool`, Ablauf siehe `CLAUDE.md` und Skill `fragen`.
