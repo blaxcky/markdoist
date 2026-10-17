@@ -86,6 +86,23 @@ export interface RepositoryOptions {
   batchSize?: number;
 }
 
+/** Map, die jede Änderung zählt – damit der Index nur bei geänderten Dateien neu entsteht. */
+class TrackedMap<K, V> extends Map<K, V> {
+  version = 0;
+  override set(k: K, v: V) {
+    this.version++;
+    return super.set(k, v);
+  }
+  override delete(k: K) {
+    this.version++;
+    return super.delete(k);
+  }
+  override clear() {
+    this.version++;
+    super.clear();
+  }
+}
+
 export class Repository {
   private readonly adapter: StorageAdapter;
   private readonly kv: KeyValueStore;
@@ -93,7 +110,9 @@ export class Repository {
   private readonly clock: () => Clock;
   private readonly random?: (bytes: Uint8Array) => void;
   private readonly batchSize: number;
-  private files = new Map<string, IndexedFile>();
+  private files = new TrackedMap<string, IndexedFile>();
+  private indexCache: { version: number; clockTick: number; index: Index } | null = null;
+  private clockTick = 0;
   private metas = new Map<string, FileMeta>();
   private trash: FileMeta[] = [];
   private undoStack: UndoEntry[] = [];
@@ -134,9 +153,17 @@ export class Repository {
     return this.state;
   }
 
+  private currentIndex(): Index {
+    const c = this.indexCache;
+    if (c && c.version === this.files.version && c.clockTick === this.clockTick) return c.index;
+    const index = buildIndex([...this.files.values()], this.clock());
+    this.indexCache = { version: this.files.version, clockTick: this.clockTick, index };
+    return index;
+  }
+
   private snapshot(): RepoState {
     return {
-      index: buildIndex([...this.files.values()], this.clock()),
+      index: this.currentIndex(),
       files: new Map(this.files),
       trash: [...this.trash],
       unverified: this.unverified,
@@ -157,6 +184,7 @@ export class Repository {
 
   /** Neu auswerten, z. B. bei Mitternacht oder Zeitzonenwechsel (3.3). */
   refreshClock() {
+    this.clockTick++;
     this.emit();
   }
 
