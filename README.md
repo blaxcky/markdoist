@@ -22,6 +22,6 @@ pnpm e2e:desktop      # Playwright gegen die Electron-App
 pnpm --filter desktop dev
 ```
 
-Android (Development-Build, kein Expo Go): `pnpm --filter mobile exec expo prebuild --platform android --clean`, dann `./gradlew assembleDebug` in `apps/mobile/android` und `pnpm --filter mobile start`.
+Android (Development-Build, kein Expo Go): `pnpm --filter mobile exec expo prebuild --platform android --clean`, dann `./gradlew assembleDebug -PreactNativeArchitectures=x86_64` in `apps/mobile/android` und `pnpm --filter mobile start` (ohne `CI=1`, sonst keine Dateiüberwachung). Android-E2E: `MAESTRO_DEV=true apps/mobile/e2e/run.sh` mit laufendem Emulator.
 
 Struktur: `packages/core` (plattformfreier Kern), `packages/app` (Speichervertrag, Repository, Texte), `apps/desktop` (Electron), `apps/mobile` (Expo).
