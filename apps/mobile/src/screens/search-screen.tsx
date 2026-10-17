@@ -21,7 +21,11 @@ export function SearchScreen() {
   const [q, setQ] = useState("");
   const [includeDone, setIncludeDone] = useState(false);
   const [actions, setActions] = useState<TaskView | null>(null);
-  const results = useMemo(() => search(state.index, q, { includeDone }), [state.index, q, includeDone]);
+  const { results, ms } = useMemo(() => {
+    const t0 = Date.now();
+    const r = search(state.index, q, { includeDone });
+    return { results: r, ms: Date.now() - t0 };
+  }, [state.index, q, includeDone]);
   const tz = systemClock().timeZone;
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -30,6 +34,7 @@ export function SearchScreen() {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Switch value={includeDone} onValueChange={setIncludeDone} trackColor={{ true: c.primary }} />
           <Text style={{ color: c.fg }}>inkl. erledigt</Text>
+          {q.trim() ? <Text style={{ color: c.muted, marginLeft: "auto", fontVariant: ["tabular-nums"] }} testID="search-stats">{results.length} Treffer · {ms} ms</Text> : null}
         </View>
       </View>
       <FlashList
