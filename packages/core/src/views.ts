@@ -472,3 +472,24 @@ export function search(idx: Index, query: string, opts: { includeDone?: boolean 
   const byTitle = (a: TaskView, b: TaskView) => collator.compare(a.task.fields.title, b.task.fields.title);
   return [...title.sort(byTitle), ...content.sort(byTitle)];
 }
+
+// ---------------------------------------------------------------------------
+// Wählbare Sortierung (4.3): Fälligkeit, Planung, Priorität, Titel, Erstelldatum
+
+export type SortChoice = "default" | SortKey;
+
+export const SORT_LABELS: Record<SortChoice, string> = {
+  default: "Standard",
+  due: "Fälligkeit",
+  scheduled: "Planung",
+  priority: "Priorität",
+  title: "Titel",
+  created: "Erstelldatum",
+};
+
+/** Sortiert eine Liste nach der gewählten Reihenfolge; „Standard“ lässt die Ansichtsreihenfolge. */
+export function sortViews(list: TaskView[], choice: SortChoice, tz: string): TaskView[] {
+  if (choice === "default") return list;
+  const tail: SortKey[] = ["due", "scheduled", "priority", "title"].filter((k) => k !== choice) as SortKey[];
+  return [...list].sort(compareBy([choice, ...tail], tz, choice === "created" ? { created: true } : {}));
+}

@@ -8,8 +8,11 @@ import {
   matchesFilter,
   problemsView,
   search,
+  SORT_LABELS,
+  sortViews,
   todayView,
   type Filter,
+  type SortChoice,
   type TaskView,
 } from "@markdoist/core";
 import { bridge, type Settings } from "./bridge";
@@ -97,6 +100,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const [filter, setFilter] = useState<Filter>({});
   const [showFilters, setShowFilters] = useState(false);
   const [inboxNewest, setInboxNewest] = useState(true);
+  const [sort, setSort] = useState<SortChoice>("default");
   const [selected, setSelected] = useState<string | null>(null);
   const [capture, setCapture] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -119,7 +123,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
     return () => clearTimeout(t);
   }, [toast]);
 
-  const filtered = (list: TaskView[]) => list.filter((v) => matchesFilter(v, filter, idx.today));
+  const filtered = (list: TaskView[]) => sortViews(list.filter((v) => matchesFilter(v, filter, idx.today)), sort, tz);
 
   type Section = { title: string | null; items: TaskView[]; scheduledHint?: boolean };
   const sections: Section[] = useMemo(() => {
@@ -143,7 +147,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         return [];
     }
      
-  }, [idx, view, query, includeDone, filter, inboxNewest, tz]);
+  }, [idx, view, query, includeDone, filter, inboxNewest, tz, sort]);
 
   const flat = sections.flatMap((s) => s.items);
   const selectedView = idx.tasks.find((v) => v.task.ref === selected) ?? null;
@@ -365,6 +369,13 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
               {inboxNewest ? "Neueste zuerst" : "Älteste zuerst"}
             </button>
           )}
+          <select value={sort} onChange={(e) => setSort(e.target.value as SortChoice)} aria-label="Sortierung" data-testid="sort" className="btn">
+            {(Object.keys(SORT_LABELS) as SortChoice[]).map((k) => (
+              <option key={k} value={k}>
+                {k === "default" ? "Sortierung" : SORT_LABELS[k]}
+              </option>
+            ))}
+          </select>
           <button className="btn" onClick={() => void repo.scan({ full: true })} title="Neu einlesen (F5)" data-testid="rescan">
             ⟳
           </button>
@@ -403,23 +414,38 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
             </label>
             <label>
               Frist
-              <select value={typeof filter.due === "string" ? filter.due : "any"} onChange={(e) => setF("due", e.target.value as never)} data-testid="filter-due">
+              <select
+                value={typeof filter.due === "object" ? "range" : (filter.due ?? "any")}
+                onChange={(e) => setF("due", (e.target.value === "range" ? { from: idx.today.toString(), to: idx.today.add({ days: 30 }).toString() } : e.target.value) as never)}
+                data-testid="filter-due"
+              >
                 <option value="any">egal</option>
                 <option value="none">keine</option>
                 <option value="overdue">überfällig</option>
                 <option value="today">heute</option>
                 <option value="next7">nächste 7 Tage</option>
+                <option value="range">Zeitraum …</option>
               </select>
+              {typeof filter.due === "object" && (
+                <RangeInputs value={filter.due} onChange={(r) => setF("due", r as never)} />
+              )}
             </label>
             <label>
               Geplant
-              <select value={typeof filter.scheduled === "string" ? filter.scheduled : "any"} onChange={(e) => setF("scheduled", e.target.value as never)}>
+              <select
+                value={typeof filter.scheduled === "object" ? "range" : (filter.scheduled ?? "any")}
+                onChange={(e) => setF("scheduled", (e.target.value === "range" ? { from: idx.today.toString(), to: idx.today.add({ days: 30 }).toString() } : e.target.value) as never)}
+              >
                 <option value="any">egal</option>
                 <option value="none">keine</option>
                 <option value="earlier">früher eingeplant</option>
                 <option value="today">heute</option>
                 <option value="next7">nächste 7 Tage</option>
+                <option value="range">Zeitraum …</option>
               </select>
+              {typeof filter.scheduled === "object" && (
+                <RangeInputs value={filter.scheduled} onChange={(r) => setF("scheduled", r as never)} />
+              )}
             </label>
             <label>
               Wiederholung
@@ -536,5 +562,14 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         </div>
       )}
     </div>
+  );
+}
+
+function RangeInputs({ value, onChange }: { value: { from: string; to: string }; onChange(r: { from: string; to: string }): void }) {
+  return (
+    <>
+      <input type="date" value={value.from} onChange={(e) => e.target.value && onChange({ ...value, from: e.target.value })} aria-label="von" />
+      <input type="date" value={value.to} onChange={(e) => e.target.value && onChange({ ...value, to: e.target.value })} aria-label="bis" />
+    </>
   );
 }

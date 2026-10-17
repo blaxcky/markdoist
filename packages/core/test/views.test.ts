@@ -162,3 +162,16 @@ describe("Probleme und Varianten (AK-09, AK-11, AK-42)", () => {
     expect(problemsView(idx)).toHaveLength(1);
   });
 });
+
+describe("Wählbare Sortierung (4.3)", () => {
+  it("Priorität absteigend, Titel deutsch, leere Termine zuletzt", async () => {
+    const { sortViews } = await import("../src");
+    const idx = buildIndex(
+      [t("Äpfel", ["priority: low", "due: 2026-10-20"]), t("Birnen", ["priority: high"]), t("Zitronen", ["priority: normal", "due: 2026-10-13"])],
+      clock,
+    );
+    expect(sortViews(idx.tasks, "priority", TZ).map((v) => v.task.fields.title)).toEqual(["Birnen", "Zitronen", "Äpfel"]);
+    expect(sortViews(idx.tasks, "title", TZ).map((v) => v.task.fields.title)).toEqual(["Äpfel", "Birnen", "Zitronen"]);
+    expect(sortViews(idx.tasks, "due", TZ).map((v) => v.task.fields.title)).toEqual(["Zitronen", "Äpfel", "Birnen"]);
+  });
+});

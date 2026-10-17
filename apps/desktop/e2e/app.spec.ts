@@ -283,3 +283,15 @@ test("Textkonflikt: externe Änderung während der Eingabe, „Meine Version“ 
   await page.getByTestId("resolve-mine").click();
   await expect.poll(() => file("Zahnarzt.md")).toContain("Mein Zusatz");
 });
+
+test("Sortierung wählbar und Zeitraum-Filter (4.3)", async () => {
+  await page.getByTestId("nav-all").click();
+  await page.getByTestId("sort").selectOption("title");
+  const titles = await page.locator("[data-testid=task-row]").evaluateAll((els) => els.map((e) => e.getAttribute("data-title")));
+  expect(titles).toEqual([...titles].sort((a, b) => a!.localeCompare(b!, "de")));
+  await page.getByTestId("filter-toggle").click();
+  await page.getByTestId("filter-due").selectOption("range");
+  await page.getByLabel("von").first().fill("2026-10-12");
+  await page.getByLabel("bis").first().fill("2026-10-12");
+  await expect(page.locator("[data-testid=task-row]")).toHaveCount(2); // Zahnarzt und Wochenrückblick
+});
