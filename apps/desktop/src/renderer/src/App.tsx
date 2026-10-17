@@ -438,7 +438,15 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
             )}
           </div>
         )}
-        {state.unverified && <div className="banner">{T.unverified}</div>}
+        {state.unverified && !state.scanProgress && <div className="banner">{T.unverified}</div>}
+        {state.scanProgress && state.scanProgress.total > 0 && (
+          <div className="banner" data-testid="scan-progress">
+            Prüfe Dateien {state.scanProgress.done}/{state.scanProgress.total}{" "}
+            <button className="btn" style={{ padding: "0 6px" }} onClick={() => repo.cancelScan()}>
+              Abbrechen
+            </button>
+          </div>
+        )}
         {state.readError && <div className="banner error">{state.readError}</div>}
         {view === "problems" && !query ? (
           <Problems repo={repo} state={state} onSelect={(r) => setSelected(r)} onOutcome={notify} />

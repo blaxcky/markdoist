@@ -69,6 +69,8 @@ export interface RepoState {
   drafts: Draft[];
   /** Kennzahlen des letzten Abgleichs (Anzeige und Leistungsmessung, M7) */
   lastScan: { files: number; read: number; ms: number; full: boolean } | null;
+  /** Fortschritt eines laufenden Abgleichs */
+  scanProgress: { done: number; total: number } | null;
 }
 
 const UNDO_LIMIT = 50;
@@ -101,6 +103,8 @@ export class Repository {
   private scanning: Promise<void> | null = null;
   private readError: string | null = null;
   private lastScan: RepoState["lastScan"] = null;
+  private scanProgress: RepoState["scanProgress"] = null;
+  private scanCancelled = false;
   private listeners = new Set<() => void>();
   private queues = new Map<string, Promise<unknown>>();
   /** Generation je Datei: Undo/Ordnerwechsel machen wartende Aufträge ungültig */
@@ -142,6 +146,7 @@ export class Repository {
       recovery: [...this.recovery],
       drafts: [...this.drafts],
       lastScan: this.lastScan,
+      scanProgress: this.scanProgress,
     };
   }
 
@@ -233,8 +238,10 @@ export class Repository {
 
   scan(opts: { full?: boolean } = {}): Promise<void> {
     if (this.scanning) return this.scanning;
+    this.scanCancelled = false;
     this.scanning = this.doScan(opts.full ?? true).finally(() => {
       this.scanning = null;
+      this.scanProgress = null;
       this.emit();
     });
     this.emit();
@@ -268,8 +275,14 @@ export class Repository {
       else this.metas.set(m.ref, m);
     }
     let readFailures = 0;
+    this.scanProgress = { done: 0, total: toRead.length };
     for (let i = 0; i < toRead.length; i += this.batchSize) {
       if (this.closed) return;
+      if (this.scanCancelled) {
+        // Abgebrochen: nichts entfernen, Anzeige bleibt als ungeprüft markiert.
+        this.readError = "Abgleich abgebrochen – Anzeige ist nicht vollständig geprüft";
+        return;
+      }
       const batch = toRead.slice(i, i + this.batchSize);
       await Promise.all(
         batch.map(async (m) => {
@@ -285,6 +298,8 @@ export class Repository {
           }
         }),
       );
+      this.scanProgress = { done: Math.min(i + this.batchSize, toRead.length), total: toRead.length };
+      if (toRead.length > this.batchSize) this.emit();
     }
     for (const ref of [...this.files.keys()]) {
       if (!seen.has(ref)) {
@@ -296,6 +311,11 @@ export class Repository {
     if (full && !readFailures) this.unverified = false;
     this.lastScan = { files: metas.length, read: toRead.length, ms: Date.now() - t0, full };
     await this.saveCache();
+  }
+
+  /** Laufenden Abgleich abbrechen (7.1). */
+  cancelScan() {
+    this.scanCancelled = true;
   }
 
   // -------------------------------------------------------------------------

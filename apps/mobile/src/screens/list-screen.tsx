@@ -73,7 +73,17 @@ export function ListScreen({ kind }: { kind: ListKind }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      {state.unverified && <Text style={{ padding: 8, backgroundColor: c.badge, color: c.muted, fontSize: 12 }}>{T.unverified}</Text>}
+      {state.unverified && !state.scanProgress && <Text style={{ padding: 8, backgroundColor: c.badge, color: c.muted, fontSize: 12 }}>{T.unverified}</Text>}
+      {state.scanProgress && state.scanProgress.total > 0 && (
+        <View style={{ flexDirection: "row", alignItems: "center", padding: 8, backgroundColor: c.badge, gap: 12 }} testID="scan-progress">
+          <Text style={{ color: c.muted, fontSize: 12, flex: 1, fontVariant: ["tabular-nums"] }}>
+            Prüfe Dateien {state.scanProgress.done}/{state.scanProgress.total}
+          </Text>
+          <Pressable onPress={() => repo.cancelScan()} hitSlop={8}>
+            <Text style={{ color: c.primary, fontSize: 12 }}>Abbrechen</Text>
+          </Pressable>
+        </View>
+      )}
       {state.readError && <Text selectable style={{ padding: 8, backgroundColor: c.badge, color: c.danger, fontSize: 12 }}>{state.readError}</Text>}
       <FlashList
         data={items}

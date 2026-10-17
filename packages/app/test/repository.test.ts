@@ -257,3 +257,24 @@ describe("Ordnerwechsel (AK-36)", () => {
     expect(text === task("A") || text.includes("priority: high")).toBe(true);
   });
 });
+
+describe("Abgleich: Fortschritt und Abbruch (7.1)", () => {
+  it("Abbruch entfernt nichts und markiert die Anzeige als ungeprüft", async () => {
+    const adapter = new MemoryAdapter();
+    for (let i = 0; i < 120; i++) adapter.tasks.set(`A${i}.md`, { text: task(`A${i}`), mtime: 1 });
+    const repo = new Repository({ adapter, kv: new MemoryKeyValueStore(), folder: "t", clock: () => clockAtLocal("2026-10-12T10:00", TZ), batchSize: 10 });
+    await repo.open();
+    expect(repo.getState().files.size).toBe(120);
+    const seen: number[] = [];
+    repo.subscribe(() => {
+      const p = repo.getState().scanProgress;
+      if (p) seen.push(p.done);
+      if (p && p.done >= 30) repo.cancelScan();
+    });
+    await repo.scan({ full: true });
+    expect(seen.some((d) => d > 0 && d < 120)).toBe(true);
+    expect(repo.getState().files.size).toBe(120);
+    expect(repo.getState().readError).toMatch(/abgebrochen/);
+    expect(repo.getState().scanProgress).toBeNull();
+  });
+});
