@@ -1,0 +1,30 @@
+appId: de.markdoist.aufgaben
+productName: Markdoist
+executableName: markdoist
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+  - "!**/*.map"
+asar: true
+linux:
+  target:
+    - rpm
+  category: Office
+  syncDesktopName: true
+  icon: build/icon.png
+  synopsis: Lokale Markdown-Todo-App
+  description: Markdoist verwaltet Aufgaben als Markdown-Dateien in einem frei wählbaren Ordner.
+  desktop:
+    entry:
+      Name: Markdoist
+      Comment: Aufgaben als Markdown-Dateien
+      StartupWMClass: Markdoist
+rpm:
+  artifactName: markdoist-${version}.x86_64.${ext}
+  packageName: markdoist
+  fpm:
+    - --rpm-rpmbuild-define=_build_id_links none
+publish: null

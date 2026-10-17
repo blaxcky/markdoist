@@ -3,3 +3,8 @@ packages:
   - apps/*
 patchedDependencies:
   rrule@2.8.1: patches/rrule@2.8.1.patch
+onlyBuiltDependencies:
+  - electron
+  - esbuild
+ignoredBuiltDependencies:
+  - electron-winstaller
