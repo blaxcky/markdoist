@@ -86,4 +86,17 @@ Je Meilenstein: was geprüft wurde, wie, und Abweichungen von [V]-Vorschlägen a
 | Suche „bettwasche schritt“ (1 400 Treffer) | 75 ms | < 100 ms |
 | Heute-Ansicht berechnen | 8 ms | – |
 
-**[V]-Abweichungen M7:** Die Testabbrüche auf dem Desktop nutzen einen nur per Umgebungsvariable aktivierbaren Haken (`MARKDOIST_TEST_CRASH=<art>:<phase>`), der den Prozess mit `SIGKILL` beendet; `process.exit` liefe in Electron noch weiter und wäre kein echter Absturz.
+**Leistung Android (Emulator)** – AVD `Markdoist_API_36` (API 36, x86_64, 4 vCPU, 4 GiB) auf dem obigen Host; Release-Build (Hermes), 2 000 Aufgaben à ~3,3 KiB im Ordner `Documents/MarkdoistPerf`; Messung `apps/mobile/e2e/perf.sh`, Werte aus der App selbst (Einstellungen → Kennzahlen, Suche → Dauer):
+
+| Messgröße | Erste Messung (v0.1.7) | Nach Optimierung | Ziel |
+|---|---|---|---|
+| Anzeige aus Cache beim Kaltstart | 1,34 s | 1,70 s | < 3 s |
+| Vollständiger SAF-Abgleich (Erststart, ohne Cache) | 38,4 s | 5,6 s | < 15 s |
+| Vollständiger SAF-Abgleich (Kaltstart mit Cache) | – | 6,7 s | < 15 s |
+| Suche „bettwasche schritt“ (1 400 Treffer) | 18 ms | 18 ms | < 100 ms |
+
+Optimierungen: schneller Lesepfad für einfache Frontmatter (Auswerten 2 000 Dateien: 0,19 s), Stapel-Lesen mit sechs parallelen Zugriffen im SAF-Modul ohne zusätzliche Metadaten-Abfrage je Datei, Cache mit vorgeparsten Daten, Fortschrittsmeldungen höchstens alle 300 ms, Zähler nur bei geändertem Index. Die Werte gelten für den Emulator, nicht als Zusage für ein echtes Gerät. Die Oberfläche blieb während des Abgleichs bedienbar (Maestro-Flows liefen parallel zum Abgleich).
+
+**[V]-Abweichungen M7:**
+- Schneller Frontmatter-Lesepfad (`packages/core/src/fastyaml.ts`) neben der `yaml`-Bibliothek: nur zum Lesen einfacher Frontmatter, alles Ungewöhnliche fällt auf die Bibliothek zurück; ein Eigenschaftstest (4 000 Zufallsfälle) vergleicht beide. Geschrieben wird weiterhin nur über die Bibliothek.
+- Die Testabbrüche auf dem Desktop nutzen einen nur per Umgebungsvariable aktivierbaren Haken (`MARKDOIST_TEST_CRASH=<art>:<phase>`), der den Prozess mit `SIGKILL` beendet; `process.exit` liefe in Electron noch weiter und wäre kein echter Absturz.
