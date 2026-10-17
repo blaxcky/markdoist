@@ -1,5 +1,13 @@
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
+import { createHash } from "node:crypto";
+import { stat } from "node:fs/promises";
 import { join } from "node:path";
+import { FsAdapter } from "./fsAdapter";
+import { LocalStore, loadSettings, saveSettings, type Settings } from "./settings";
+
+// Datenverzeichnis: ~/.config/markdoist (Plan 3.1). Für Tests überschreibbar.
+const dataDir = process.env.MARKDOIST_DATA_DIR ?? join(app.getPath("appData"), "markdoist");
+app.setPath("userData", dataDir);
 
 // Nur eine App-Instanz schreibt; weitere Starts aktivieren sie (2.1).
 if (!app.requestSingleInstanceLock()) {
@@ -7,14 +15,40 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win: BrowserWindow | null = null;
+let settings: Settings = { folder: null, theme: "system" };
+let adapter: FsAdapter | null = null;
+let unwatch: (() => void) | null = null;
+const store = new LocalStore(dataDir);
+
+function journalDir(folder: string) {
+  const id = createHash("sha256").update(folder).digest("hex").slice(0, 16);
+  return join(dataDir, "journal", id);
+}
+
+function openFolder(folder: string | null) {
+  unwatch?.();
+  unwatch = null;
+  adapter = folder ? new FsAdapter(folder, journalDir(folder)) : null;
+  if (adapter) {
+    unwatch = adapter.watch((overflow) => win?.webContents.send("storage:changed", overflow));
+  }
+}
+
+function requireAdapter(): FsAdapter {
+  if (!adapter) throw new Error("Kein Aufgabenordner gewählt");
+  return adapter;
+}
 
 function createWindow(): void {
   win = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1280,
+    height: 820,
+    minWidth: 720,
+    minHeight: 480,
     title: "Markdoist",
     show: false,
     autoHideMenuBar: true,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#1e1f22" : "#ffffff",
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
@@ -29,8 +63,60 @@ function createWindow(): void {
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (e) => e.preventDefault());
+  win.on("focus", () => win?.webContents.send("app:focus"));
   if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void win.loadFile(join(__dirname, "../renderer/index.html"));
+}
+
+function registerIpc() {
+  ipcMain.handle("app:info", () => ({ version: app.getVersion() }));
+  ipcMain.handle("settings:get", () => settings);
+  ipcMain.handle("settings:theme", async (_e, theme: Settings["theme"]) => {
+    if (!["system", "light", "dark"].includes(theme)) return settings;
+    settings = { ...settings, theme };
+    nativeTheme.themeSource = theme;
+    await saveSettings(dataDir, settings);
+    return settings;
+  });
+  ipcMain.handle("folder:choose", async () => {
+    const r = await dialog.showOpenDialog(win!, {
+      title: "Aufgabenordner wählen",
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (r.canceled || !r.filePaths[0]) return settings;
+    return setFolder(r.filePaths[0]);
+  });
+  ipcMain.handle("folder:set", async (_e, folder: string) => setFolder(folder));
+  ipcMain.handle("open:external", (_e, url: string) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  });
+
+  // Ordnerbezogene Speicheroperationen; Referenzen werden im Adapter gegen den Ordner geprüft.
+  const s = (name: string, fn: (...args: never[]) => Promise<unknown>) =>
+    ipcMain.handle(`storage:${name}`, (_e, ...args) => (fn as (...a: unknown[]) => Promise<unknown>)(...args));
+  s("list", (scope: "tasks" | "trash") => requireAdapter().list(scope));
+  s("read", (ref: string) => requireAdapter().read(ref));
+  s("write", (ref: string, text: string, h: string) => requireAdapter().write(ref, text, h));
+  s("create", (name: string, text: string) => requireAdapter().create(name, text));
+  s("moveToTrash", (ref: string, h: string) => requireAdapter().moveToTrash(ref, h));
+  s("restoreFromTrash", (ref: string, h: string) => requireAdapter().restoreFromTrash(ref, h));
+  s("rename", (ref: string, n: string, h: string) => requireAdapter().rename(ref, n, h));
+  s("deletePermanently", (ref: string, h: string) => requireAdapter().deletePermanently(ref, h));
+  s("recover", () => requireAdapter().recover());
+  s("resolveRecovery", (opId: string) => requireAdapter().resolveRecovery(opId));
+
+  ipcMain.handle("kv:get", (_e, k: string) => store.get(k));
+  ipcMain.handle("kv:set", (_e, k: string, v: string) => store.set(k, v));
+  ipcMain.handle("kv:delete", (_e, k: string) => store.delete(k));
+}
+
+async function setFolder(folder: string): Promise<Settings> {
+  const st = await stat(folder);
+  if (!st.isDirectory()) throw new Error("Kein Ordner");
+  settings = { ...settings, folder };
+  await saveSettings(dataDir, settings);
+  openFolder(folder);
+  return settings;
 }
 
 app.on("second-instance", () => {
@@ -40,7 +126,12 @@ app.on("second-instance", () => {
   }
 });
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
+  settings = await loadSettings(dataDir);
+  if (process.env.MARKDOIST_FOLDER) settings.folder = process.env.MARKDOIST_FOLDER;
+  nativeTheme.themeSource = settings.theme;
+  openFolder(settings.folder);
+  registerIpc();
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -48,5 +139,6 @@ void app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  unwatch?.();
   app.quit();
 });

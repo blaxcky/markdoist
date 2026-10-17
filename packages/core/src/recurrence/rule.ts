@@ -250,9 +250,9 @@ function impossibleReason(r: Rule): string | null {
 export function formatRule(r: Rule): string {
   const parts = [`FREQ=${r.freq}`];
   if (r.interval !== 1) parts.push(`INTERVAL=${r.interval}`);
+  if (r.bymonth.length) parts.push(`BYMONTH=${r.bymonth.join(",")}`);
   if (r.byday.length) parts.push(`BYDAY=${r.byday.map((d) => `${d.n ?? ""}${d.wd}`).join(",")}`);
   if (r.bymonthday.length) parts.push(`BYMONTHDAY=${r.bymonthday.join(",")}`);
-  if (r.bymonth.length) parts.push(`BYMONTH=${r.bymonth.join(",")}`);
   if (r.byyearday.length) parts.push(`BYYEARDAY=${r.byyearday.join(",")}`);
   if (r.byweekno.length) parts.push(`BYWEEKNO=${r.byweekno.join(",")}`);
   if (r.bysetpos.length) parts.push(`BYSETPOS=${r.bysetpos.join(",")}`);
