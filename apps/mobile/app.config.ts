@@ -1,7 +1,7 @@
 import type { ExpoConfig } from "expo/config";
 
 // Version und versionCode setzt der Release-Workflow (Plan 10.2).
-const version = process.env.MARKDOIST_VERSION ?? "0.1.0";
+const version = process.env.MARKDOIST_VERSION ?? "1.0.0";
 const versionCode = Number(process.env.MARKDOIST_VERSION_CODE ?? "1");
 
 const config: ExpoConfig = {

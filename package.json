@@ -1,7 +1,7 @@
 {
   "name": "markdoist-monorepo",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Markdoist – lokale Markdown-Todo-App",
   "packageManager": "pnpm@10.34.7",
   "engines": {
