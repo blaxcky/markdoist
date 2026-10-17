@@ -347,6 +347,28 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
           {save === "conflict" && T.save.conflict}
         </span>
       </div>
+      {save === "conflict" && (
+        <div className="diag warn" data-testid="draft-conflict">
+          Die Datei wurde extern geändert, während du geschrieben hast. Dein Entwurf ist lokal gesichert.
+          <div className="actions" style={{ padding: "6px 0 0" }}>
+            {(["mine", "file", "both"] as const).map((ch) => (
+              <button
+                key={ch}
+                className="btn"
+                data-testid={`resolve-${ch}`}
+                onClick={() =>
+                  void repo.resolveDraftConflict(ref, ch).then((o) => {
+                    onOutcome(o, "Konflikt gelöst");
+                    setSave(o.status === "ok" || o.status === "noop" ? "saved" : o.status === "conflict" ? "conflict" : "failed");
+                  })
+                }
+              >
+                {{ mine: "Meine Version", file: "Datei-Version", both: "Beide behalten" }[ch]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {tab === "edit" ? (
         <MarkdownEditor value={body} docKey={ref} readOnly={ro} onChange={onBodyChange} onBlur={() => void flush()} />
       ) : (

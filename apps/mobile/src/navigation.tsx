@@ -41,7 +41,7 @@ function HeaderButtons() {
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
   const state = useRepoState();
   const c = useTheme();
-  const problems = problemsView(state.index).length + state.recovery.length;
+  const problems = problemsView(state.index).length + state.recovery.length + state.drafts.filter((d) => !state.files.has(d.ref)).length;
   const btn = (label: string, to: keyof RootStack, testID: string, color = c.fg) => (
     <Pressable onPress={() => nav.navigate(to as never)} hitSlop={8} testID={testID} accessibilityLabel={testID} style={{ paddingHorizontal: 10 }}>
       <Text style={{ fontSize: 20, color }}>{label}</Text>

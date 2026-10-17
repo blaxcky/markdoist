@@ -243,6 +243,31 @@ export function DetailScreen() {
           {{ idle: "", pending: T.save.pending, draft: T.save.draft, saved: T.save.saved, failed: T.save.failed, conflict: T.save.conflict }[save]}
         </Text>
       </View>
+      {save === "conflict" && (
+        <View style={{ backgroundColor: c.badge, borderRadius: 8, padding: 10, gap: 8 }} testID="draft-conflict">
+          <Text selectable style={{ color: c.warn }}>Die Datei wurde extern geändert. Dein Entwurf ist lokal gesichert.</Text>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            {(["mine", "file", "both"] as const).map((ch) => (
+              <Chip
+                key={ch}
+                c={c}
+                active={false}
+                testID={`resolve-${ch}`}
+                label={{ mine: "Meine Version", file: "Datei-Version", both: "Beide behalten" }[ch]}
+                onPress={() =>
+                  void repo.resolveDraftConflict(ref, ch).then((o) => {
+                    notify(o, "Konflikt gelöst");
+                    if (o.status === "ok" || o.status === "noop") {
+                      pending.current = false;
+                      setSave("saved");
+                    }
+                  })
+                }
+              />
+            ))}
+          </View>
+        </View>
+      )}
       {tab === "edit" ? (
         <TextInput
           value={body}

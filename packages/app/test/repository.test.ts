@@ -278,3 +278,45 @@ describe("Abgleich: Fortschritt und Abbruch (7.1)", () => {
     expect(repo.getState().scanProgress).toBeNull();
   });
 });
+
+describe("Textkonflikt-Entscheidungen (7.3) und Wiederherstellung", () => {
+  const conflicted = async () => {
+    const { repo, adapter } = setup();
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    await repo.saveDraft("tasks/A.md", "Mein Text\n");
+    adapter.external("A.md", task("A").replace("Notiz", "Fremder Text"));
+    await repo.scan();
+    expect((await repo.commitDraft("tasks/A.md")).status).toBe("conflict");
+    return { repo, adapter };
+  };
+  it("Meine Version", async () => {
+    const { repo, adapter } = await conflicted();
+    expect((await repo.resolveDraftConflict("tasks/A.md", "mine")).status).toBe("ok");
+    expect(adapter.tasks.get("A.md")!.text).toContain("Mein Text");
+    expect(repo.getState().drafts).toHaveLength(0);
+  });
+  it("Datei-Version", async () => {
+    const { repo, adapter } = await conflicted();
+    await repo.resolveDraftConflict("tasks/A.md", "file");
+    expect(adapter.tasks.get("A.md")!.text).toContain("Fremder Text");
+    expect(repo.getState().drafts).toHaveLength(0);
+  });
+  it("Beide behalten", async () => {
+    const { repo, adapter } = await conflicted();
+    expect((await repo.resolveDraftConflict("tasks/A.md", "both")).status).toBe("ok");
+    expect(adapter.tasks.get("A.md")!.text).toContain("Fremder Text");
+    expect([...adapter.tasks.values()].some((f) => f.text.includes("Mein Text"))).toBe(true);
+  });
+  it("verwaister Entwurf nach externer Löschung", async () => {
+    const { repo, adapter } = setup();
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    await repo.saveDraft("tasks/A.md", "Rettung\n");
+    adapter.external("A.md", null);
+    await repo.scan();
+    expect(repo.orphanDrafts()).toHaveLength(1);
+    await repo.resolveDraftConflict("tasks/A.md", "both");
+    expect([...adapter.tasks.values()].some((f) => f.text.includes("Rettung"))).toBe(true);
+  });
+});

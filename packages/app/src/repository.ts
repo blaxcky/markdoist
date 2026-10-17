@@ -693,6 +693,55 @@ export class Repository {
     return r;
   }
 
+  /**
+   * Bewusste Entscheidung bei einem Textkonflikt (7.3):
+   * „mine“ schreibt den Entwurf auf die aktuelle Dateifassung, „file“ verwirft den Entwurf,
+   * „both“ speichert den Entwurf als neue Datei und lässt die Datei unverändert.
+   */
+  async resolveDraftConflict(ref: string, choice: "mine" | "file" | "both"): Promise<Outcome> {
+    const d = this.drafts.find((x) => x.ref === ref);
+    if (!d) return { status: "noop" };
+    if (choice === "file") {
+      await this.discardDraft(ref);
+      return { status: "ok", message: "Entwurf verworfen" };
+    }
+    const f = this.files.get(ref);
+    if (choice === "both" || !f || f.kind !== "task") {
+      const title = f && f.kind === "task" ? `${f.fields.title} (Entwurf)` : "Wiederhergestellter Entwurf";
+      return this.saveDraftAsNew(ref, title);
+    }
+    // „Meine Version“: auf die zuletzt verglichene Dateifassung beziehen; der Hash muss noch passen.
+    d.baseHash = f.hash;
+    d.baseText = f.body;
+    await this.saveDrafts();
+    return this.commitDraft(ref);
+  }
+
+  /** Entwürfe, deren Datei nicht mehr existiert (7.1, 7.6). */
+  orphanDrafts(): Draft[] {
+    return this.drafts.filter((d) => !this.files.has(d.ref));
+  }
+
+  /**
+   * Wiederherstellungsfall übernehmen: gewünschte Fassung auf die aktuelle Datei schreiben.
+   * Nur auf ausdrücklichen Wunsch; die aktuelle Fassung wird über ihren Hash abgesichert.
+   */
+  async applyRecovery(opId: string): Promise<Outcome> {
+    const c = this.recovery.find((r) => r.opId === opId);
+    if (!c || c.desired === null) return { status: "blocked", message: "Keine gewünschte Fassung vorhanden" };
+    let res: WriteResult;
+    try {
+      const cur = await this.adapter.read(c.ref);
+      res = await this.adapter.write(c.ref, c.desired, cur.hash);
+    } catch {
+      // Datei fehlt: als neue Datei anlegen statt still neu zu erzeugen.
+      res = await this.adapter.create(freeName(c.name, (n) => [...this.files.values()].some((f) => f.name.toLowerCase() === n.toLowerCase())), c.desired);
+    }
+    if (res.status !== "ok") return this.failed(res);
+    await this.resolveRecovery(opId);
+    return { status: "ok", message: "Fassung übernommen" };
+  }
+
   /** Entwurf als neue Datei speichern (nach externer Löschung, 7.1). */
   async saveDraftAsNew(ref: string, title: string): Promise<Outcome> {
     const d = this.drafts.find((x) => x.ref === ref);

@@ -27,11 +27,28 @@ export function Problems({ repo, state, onSelect, onOutcome }: Props) {
             </details>
           )}
           <div className="actions" style={{ padding: "6px 0 0" }}>
-            <button className="btn" onClick={() => void repo.resolveRecovery(r.opId)}>Erledigt markieren</button>
+            {r.desired !== null && (
+              <button className="btn" onClick={() => void repo.applyRecovery(r.opId).then((o) => onOutcome(o, "Fassung übernommen"))} data-testid="apply-recovery">
+                Gewünschte Fassung übernehmen
+              </button>
+            )}
+            <button className="btn" onClick={() => void repo.resolveRecovery(r.opId)}>Aktuellen Stand behalten</button>
           </div>
         </div>
       ))}
-      {entries.length === 0 && state.recovery.length === 0 && <div className="empty">Keine Probleme.</div>}
+      {repo.orphanDrafts().map((d) => (
+        <div key={d.ref} className="diag warn" data-testid="orphan-draft">
+          <b>Entwurf ohne Datei</b> ({d.ref.replace(/^tasks\//, "")}): Die Datei wurde extern gelöscht oder umbenannt.
+          <pre className="diff">{d.text}</pre>
+          <div className="actions" style={{ padding: "6px 0 0" }}>
+            <button className="btn" onClick={() => void repo.resolveDraftConflict(d.ref, "both").then((o) => onOutcome(o, "Als neue Datei gespeichert"))}>
+              Als neue Datei speichern
+            </button>
+            <button className="btn" onClick={() => void repo.discardDraft(d.ref)}>Verwerfen</button>
+          </div>
+        </div>
+      ))}
+      {entries.length === 0 && state.recovery.length === 0 && repo.orphanDrafts().length === 0 && <div className="empty">Keine Probleme.</div>}
       {entries.map((p, i) => {
         if (p.kind === "conflict") {
           const c = p.conflict!;

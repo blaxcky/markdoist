@@ -271,3 +271,15 @@ test("Prozessabbruch beim Schreiben: alte Fassung bleibt, Wiederherstellung ange
   expect(await file("Zahnarzt.md")).toBe(before);
   expect((await readdir(folder)).filter((n) => n.endsWith(".todo-tmp"))).toEqual([]);
 });
+
+test("Textkonflikt: externe Änderung während der Eingabe, „Meine Version“ (7.3)", async () => {
+  await row("Zahnarzttermin vereinbaren").click();
+  await page.locator(".cm-content").click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type(" Mein Zusatz");
+  const orig = await file("Zahnarzt.md");
+  await writeFile(join(folder, "Zahnarzt.md"), orig.replace("Praxis anrufen.", "Praxis per Mail kontaktieren."));
+  await expect(page.getByTestId("draft-conflict")).toBeVisible({ timeout: 6000 });
+  await page.getByTestId("resolve-mine").click();
+  await expect.poll(() => file("Zahnarzt.md")).toContain("Mein Zusatz");
+});

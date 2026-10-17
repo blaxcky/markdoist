@@ -29,10 +29,19 @@ export function ProblemsScreen() {
           <Text selectable style={{ color: c.danger, fontWeight: "600" }}>Wiederherstellung: {r.name}</Text>
           <Text selectable style={{ color: c.fg }}>{r.message}</Text>
           {r.desired !== null && <Text selectable style={{ color: c.muted, fontFamily: "monospace", fontSize: 12 }} numberOfLines={12}>{r.desired}</Text>}
-          {btn("Erledigt markieren", () => void repo.resolveRecovery(r.opId))}
+          {r.desired !== null && btn("Gewünschte Fassung übernehmen", () => void repo.applyRecovery(r.opId).then((o) => notify(o, "Fassung übernommen")))}
+          {btn("Aktuellen Stand behalten", () => void repo.resolveRecovery(r.opId))}
         </View>
       ))}
-      {entries.length === 0 && state.recovery.length === 0 && <Text style={{ color: c.muted }}>Keine Probleme.</Text>}
+      {repo.orphanDrafts().map((d) => (
+        <View key={d.ref} style={card} testID="orphan-draft">
+          <Text selectable style={{ color: c.warn, fontWeight: "600" }}>Entwurf ohne Datei ({d.ref.replace(/^tasks\//, "")})</Text>
+          <Text selectable style={{ color: c.fg, fontFamily: "monospace", fontSize: 12 }} numberOfLines={8}>{d.text}</Text>
+          {btn("Als neue Datei speichern", () => void repo.resolveDraftConflict(d.ref, "both").then((o) => notify(o, "Als neue Datei gespeichert")))}
+          {btn("Verwerfen", () => void repo.discardDraft(d.ref))}
+        </View>
+      ))}
+      {entries.length === 0 && state.recovery.length === 0 && repo.orphanDrafts().length === 0 && <Text style={{ color: c.muted }}>Keine Probleme.</Text>}
       {entries.map((p, i) => {
         if (p.kind === "conflict") {
           const files = p.conflict!.files;
