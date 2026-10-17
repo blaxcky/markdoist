@@ -13,6 +13,7 @@ export default tseslint.config(
       "**/*.config.js",
       "**/*.config.mjs",
       "scripts/**",
+      "**/e2e/*.mjs",
     ],
   },
   js.configs.recommended,
