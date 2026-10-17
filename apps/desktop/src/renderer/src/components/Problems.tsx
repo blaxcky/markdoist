@@ -1,6 +1,7 @@
 // Probleme (4.3) und Konfliktvarianten (7.4): ganze Variante behalten oder beide behalten.
 import { useState } from "react";
 import { diffLines } from "diff";
+import { useDialog } from "../dialog";
 import { T, type Outcome, type Repository, type RepoState } from "@markdoist/app";
 import { problemsView, type ConflictGroup, type Task } from "@markdoist/core";
 
@@ -100,13 +101,14 @@ function ConflictDialog({
   onKeep(t: Task): void;
   onKeepBoth(): void;
 }) {
+  const dialog = useDialog<HTMLDivElement>(onClose);
   const [a, b] = group.files as [Task, Task];
   const keys = [...new Set([...Object.keys(a.data), ...Object.keys(b.data)])];
   const show = (v: unknown) => (v === undefined ? "–" : typeof v === "string" ? v : JSON.stringify(v));
   const parts = diffLines(a.body, b.body);
   return (
     <div className="modal-back" onClick={onClose}>
-      <div className="modal" style={{ width: "min(900px, 95vw)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Konfliktvarianten" data-testid="conflict-dialog">
+      <div ref={dialog} className="modal" style={{ width: "min(900px, 95vw)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Konfliktvarianten" data-testid="conflict-dialog">
         <h2>Konfliktvarianten</h2>
         <p style={{ margin: 0, fontSize: 12 }}>Es wird nichts automatisch entschieden. Die nicht gewählte Variante wandert in den Papierkorb.</p>
         <div className="variants">

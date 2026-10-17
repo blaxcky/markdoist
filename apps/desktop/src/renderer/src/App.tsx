@@ -185,7 +185,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
       const el = e.target as HTMLElement;
       const inField = el.closest("input, textarea, select, .cm-editor, [contenteditable]") !== null;
       const ctrl = e.ctrlKey || e.metaKey;
-      if (capture) return;
+      // Offene Dialoge haben eigene Tastaturbedienung.
+      if (capture || document.querySelector('[aria-modal="true"]')) return;
       if (ctrl && e.key.toLowerCase() === "n") {
         e.preventDefault();
         setCapture(true);

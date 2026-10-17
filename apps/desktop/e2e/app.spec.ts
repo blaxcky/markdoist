@@ -235,3 +235,17 @@ test("Gleiche Frist extern und lokal geändert → Konflikt, nichts überschrieb
   await expect(page.getByTestId("toast")).toContainText(/geändert|Konflikt/);
   expect(await file("Zahnarzt.md")).toBe(ext);
 });
+
+test("Dialoge: Fokus beim Öffnen, Escape schließt, keine Aufgabenkürzel im Dialog (4.5)", async () => {
+  await row("Zahnarzttermin vereinbaren").click();
+  await page.getByTestId("edit-recurrence").click();
+  await expect(page.getByTestId("recurrence-editor")).toBeVisible();
+  const focused = await page.evaluate(() => document.activeElement?.closest("[data-testid=recurrence-editor]") !== null);
+  expect(focused).toBe(true);
+  const before = await file("Zahnarzt.md");
+  await page.keyboard.press("n");
+  await expect(page.getByTestId("capture")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("recurrence-editor")).toHaveCount(0);
+  expect(await file("Zahnarzt.md")).toBe(before);
+});

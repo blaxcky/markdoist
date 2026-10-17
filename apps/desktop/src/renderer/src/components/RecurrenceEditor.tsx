@@ -1,6 +1,7 @@
 // Wiederholungseditor (Abschnitt 6, M6): einfache Optionen, Monatsende-Abfrage,
 // erweiterte Regeleingabe mit Validierung, Vorschau der nächsten 10 Termine.
 import { useMemo, useState } from "react";
+import { useDialog } from "../dialog";
 import {
   defaultForm,
   formFromSeries,
@@ -33,6 +34,7 @@ export function RecurrenceEditor({ series, today, defaultField, onCancel, onSave
   const [f, setF] = useState<RuleForm>(() =>
     series ? formFromSeries(series, today) : defaultForm(today, defaultField),
   );
+  const dialog = useDialog<HTMLDivElement>(onCancel);
   const set = <K extends keyof RuleForm>(k: K, v: RuleForm[K]) => setF((x) => ({ ...x, [k]: v }));
   const preview = useMemo(() => previewForm(f, today, !!series), [f, today, series]);
   const simple = f.mode === "simple";
@@ -41,7 +43,7 @@ export function RecurrenceEditor({ series, today, defaultField, onCancel, onSave
 
   return (
     <div className="modal-back" onClick={onCancel}>
-      <div className="modal" role="dialog" aria-label="Wiederholung" onClick={(e) => e.stopPropagation()} data-testid="recurrence-editor">
+      <div ref={dialog} className="modal" role="dialog" aria-modal="true" aria-label="Wiederholung" onClick={(e) => e.stopPropagation()} data-testid="recurrence-editor">
         <h2>Wiederholung</h2>
         <div className="fields" style={{ padding: 0 }}>
           <label>Art</label>
