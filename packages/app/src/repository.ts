@@ -20,6 +20,7 @@ import {
   type Plan,
   type Task,
   type TaskAction,
+  type YamlValue,
 } from "@markdoist/core";
 import type { FileMeta, KeyValueStore, RecoveryCase, StorageAdapter, WriteResult } from "./storage";
 import { writeResultMessage } from "./texts";
@@ -228,12 +229,17 @@ export class Repository {
     try {
       const raw = await this.kv.get(this.key("cache"));
       if (!raw) return;
-      const entries = JSON.parse(raw) as { meta: FileMeta; text: string; hash: string }[];
+      const entries = JSON.parse(raw) as {
+        meta: FileMeta;
+        text: string;
+        hash: string;
+        parsed?: { data: Record<string, YamlValue>; hasAnchors: boolean };
+      }[];
       for (const e of entries) {
         this.metas.set(e.meta.ref, e.meta);
         this.files.set(
           e.meta.ref,
-          readTaskFile({ ref: e.meta.ref, name: e.meta.name, text: e.text, hash: e.hash, mtime: e.meta.mtime }),
+          readTaskFile({ ref: e.meta.ref, name: e.meta.name, text: e.text, hash: e.hash, mtime: e.meta.mtime, preParsed: e.parsed }),
         );
       }
       this.unverified = true;
@@ -249,6 +255,7 @@ export class Repository {
       meta: this.metas.get(f.ref) ?? { name: f.name, ref: f.ref, mtime: f.mtime, size: null },
       text: f.text,
       hash: f.hash,
+      ...(f.kind === "task" ? { parsed: { data: f.data, hasAnchors: f.hasAnchors } } : {}),
     }));
     try {
       await this.kv.set(this.key("cache"), JSON.stringify(entries));

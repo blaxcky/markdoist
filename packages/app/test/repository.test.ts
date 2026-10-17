@@ -320,3 +320,23 @@ describe("Textkonflikt-Entscheidungen (7.3) und Wiederherstellung", () => {
     expect([...adapter.tasks.values()].some((f) => f.text.includes("Rettung"))).toBe(true);
   });
 });
+
+describe("Cache mit vorgeparster Frontmatter", () => {
+  it("liefert dieselben Daten wie frisches Einlesen", async () => {
+    const kv = new MemoryKeyValueStore();
+    const adapter = new MemoryAdapter();
+    adapter.tasks.set("A.md", { text: task("A", "due: 2026-10-14\ntags: [x, y]\n# Kommentar\n"), mtime: 1 });
+    const a = setup(adapter, kv);
+    await a.repo.open();
+    const fresh = [...a.repo.getState().files.values()][0]!;
+    adapter.listFails = true; // zweiter Start: nur Cache
+    const b = setup(adapter, kv);
+    await b.repo.open();
+    const cached = [...b.repo.getState().files.values()][0]!;
+    expect(cached.kind).toBe("task");
+    if (cached.kind !== "task" || fresh.kind !== "task") return;
+    expect(cached.data).toEqual(fresh.data);
+    expect(cached.fields.due?.raw).toBe("2026-10-14");
+    expect(cached.hash).toBe(fresh.hash);
+  });
+});

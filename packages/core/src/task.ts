@@ -77,6 +77,7 @@ export interface Task extends FileRef {
   diagnostics: Diagnostic[];
   /** schreibgeschützt (höhere Formatversion, unbekannte Serienstruktur, Anker o. ä.) */
   readOnly: boolean;
+  hasAnchors: boolean;
 }
 
 export interface UnrecognizedFile extends FileRef {
@@ -99,6 +100,8 @@ export interface ReadInput extends FileRef {
   mtime: number | null;
   /** true, wenn die Bytes kein gültiges UTF-8 waren */
   invalidUtf8?: boolean;
+  /** bereits geparste Frontmatter desselben Textes (Cache), spart das erneute YAML-Parsen */
+  preParsed?: { data: Record<string, YamlValue>; hasAnchors: boolean };
 }
 
 /** Liest eine Datei. Schreibt nie etwas (7.1). */
@@ -128,7 +131,9 @@ export function readTaskFile(input: ReadInput): IndexedFile {
       ],
     };
   }
-  const parsed = parseFrontmatter(split.yaml);
+  const parsed = input.preParsed
+    ? ({ ok: true, ...input.preParsed } as const)
+    : parseFrontmatter(split.yaml);
   if (!parsed.ok) {
     const code: DiagnosticCode =
       parsed.error === "duplicate-key"
@@ -287,6 +292,7 @@ export function readTaskFile(input: ReadInput): IndexedFile {
     body: split.body,
     diagnostics,
     readOnly,
+    hasAnchors: parsed.hasAnchors,
   };
 }
 
