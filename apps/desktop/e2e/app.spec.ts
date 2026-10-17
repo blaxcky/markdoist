@@ -209,3 +209,29 @@ test("Konfliktkopie: Variante behalten (AK-33)", async () => {
   expect(await file("Zahnarzt.md")).toBe(orig);
   expect((await readdir(join(folder, ".todo-trash"))).length).toBe(1);
 });
+
+test("Externe Änderung wird per Watcher erkannt (7.1)", async () => {
+  await writeFile(join(folder, "Extern.md"), fm(["id: 01K7C9V3QH2T8M4N6P0R5S1EXT", "title: Extern angelegt", "status: open", "inbox: true"]));
+  await page.getByTestId("nav-inbox").click();
+  await expect(row("Extern angelegt")).toBeVisible({ timeout: 5000 });
+});
+
+test("Externer Body + lokale Priorität bleiben beide erhalten (AK-10)", async () => {
+  await row("Zahnarzttermin vereinbaren").click();
+  const orig = await file("Zahnarzt.md");
+  // Externe Änderung am Body, ohne dass die App sie vorher eingelesen haben muss.
+  await writeFile(join(folder, "Zahnarzt.md"), orig.replace("Praxis anrufen.", "Praxis anrufen – extern ergänzt."));
+  await page.getByTestId("field-priority").selectOption("high");
+  await expect.poll(() => file("Zahnarzt.md")).toContain("priority: high");
+  expect(await file("Zahnarzt.md")).toContain("extern ergänzt");
+});
+
+test("Gleiche Frist extern und lokal geändert → Konflikt, nichts überschrieben (AK-10)", async () => {
+  await row("Zahnarzttermin vereinbaren").click();
+  const orig = await file("Zahnarzt.md");
+  const ext = orig.replace("due: 2026-10-12", "due: 2026-10-19");
+  await writeFile(join(folder, "Zahnarzt.md"), ext);
+  await page.getByTestId("field-due").fill("2026-10-16");
+  await expect(page.getByTestId("toast")).toContainText(/geändert|Konflikt/);
+  expect(await file("Zahnarzt.md")).toBe(ext);
+});
