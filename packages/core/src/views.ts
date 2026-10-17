@@ -34,6 +34,9 @@ export interface TaskView {
   variants: Task[];
   searchTitle: string;
   searchBody: string;
+  /** vorberechnete Sortierschlüssel (ms) */
+  dueKey: number | null;
+  scheduledKey: number | null;
 }
 
 export interface Index {
@@ -95,6 +98,36 @@ function effectiveDates(t: Task, s: Series | null): { due: DateValue | null; sch
   return { due: t.fields.due, scheduled: t.fields.scheduled };
 }
 
+interface StaticPart {
+  series: Series | null;
+  due: DateValue | null;
+  scheduled: DateValue | null;
+  diagnostics: Diagnostic[];
+  searchTitle: string;
+  searchBody: string;
+}
+
+// Je Datei-Objekt zwischengespeichert: ändert sich nur, wenn die Datei neu gelesen wird.
+const staticCache = new WeakMap<Task, StaticPart>();
+
+function staticPart(t: Task): StaticPart {
+  let st = staticCache.get(t);
+  if (!st) {
+    const series = readSeries(t);
+    const { due, scheduled } = effectiveDates(t, series);
+    st = {
+      series,
+      due,
+      scheduled,
+      diagnostics: [...t.diagnostics, ...(series?.diagnostics ?? [])],
+      searchTitle: normalizeSearch(t.fields.title),
+      searchBody: normalizeSearch(t.body),
+    };
+    staticCache.set(t, st);
+  }
+  return st;
+}
+
 export function buildIndex(files: IndexedFile[], clock: Clock): Index {
   const today = todayOf(clock);
   const tasks = files.filter((f): f is Task => f.kind === "task");
@@ -133,9 +166,9 @@ export function buildIndex(files: IndexedFile[], clock: Clock): Index {
   const views: TaskView[] = [];
   for (const t of tasks) {
     if (variantOf.has(t)) continue;
-    const series = readSeries(t);
-    const { due, scheduled } = effectiveDates(t, series);
-    const diagnostics = [...t.diagnostics, ...(series?.diagnostics ?? [])];
+    const st = staticPart(t);
+    const { series, due, scheduled } = st;
+    const diagnostics = [...st.diagnostics];
     const variants = [...variantOf.entries()].filter(([, p]) => p === t).map(([v]) => v);
     if (variants.length) {
       diagnostics.push({
@@ -155,8 +188,10 @@ export function buildIndex(files: IndexedFile[], clock: Clock): Index {
       diagnostics,
       readOnly: t.readOnly || (series?.structureError ?? false),
       variants,
-      searchTitle: normalizeSearch(t.fields.title),
-      searchBody: normalizeSearch(t.body),
+      searchTitle: st.searchTitle,
+      searchBody: st.searchBody,
+      dueKey: due ? sortKey(due, clock.timeZone) : null,
+      scheduledKey: scheduled ? sortKey(scheduled, clock.timeZone) : null,
     });
   }
   return { tasks: views, unrecognized, conflicts, today };
@@ -169,11 +204,11 @@ const collator = new Intl.Collator("de", { sensitivity: "base", numeric: true })
 
 export type SortKey = "due" | "scheduled" | "priority" | "title" | "created";
 
-function cmpDate(a: DateValue | null, b: DateValue | null, tz: string): number {
-  if (!a && !b) return 0;
-  if (!a) return 1; // leere Werte zuletzt
-  if (!b) return -1;
-  return sortKey(a, tz) - sortKey(b, tz);
+function cmpKey(a: number | null, b: number | null): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1; // leere Werte zuletzt
+  if (b === null) return -1;
+  return a - b;
 }
 
 function createdKey(v: TaskView): number | null {
@@ -194,10 +229,10 @@ export function compareBy(keys: SortKey[], tz: string, desc: Partial<Record<Sort
       let c = 0;
       switch (k) {
         case "due":
-          c = cmpDate(a.due, b.due, tz);
+          c = cmpKey(a.dueKey, b.dueKey);
           break;
         case "scheduled":
-          c = cmpDate(a.scheduled, b.scheduled, tz);
+          c = cmpKey(a.scheduledKey, b.scheduledKey);
           break;
         case "priority":
           c = PRIORITY_RANK[b.task.fields.priority] - PRIORITY_RANK[a.task.fields.priority];
