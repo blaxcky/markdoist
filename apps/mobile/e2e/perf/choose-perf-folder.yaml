@@ -1,0 +1,19 @@
+# Leistungsmessung (M7): Ordner mit 2 000 Testaufgaben wählen.
+appId: de.markdoist.aufgaben
+---
+- clearState
+- launchApp
+- tapOn:
+    id: choose-folder
+- extendedWaitUntil:
+    visible: "MarkdoistPerf"
+    timeout: 15000
+- tapOn: "MarkdoistPerf"
+- tapOn:
+    text: "(?i)use this folder|diesen ordner verwenden"
+- tapOn:
+    text: "(?i)allow|zulassen"
+- extendedWaitUntil:
+    visible:
+      id: tab-today
+    timeout: 60000

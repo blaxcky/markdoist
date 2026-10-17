@@ -70,6 +70,8 @@ export interface RepoState {
   drafts: Draft[];
   /** Kennzahlen des letzten Abgleichs (Anzeige und Leistungsmessung, M7) */
   lastScan: { files: number; read: number; ms: number; full: boolean } | null;
+  /** Dauer bis zur Anzeige aus dem Cache beim Öffnen (ms), null ohne Cache */
+  cacheLoadMs: number | null;
   /** Fortschritt eines laufenden Abgleichs */
   scanProgress: { done: number; total: number } | null;
 }
@@ -125,6 +127,7 @@ export class Repository {
   private readError: string | null = null;
   private lastScan: RepoState["lastScan"] = null;
   private scanProgress: RepoState["scanProgress"] = null;
+  private cacheLoadMs: number | null = null;
   private scanCancelled = false;
   private listeners = new Set<() => void>();
   private queues = new Map<string, Promise<unknown>>();
@@ -178,6 +181,7 @@ export class Repository {
       drafts: [...this.drafts],
       lastScan: this.lastScan,
       scanProgress: this.scanProgress,
+      cacheLoadMs: this.cacheLoadMs,
     };
   }
 
@@ -208,7 +212,12 @@ export class Repository {
 
   /** Lädt Cache, Undo und Entwürfe; klärt offene Vorgänge; startet den vollständigen Abgleich. */
   async open(): Promise<void> {
+    const t0 = Date.now();
     await this.loadCache();
+    if (this.files.size) {
+      this.emit(); // Anzeige aus dem Cache, noch als ungeprüft markiert
+      this.cacheLoadMs = Date.now() - t0;
+    }
     try {
       this.undoStack = JSON.parse((await this.kv.get(this.key("undo"))) ?? "[]");
     } catch {

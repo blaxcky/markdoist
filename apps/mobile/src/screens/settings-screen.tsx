@@ -30,6 +30,7 @@ export function SettingsScreen() {
       {state.lastScan && (
         <Text selectable style={{ color: c.muted, fontSize: 13 }} testID="last-scan">
           Letzter {state.lastScan.full ? "vollständiger " : ""}Abgleich: {state.lastScan.files} Dateien, {state.lastScan.read} gelesen, {state.lastScan.ms} ms
+          {state.cacheLoadMs !== null ? `; Anzeige aus Cache nach ${state.cacheLoadMs} ms` : ""}
         </Text>
       )}
       {row(T.views.trash, () => nav.navigate("Trash"), "open-trash")}
