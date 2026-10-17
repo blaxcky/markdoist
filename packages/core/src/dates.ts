@@ -64,14 +64,12 @@ export function parseDateValue(raw: unknown): DateValue | null {
  *  - Zeitlücke (Frühjahr): erster gültiger Zeitpunkt nach der Lücke (Übergangszeitpunkt).
  *  - Doppelte Stunde (Herbst): der frühere Instant. */
 export function resolveLocal(dt: Temporal.PlainDateTime, timeZone: string): Temporal.Instant {
-  try {
-    return dt.toZonedDateTime(timeZone, { disambiguation: "reject" }).toInstant();
-  } catch {
-    const before = dt.toZonedDateTime(timeZone, { disambiguation: "earlier" });
-    const next = before.getTimeZoneTransition("next");
-    if (next) return next.toInstant();
-    return before.toInstant();
-  }
+  const earlier = dt.toZonedDateTime(timeZone, { disambiguation: "earlier" });
+  // Gültige oder doppelte Uhrzeit: `earlier` trifft die Wanduhrzeit (bei doppelter der frühere Instant).
+  if (earlier.toPlainDateTime().equals(dt)) return earlier.toInstant();
+  // Zeitlücke: `earlier` liegt vor der Lücke; der Übergang ist der erste gültige Zeitpunkt danach.
+  const next = earlier.getTimeZoneTransition("next");
+  return next ? next.toInstant() : earlier.toInstant();
 }
 
 export function todayOf(clock: Clock): Temporal.PlainDate {

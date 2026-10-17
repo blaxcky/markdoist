@@ -9,3 +9,4 @@ export * from "./actions";
 export * from "./recurrence/rule";
 export * from "./recurrence/engine";
 export * from "./recurrence/series";
+export * from "./views";
