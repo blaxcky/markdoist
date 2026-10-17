@@ -62,6 +62,15 @@ export function TaskRow({ view, today, tz, scheduledHint, onOpen, onToggle, onAc
         style={{ flexDirection: "row", gap: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: c.bg, borderBottomWidth: 1, borderBottomColor: c.outline }}
         testID={`row-${f.title}`}
         accessibilityLabel={f.title}
+        accessibilityActions={[
+          { name: "toggle", label: done ? T.actions.reopen : T.actions.complete },
+          { name: "actions", label: "Aktionen" },
+        ]}
+        onAccessibilityAction={(e) => {
+          if (view.readOnly) return;
+          if (e.nativeEvent.actionName === "toggle") onToggle();
+          else if (e.nativeEvent.actionName === "actions") onActions();
+        }}
       >
         <Pressable
           onPress={view.readOnly ? undefined : onToggle}
