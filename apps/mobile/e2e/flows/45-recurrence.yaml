@@ -1,0 +1,26 @@
+# M6: Wiederholung anlegen (wöchentlich, 5 Termine) mit Vorschau.
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-inbox
+- tapOn: "Zahnarzttermin vereinbaren"
+- scrollUntilVisible:
+    element:
+      id: edit-recurrence
+- tapOn:
+    id: edit-recurrence
+- tapOn:
+    id: rec-end-count
+- scrollUntilVisible:
+    element:
+      id: rec-preview
+- assertVisible: "wöchentlich am .*, 5-mal"
+- scrollUntilVisible:
+    element:
+      id: rec-save
+- tapOn:
+    id: rec-save
+- assertVisible:
+    id: series-desc
+- back

@@ -52,6 +52,8 @@ if [ $fail = 0 ]; then
   check "Zahnarzt.md" "Neu"
   check "Zahnarzt.md" "status: open"
   check "Kaputt.md" "title: ["
+  check "Zahnarzt.md" "COUNT=5"
+  check "Zahnarzt.md" "recurrence_anchor: calendar"
   n=$(adb shell ls "$DIR" | grep -c '\.md' || true)
   echo "Dateien im Ordner: $n"
   adb shell ls -a "$DIR" | grep -q 'todo-tmp' && { echo "FEHL Temp-Datei übrig"; fail=1; } || true
