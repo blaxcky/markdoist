@@ -1,0 +1,85 @@
+// Zentrale deutsche Texte (Plan 4.5).
+import type { Priority, Status } from "@markdoist/core";
+import type { WriteResult } from "./storage";
+
+export const T = {
+  appName: "Markdoist",
+  views: {
+    inbox: "Eingang",
+    today: "Heute",
+    all: "Alle offenen",
+    done: "Erledigt",
+    problems: "Probleme",
+    trash: "Papierkorb",
+    search: "Suche",
+  },
+  today: {
+    due: "Fällig",
+    plannedToday: "Heute eingeplant",
+    plannedEarlier: "Früher eingeplant",
+  },
+  status: { open: "Offen", "in-progress": "In Arbeit", done: "Erledigt" } satisfies Record<Status, string>,
+  priority: { none: "Keine", low: "Niedrig", normal: "Normal", high: "Hoch" } satisfies Record<Priority, string>,
+  fields: {
+    title: "Titel",
+    status: "Status",
+    priority: "Priorität",
+    inbox: "Eingang",
+    due: "Frist",
+    scheduled: "Geplant",
+    note: "Notiz",
+  },
+  badges: { inbox: "Eingang", overdue: "überfällig", series: "Serie", warning: "Hinweis", readOnly: "schreibgeschützt" },
+  actions: {
+    capture: "Neue Aufgabe",
+    complete: "Erledigen",
+    reopen: "Wiederöffnen",
+    file: "Einsortieren",
+    toInbox: "Zurück in den Eingang",
+    delete: "Löschen",
+    restore: "Wiederherstellen",
+    emptyTrash: "Papierkorb leeren",
+    undo: "Rückgängig",
+    rescan: "Neu einlesen",
+    skip: "Überspringen",
+    renameToTitle: "Dateinamen an Titel angleichen",
+    adopt: "Als Aufgabe übernehmen",
+    chooseFolder: "Ordner wählen",
+    keepVariant: "Diese Variante behalten",
+    keepBoth: "Beide behalten",
+  },
+  save: {
+    pending: "Änderungen offen",
+    draft: "Entwurf lokal gesichert",
+    saved: "Gespeichert",
+    failed: "Speichern fehlgeschlagen",
+    conflict: "Konflikt",
+  },
+  empty: {
+    inbox: "Der Eingang ist leer.",
+    today: "Für heute steht nichts an.",
+    all: "Keine offenen Aufgaben.",
+    done: "Noch nichts erledigt.",
+    noFolder: "Bitte einen Aufgabenordner wählen.",
+  },
+  unverified: "Anzeige aus dem Zwischenspeicher – wird geprüft …",
+};
+
+export function writeResultMessage(r: WriteResult): string {
+  switch (r.status) {
+    case "ok":
+      return "Gespeichert";
+    case "conflict":
+      return "Die Datei wurde inzwischen geändert";
+    case "permission":
+      return `Keine Berechtigung: ${r.message}`;
+    case "missing":
+      return `Datei fehlt: ${r.message}`;
+    case "full":
+      return `Speicher voll: ${r.message}`;
+    case "exists":
+      return `Datei existiert bereits: ${r.message}`;
+    case "unknown":
+      return `Unklarer Ausgang – bitte Wiederherstellung prüfen: ${r.message}`;
+  }
+}

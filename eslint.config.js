@@ -18,6 +18,11 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    files: ["**/plugins/*.js"],
+    languageOptions: { sourceType: "commonjs", globals: { require: "readonly", module: "writable" } },
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
+  {
     rules: {
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },

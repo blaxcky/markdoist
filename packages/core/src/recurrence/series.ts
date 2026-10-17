@@ -215,7 +215,7 @@ export function readSeries(task: Task): Series | null {
   }
 
   // recurrence_instance (K)
-  let instance: Temporal.PlainDate | null = null;
+  let instance: Temporal.PlainDate | null;
   if ("recurrence_instance" in data) {
     instance = parseKey(data.recurrence_instance);
     if (!instance) structure("recurrence_instance", "recurrence_instance ist ungültig");
