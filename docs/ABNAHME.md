@@ -68,3 +68,22 @@ Je Meilenstein: was geprüft wurde, wie, und Abweichungen von [V]-Vorschlägen a
 ## M6 – Wiederholungs-UI
 
 - Gemeinsames Formularmodell (`packages/app/src/ruleForm.ts`, Tests): einfache Optionen, Monatsende-Abfrage (29./30./31., 29.02.), Ende nie/Datum/Anzahl, Art Kalender/ab Erledigung, Bezugsfeld, Abstand, erweiterte RRULE-Eingabe mit Validierung, Vorschau der nächsten 10 Termine, deutsche Beschreibung, „ab jetzt neu zählen“. Editor auf Desktop (E2E: wöchentlich 5-mal) und Android. Historienansicht mit Archivabschnitten auf beiden Plattformen; „Serie beenden“, „wiederöffnen“, „Wiederholung entfernen“.
+
+## M7 – Gesamtrobustheit und Leistung
+
+**Robustheit (Desktop, echte Oberfläche, Playwright):** harter Prozessabbruch (`SIGKILL`) mitten im Schreiben → Datei unverändert, beim Neustart Wiederherstellungsfall unter Probleme, keine Temp-Reste; externe Änderung bei laufender App per Watcher erkannt; externer Body + lokale Priorität bleiben beide erhalten; gleiche Frist extern und lokal → Konflikt ohne Überschreiben; Textkonflikt während der Eingabe mit „Meine Version / Datei-Version / Beide behalten“; Konfliktkopie mit Feldvergleich und Body-Diff. Insgesamt **19 Playwright-Tests grün**.
+
+**Konfliktansicht:** beide Plattformen zeigen Feldvergleich und Body-Diff; Entscheidungen „Variante behalten“ (die andere wandert in den Papierkorb) und „Beide behalten“ (Kopie erhält neue ID).
+
+**Abgleich:** Fortschritt („Prüfe Dateien n/N“) und Abbrechen sichtbar; ein abgebrochener Abgleich entfernt nichts und markiert die Anzeige als nicht vollständig geprüft. Fortschrittsmeldungen bauen den Index nicht neu auf.
+
+**Leistung Desktop** (2 000 Aufgaben à ~3,3 KiB, echter `FsAdapter`, Messung `apps/desktop/bench/perf.test.ts`; Host: AMD Ryzen 7 8845HS, 16 Threads, 30 GiB, Fedora 43, Node 22):
+
+| Messgröße | Ergebnis | Ziel |
+|---|---|---|
+| Cache-Anzeige beim zweiten Start | 0,31 s | < 2 s |
+| Vollständiger Abgleich (Lesen + Hashen + Parsen) | 0,82 s | – |
+| Suche „bettwasche schritt“ (1 400 Treffer) | 75 ms | < 100 ms |
+| Heute-Ansicht berechnen | 8 ms | – |
+
+**[V]-Abweichungen M7:** Die Testabbrüche auf dem Desktop nutzen einen nur per Umgebungsvariable aktivierbaren Haken (`MARKDOIST_TEST_CRASH=<art>:<phase>`), der den Prozess mit `SIGKILL` beendet; `process.exit` liefe in Electron noch weiter und wäre kein echter Absturz.
