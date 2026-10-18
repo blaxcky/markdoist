@@ -64,7 +64,8 @@ export function DetailScreen() {
   const [title, setTitle] = useState(view?.task.fields.title ?? "");
   const [body, setBody] = useState(draft ?? view?.task.body ?? "");
   const [tab, setTab] = useState<"edit" | "preview">("edit");
-  const [save, setSave] = useState<SaveState>(draft !== null ? "draft" : "idle");
+  const draftConflict = !!state.drafts.find((d) => d.ref === ref)?.conflictHash;
+  const [save, setSave] = useState<SaveState>(draftConflict ? "conflict" : draft !== null ? "draft" : "idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef(false);
   const html = useMemo(() => (tab === "preview" ? previewHtml(body, c) : ""), [tab, body, c]);
@@ -242,7 +243,8 @@ export function DetailScreen() {
           {s && btn("Wiederholung entfernen", () => act({ type: "removeRecurrence", revision: s.revisionKey }, "Wiederholung entfernt"))}
         </View>
         {previewLinesFor.length > 0 && (
-          <View testID={s?.phase === "ended" ? "reopen-preview" : "complete-preview"} accessibilityLabel={s?.phase === "ended" ? "Beim Wiederöffnen" : "Beim Erledigen"}>
+          <View testID={s?.phase === "ended" ? "reopen-preview" : "complete-preview"}>
+            <Text style={{ color: c.muted, fontSize: 13 }}>{s?.phase === "ended" ? "Beim Wiederöffnen:" : "Beim Erledigen:"}</Text>
             {previewLinesFor.map((l) => (
               <Text key={l} style={{ color: c.muted, fontSize: 13 }}>• {l}</Text>
             ))}

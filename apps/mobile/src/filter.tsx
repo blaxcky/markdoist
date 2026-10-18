@@ -125,15 +125,16 @@ export function FilterSheet({ today }: { today: Temporal.PlainDate }) {
             {row("Geplant", schValue, [["any", "egal"], ["none", "keine"], ["earlier", "früher eingeplant"], ["today", "heute"], ["next7", "7 Tage"], ["range", "Zeitraum"]] as Opt<string>[], (v) => set("scheduled", (v === "range" ? defaultRange : v) as never), "scheduled")}
             {rangeRow("scheduled")}
             {row("Wiederholung", filter.recurrence ?? "any", [["any", "egal"], ["none", "keine"], ["calendar", "Kalender"], ["completion", "ab Erledigung"], ["invalid", "fehlerhaft"]] as Opt<string>[], (v) => set("recurrence", v as never), "recurrence")}
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
-              <Pressable onPress={() => { setFilter({}); setSort("default"); setInboxNewest(true); }} testID="filter-reset">
-                <Text style={{ color: c.danger }}>Zurücksetzen</Text>
-              </Pressable>
-              <Pressable onPress={() => setOpen(false)} testID="filter-close">
-                <Text style={{ color: c.primary, fontWeight: "600" }}>Fertig</Text>
-              </Pressable>
-            </View>
           </ScrollView>
+          {/* Feste Fußzeile: bleibt sichtbar, auch wenn die Filterliste scrollt */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: c.outline }}>
+            <Pressable onPress={() => { setFilter({}); setSort("default"); setInboxNewest(true); }} testID="filter-reset">
+              <Text style={{ color: c.danger }}>Zurücksetzen</Text>
+            </Pressable>
+            <Pressable onPress={() => setOpen(false)} testID="filter-close">
+              <Text style={{ color: c.primary, fontWeight: "600" }}>Fertig</Text>
+            </Pressable>
+          </View>
         </Pressable>
       </Pressable>
     </Modal>

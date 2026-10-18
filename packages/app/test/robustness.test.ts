@@ -469,3 +469,11 @@ describe("AK-15: alte wartende Serienaktion nach Undo", () => {
     expect(adapter.tasks.get("S.md")!.text).toBe(serie);
   });
 });
+
+describe("Fehlertexte", () => {
+  it("zeigt bei Expo-Modulfehlern nur die Ursache", async () => {
+    const { errMessage } = await import("../src/repository");
+    expect(errMessage(new Error("Call to function 'SafStorage.listChildren' has been rejected.\n→ Caused by: Ordner nicht lesbar"))).toBe("Ordner nicht lesbar");
+    expect(errMessage(new Error("Datei fehlt"))).toBe("Datei fehlt");
+  });
+});

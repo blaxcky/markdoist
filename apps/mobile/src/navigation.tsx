@@ -58,7 +58,7 @@ function HeaderButtons() {
     <View style={{ flexDirection: "row", alignItems: "center" }}>
       {problems > 0 && btn(`⚠ ${problems}`, "Problems", "nav-problems", c.warn)}
       <Pressable onPress={() => f.setOpen(true)} hitSlop={8} testID="nav-filter" accessibilityLabel="Filter und Sortierung" style={{ paddingHorizontal: 10 }}>
-        <Text style={{ fontSize: 20, color: filterActive(f.filter, f.sort, f.inboxNewest) ? c.primary : c.fg }}>⏷</Text>
+        <Text style={{ fontSize: 20, color: filterActive(f.filter, f.sort, f.inboxNewest) ? c.primary : c.fg }}>▾</Text>
       </Pressable>
       {btn("⌕", "Search", "nav-search")}
       {btn("⋮", "Settings", "nav-settings")}

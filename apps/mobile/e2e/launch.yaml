@@ -29,6 +29,11 @@ appId: de.markdoist.aufgaben
           timeout: 30000
       - waitForAnimationToEnd:
           timeout: 5000
+      # Das Begrüßungsfenster des Entwicklermenüs erscheint nach gelöschtem App-Zustand verzögert.
+      - extendedWaitUntil:
+          visible: "Runtime version.*"
+          timeout: 4000
+          optional: true
       - runFlow:
           when:
             visible: "Runtime version.*"

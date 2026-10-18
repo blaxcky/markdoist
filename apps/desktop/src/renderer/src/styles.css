@@ -187,6 +187,10 @@ textarea {
   padding-left: 18px;
   color: var(--fg-muted);
 }
+.preview-lines .preview-head {
+  list-style: none;
+  margin-left: -18px;
+}
 .filters select {
   font-size: 12px;
   padding: 2px;

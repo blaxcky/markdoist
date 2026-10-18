@@ -2,9 +2,9 @@
 
 **Stand:** 2026-10-17. Alle Rückfragen aus FRAGEN.md (F001–F018) sind beantwortet und eingearbeitet. Neu seit 2026-10-12: Nutzung der Expo-Skills und des Expo-MCP (Abschnitt 2.3).
 
-## Stand der Umsetzung (17.10.2026)
+## Stand der Umsetzung (18.10.2026)
 
-M0–M7 sind umgesetzt und abgenommen, M8 (Version 1.0) läuft. Nachweise, Messwerte und alle [V]-Abweichungen stehen in [`docs/ABNAHME.md`](docs/ABNAHME.md), das Dateiformat in [`docs/DATEIFORMAT.md`](docs/DATEIFORMAT.md). Repository: https://github.com/blaxcky/markdoist (öffentlich, keine Lizenz).
+M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10.2026 wurde die Umsetzung vollständig gegen diese Spezifikation abgeglichen; die gefundenen Lücken (Vorschau vor Serienaktionen, Ausnahmen übernehmen, Robustheit nach 7.1/7.3/7.6, fehlende AK-Tests u. a.) sind geschlossen. Nachweise, Messwerte und alle [V]-Abweichungen stehen in [`docs/ABNAHME.md`](docs/ABNAHME.md), das Dateiformat in [`docs/DATEIFORMAT.md`](docs/DATEIFORMAT.md). Repository: https://github.com/blaxcky/markdoist (öffentlich, keine Lizenz).
 
 ## Auftrag an die Umsetzung
 

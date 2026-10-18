@@ -63,18 +63,27 @@ export function Problems({ repo, state, onSelect, onOutcome }: Props) {
               </>
             ) : (
               <>
-                <b>Ungespeicherter Entwurf</b> ({name}): lokal gesichert, aber noch nicht in die Datei geschrieben.
+                <b>Ungespeicherter Entwurf</b> ({name}):{" "}
+                {d.conflictHash ? "Die Datei wurde inzwischen extern geändert – bitte entscheiden." : "lokal gesichert, aber noch nicht in die Datei geschrieben."}
               </>
             )}
             <pre className="diff">{d.text}</pre>
             <div className="actions" style={{ padding: "6px 0 0" }}>
-              {!orphan && (
+              {!orphan && <button className="btn" onClick={() => onSelect(d.ref)}>Öffnen</button>}
+              {!orphan && d.conflictHash && (
                 <>
-                  <button className="btn" onClick={() => onSelect(d.ref)}>Öffnen</button>
-                  <button className="btn" onClick={() => void repo.retryDraft(d.ref).then((o) => onOutcome(o, "Entwurf gespeichert"))} data-testid="retry-draft">
-                    In die Datei speichern
+                  <button className="btn" onClick={() => void repo.resolveDraftConflict(d.ref, "mine").then((o) => onOutcome(o, "Meine Version gespeichert"))} data-testid="resolve-mine">
+                    Meine Version (überschreibt die Datei-Version)
+                  </button>
+                  <button className="btn" onClick={() => void repo.resolveDraftConflict(d.ref, "file").then((o) => onOutcome(o, "Datei-Version behalten"))} data-testid="resolve-file">
+                    Datei-Version behalten
                   </button>
                 </>
+              )}
+              {!orphan && !d.conflictHash && (
+                <button className="btn" onClick={() => void repo.retryDraft(d.ref).then((o) => onOutcome(o, "Entwurf gespeichert"))} data-testid="retry-draft">
+                  In die Datei speichern
+                </button>
               )}
               <button className="btn" onClick={() => void repo.saveDraftAsNew(d.ref).then((o) => onOutcome(o, "Als neue Datei gespeichert"))} data-testid="draft-as-new">
                 Als neue Datei speichern

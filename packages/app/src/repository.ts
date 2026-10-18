@@ -1106,8 +1106,11 @@ export function isTaskFileName(m: FileMeta): boolean {
   return !m.name.startsWith(".") && m.name.toLowerCase().endsWith(".md");
 }
 
-function errMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
+/** Fehlertext für die Anzeige; bei Expo-Modulfehlern nur die eigentliche Ursache. */
+export function errMessage(e: unknown): string {
+  const m = e instanceof Error ? e.message : String(e);
+  const causes = m.split(/\n?\s*→ Caused by:\s*/);
+  return (causes.length > 1 ? causes[causes.length - 1]! : m).trim();
 }
 
 export { freeName };

@@ -58,7 +58,10 @@ export function ProblemsScreen() {
             <Text selectable style={{ color: c.warn, fontWeight: "600" }}>{orphan ? `Entwurf ohne Datei (${name})` : `Ungespeicherter Entwurf (${name})`}</Text>
             <Text selectable style={{ color: c.fg, fontFamily: "monospace", fontSize: 12 }} numberOfLines={8}>{d.text}</Text>
             {!orphan && btn("Öffnen", () => nav.navigate("Detail", { ref: d.ref }))}
-            {!orphan && btn("In die Datei speichern", () => void repo.retryDraft(d.ref).then((o) => notify(o, "Entwurf gespeichert")), "retry-draft")}
+            {!orphan && d.conflictHash && <Text style={{ color: c.fg }}>Die Datei wurde inzwischen extern geändert – bitte entscheiden.</Text>}
+            {!orphan && d.conflictHash && btn("Meine Version (überschreibt die Datei-Version)", () => void repo.resolveDraftConflict(d.ref, "mine").then((o) => notify(o, "Meine Version gespeichert")), "resolve-mine")}
+            {!orphan && d.conflictHash && btn("Datei-Version behalten", () => void repo.resolveDraftConflict(d.ref, "file").then((o) => notify(o, "Datei-Version behalten")), "resolve-file")}
+            {!orphan && !d.conflictHash && btn("In die Datei speichern", () => void repo.retryDraft(d.ref).then((o) => notify(o, "Entwurf gespeichert")), "retry-draft")}
             {btn("Als neue Datei speichern", () => void repo.saveDraftAsNew(d.ref).then((o) => notify(o, "Als neue Datei gespeichert")), "draft-as-new")}
             {btn("Verwerfen", () => void repo.discardDraft(d.ref))}
           </View>

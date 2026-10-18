@@ -25,11 +25,13 @@ interface Props {
   view: TaskView;
   today: Temporal.PlainDate;
   draftText: string | null;
+  /** Entwurf mit bereits festgestelltem Textkonflikt (7.3) */
+  draftConflict?: boolean;
   focusField: { field: "due" | "scheduled" | "priority" | "title"; nonce: number } | null;
   onOutcome(o: Outcome, label?: string): void;
 }
 
-export function Detail({ repo, view, today, draftText, focusField, onOutcome }: Props) {
+export function Detail({ repo, view, today, draftText, draftConflict, focusField, onOutcome }: Props) {
   const t = view.task;
   const f = t.fields;
   const ref = t.ref;
@@ -37,7 +39,7 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
   const s = view.series;
   const [tab, setTab] = useState<"edit" | "preview">("edit");
   const [title, setTitle] = useState(f.title);
-  const [save, setSave] = useState<SaveState>(draftText !== null ? "draft" : "idle");
+  const [save, setSave] = useState<SaveState>(draftConflict ? "conflict" : draftText !== null ? "draft" : "idle");
   const [editRule, setEditRule] = useState<false | "edit" | "continue">(false);
   const [extraException, setExtraException] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -304,6 +306,7 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
           </div>
           {seriesActive && completePreview.length > 0 && (
             <ul className="preview-lines" data-testid="complete-preview" aria-label="Beim Erledigen">
+              <li className="preview-head">Beim Erledigen:</li>
               {completePreview.map((l) => (
                 <li key={l}>{l}</li>
               ))}
@@ -311,6 +314,7 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
           )}
           {reopenPreview && (
             <ul className="preview-lines" data-testid="reopen-preview" aria-label="Beim Wiederöffnen">
+              <li className="preview-head">Beim Wiederöffnen:</li>
               {reopenPreview.lines.map((l) => (
                 <li key={l}>{l}</li>
               ))}

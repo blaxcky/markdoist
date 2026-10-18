@@ -8,13 +8,25 @@ appId: de.markdoist.aufgaben
 - tapOn: "Zahnarzttermin vereinbaren"
 - tapOn:
     id: priority-high
+# Die Snackbar „Priorität geändert“ liegt unten über dem Editor; erst danach ins Textfeld tippen.
+- extendedWaitUntil:
+    notVisible:
+      id: snackbar
+    timeout: 8000
 - scrollUntilVisible:
     element:
       id: editor
 - tapOn:
     id: editor
 - inputText: " Neu"
-- hideKeyboard
+# Kein hideKeyboard: Ist die Tastatur schon zu, drückt es „Zurück“ und verlässt das Detail.
+# Die Speicheranzeige steht über dem Editor; je nach Tastatur liegt sie ober- oder unterhalb.
+- scrollUntilVisible:
+    element:
+      id: save-state
+    direction: UP
+    timeout: 6000
+    optional: true
 - scrollUntilVisible:
     element:
       id: save-state

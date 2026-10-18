@@ -537,6 +537,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
             view={selectedView}
             today={idx.today}
             draftText={state.drafts.find((d) => d.ref === selectedView.task.ref)?.text ?? null}
+            draftConflict={!!state.drafts.find((d) => d.ref === selectedView.task.ref)?.conflictHash}
             focusField={focusField}
             onOutcome={notify}
           />
