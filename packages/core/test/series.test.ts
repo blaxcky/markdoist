@@ -366,3 +366,115 @@ describe("Ausnahmen (5.4)", () => {
     expect(run(base, { type: "setException", revision: "REV1", date: "2026-10-20", skipped: true }, ctxAt("2026-10-12T10:00")).plan.kind).toBe("blocked");
   });
 });
+
+describe("Korrekturen nach Abgleich mit der Spezifikation", () => {
+  it("5.3: geleerter Abstand entfernt recurrence_offset_days, Differenz der Felder gilt", () => {
+    const base = weekly("calendar", "FREQ=WEEKLY;BYDAY=MO", "2026-10-12", ["scheduled: 2026-10-10", "recurrence_offset_days: -3"]);
+    const r = run(
+      base,
+      { type: "changeReference", revision: "REV1", field: "due", offsetDays: null },
+      ctxAt("2026-10-12T10:00"),
+    );
+    expect(r.plan.kind).toBe("edit");
+    const t = task(r.text);
+    expect("recurrence_offset_days" in t.data).toBe(false);
+    expect(t.data.scheduled).toBe("2026-10-10");
+    const next = run(r.text, { type: "completeOccurrence", revision: "REV1", instance: "2026-10-12" }, ctxAt("2026-10-12T11:00"));
+    expect(task(next.text).data.scheduled).toBe("2026-10-17");
+  });
+
+  it("5.1: Einzelverschieben ohne gespeichertes recurrence_instance ändert K nicht", () => {
+    const base = fm([
+      "title: Fremd",
+      "status: open",
+      "due: 2026-10-12",
+      "recurrence: FREQ=WEEKLY;BYDAY=MO",
+    ]);
+    const before = readSeries(task(base))!;
+    expect(before.instance?.toString()).toBe("2026-10-12");
+    const r = run(base, { type: "setDate", field: "due", value: "2026-10-14" }, ctxAt("2026-10-12T10:00"));
+    const after = readSeries(task(r.text))!;
+    expect(task(r.text).data.recurrence_instance).toBe("2026-10-12");
+    expect(after.instance?.toString()).toBe("2026-10-12");
+    expect(after.revisionKey).toBe(before.revisionKey);
+    expect(after.phase).toBe("active");
+  });
+
+  it("6: unpassender Start einer Fremddatei wird benannt, ohne zu sperren", () => {
+    const s = readSeries(task(weekly("calendar", "FREQ=WEEKLY;BYDAY=FR", "2026-10-16")))!;
+    expect(s.phase).toBe("active");
+    expect(s.diagnostics.map((d) => d.code)).toContain("series-start-mismatch");
+    const ok = readSeries(task(weekly("calendar", "FREQ=WEEKLY;BYDAY=MO", "2026-10-12")))!;
+    expect(ok.diagnostics.map((d) => d.code)).not.toContain("series-start-mismatch");
+  });
+
+  it("4.4: von „Erledigt“ direkt auf „In Arbeit“", () => {
+    const base = fm(["id: 01K6B2N8R4T6V8X0Z2C4E6G8J0", "title: A", "status: done", "completedDate: 2026-10-11T10:00:00+02:00"]);
+    const r = run(base, { type: "setStatus", status: "in-progress" }, ctxAt("2026-10-12T10:00"));
+    const t = task(r.text);
+    expect(t.data.status).toBe("in-progress");
+    expect("completedDate" in t.data).toBe(false);
+  });
+});
+
+describe("Vorschau vor Serienaktionen (5.2, 5.4)", () => {
+  it("AK-30: Kollision wird vor dem Erledigen erklärt und nichts geschrieben", async () => {
+    const { previewSeriesAction } = await import("../src");
+    const base = weekly("completion", "FREQ=WEEKLY", "2026-10-19");
+    const t = task(base);
+    const p = previewSeriesAction(t, { type: "completeOccurrence", revision: "REV1", instance: "2026-10-19" }, ctxAt("2026-10-12T10:00"));
+    expect(p.result).toBe("change");
+    expect(p.instance?.toString()).toBe("2026-10-26");
+    expect(p.passedOver.map((x) => [x.date.toString(), x.reason])).toEqual([["2026-10-19", "done"]]);
+    expect(t.text).toBe(base);
+    const real = run(base, { type: "completeOccurrence", revision: "REV1", instance: "2026-10-19" }, ctxAt("2026-10-12T10:00"));
+    expect(task(real.text).data.due).toBe("2026-10-26");
+  });
+
+  it("Ausnahme wird in der Vorschau als übergangen genannt", async () => {
+    const { previewSeriesAction } = await import("../src");
+    const base = weekly("calendar", "FREQ=WEEKLY;BYDAY=MO", "2026-10-12", ["skipped_instances:", "  - 2026-10-19"]);
+    const p = previewSeriesAction(task(base), { type: "completeOccurrence", revision: "REV1", instance: "2026-10-12" }, ctxAt("2026-10-12T10:00"));
+    expect(p.instance?.toString()).toBe("2026-10-26");
+    expect(p.passedOver.map((x) => x.reason)).toEqual(["skipped"]);
+  });
+
+  it("Regeländerung: neuer Abschnitt, abgelöster überfälliger Termin, aufgelöste Einzelverschiebung", async () => {
+    const { previewSeriesAction } = await import("../src");
+    // K = 05.10., Frist einzeln auf 07.10. verschoben, heute 12.10.
+    const base = weekly("calendar", "FREQ=WEEKLY;BYDAY=MO", "2026-10-05").replace("due: 2026-10-05", "due: 2026-10-07");
+    const p = previewSeriesAction(
+      task(base),
+      {
+        type: "changeRule",
+        revision: "REV1",
+        spec: { rule: "FREQ=WEEKLY;BYDAY=TU", anchor: "calendar", field: "due", start: "2026-10-12", offsetDays: null },
+        restartCount: false,
+        resetChecklists: false,
+      },
+      ctxAt("2026-10-12T10:00"),
+    );
+    expect(p.newSection).toBe(true);
+    expect(p.instance?.toString()).toBe("2026-10-13");
+    expect(p.supersededOverdue?.toString()).toBe("2026-10-07");
+    expect(p.shifted).toBe(true);
+    expect(p.dates).toEqual([{ field: "due", from: "2026-10-07", to: "2026-10-13" }]);
+  });
+
+  it("unverändert gespeicherte Regel ist ein No-op", async () => {
+    const { previewSeriesAction } = await import("../src");
+    const base = weekly("calendar", "FREQ=WEEKLY;BYDAY=MO", "2026-10-12");
+    const p = previewSeriesAction(
+      task(base),
+      {
+        type: "changeRule",
+        revision: "REV1",
+        spec: { rule: "FREQ=WEEKLY;BYDAY=MO", anchor: "calendar", field: "due", start: "2026-10-05", offsetDays: null },
+        restartCount: false,
+        resetChecklists: false,
+      },
+      ctxAt("2026-10-12T10:00"),
+    );
+    expect(p.result).toBe("noop");
+  });
+});

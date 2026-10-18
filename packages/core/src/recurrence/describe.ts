@@ -66,9 +66,9 @@ export function describeRule(r: Rule, anchor: "calendar" | "completion" = "calen
         !r.byday.length &&
         r.bysetpos.length === 1 &&
         r.bysetpos[0] === -1 &&
-        r.bymonthday.join(",") === "28,29,30"
+        (r.bymonthday.join(",") === "28,29,30" || r.bymonthday.join(",") === "28,29")
       ) {
-        core = `${base} am 30. oder letzten Tag`;
+        core = `${base} am ${r.bymonthday.length + 27}. oder letzten Tag`;
       } else if (r.byday.length === 1 && !r.bymonthday.length && !r.bysetpos.length && r.byday[0]!.n !== null) {
         const b = r.byday[0]!;
         const ord = ORD[b.n!];

@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -171,5 +172,81 @@ describe("Repository über FsAdapter (AK-08)", () => {
     const after = await Promise.all((await readdir(root)).map(async (n) => (await stat(join(root, n))).mtimeMs));
     expect(after).toEqual(before);
     expect(repo.getState().files.size).toBe(20);
+  });
+});
+
+describe("Unklarer Ausgang zur Laufzeit (7.3)", () => {
+  const thirdAt = (phase: string) => (k: string, p: string) => {
+    if (k === "write" && p === phase) {
+      writeFileSync(join(root, "A.md"), T("extern"));
+      throw new Error("E/A-Fehler");
+    }
+  };
+  it("dritter Inhalt: Fall kommt sofort mit, Datei bleibt, Journal bleibt offen", async () => {
+    await writeFile(join(root, "A.md"), T("alt"));
+    const a = new FsAdapter(root, journal, thirdAt("before-rename"));
+    const r = await a.write("tasks/A.md", T("neu"), hashText(T("alt")));
+    expect(r.status).toBe("unknown");
+    if (r.status !== "unknown") return;
+    expect(r.recovery).toMatchObject({ kind: "write", ref: "tasks/A.md", before: T("alt"), desired: T("neu"), current: T("extern") });
+    expect(await readFile(join(root, "A.md"), "utf8")).toBe(T("extern"));
+    expect((await new FsAdapter(root, journal).recover()).map((c) => c.opId)).toEqual([r.recovery!.opId]);
+    expect((await readdir(root)).filter((n) => n.endsWith(".todo-tmp"))).toEqual([]);
+  });
+  it("unberührtes Ziel: Fehler ohne Fall, Journal abgeschlossen", async () => {
+    await writeFile(join(root, "A.md"), T("alt"));
+    const a = new FsAdapter(root, journal, (k, p) => {
+      if (k === "write" && p === "before-rename") throw new Error("E/A-Fehler");
+    });
+    const r = await a.write("tasks/A.md", T("neu"), hashText(T("alt")));
+    expect(r.status).toBe("unknown");
+    expect(r.status === "unknown" && r.recovery).toBeFalsy();
+    expect(await new FsAdapter(root, journal).recover()).toEqual([]);
+    expect(await readFile(join(root, "A.md"), "utf8")).toBe(T("alt"));
+  });
+  it("Repository: Fall sofort sichtbar, weitere Schreibaktionen auf der Datei gesperrt", async () => {
+    await writeFile(join(root, "A.md"), T("alt"));
+    let inject = false;
+    const repo = new Repository({
+      adapter: new FsAdapter(root, journal, (k, p) => {
+        if (inject && k === "write" && p === "before-rename") {
+          inject = false;
+          writeFileSync(join(root, "A.md"), T("extern"));
+          throw new Error("E/A-Fehler");
+        }
+      }),
+      kv: new MemoryKeyValueStore(),
+      folder: root,
+      clock: () => clockAtLocal("2026-10-12T10:00", "Europe/Berlin"),
+    });
+    await repo.open();
+    inject = true;
+    expect((await repo.perform("tasks/A.md", { type: "setPriority", priority: "high" })).status).toBe("error");
+    const c = repo.getState().recovery;
+    expect(c).toHaveLength(1);
+    expect(c[0]!.current).toBe(T("extern"));
+    expect((await repo.perform("tasks/A.md", { type: "setPriority", priority: "low" })).status).toBe("blocked");
+    expect(await readFile(join(root, "A.md"), "utf8")).toBe(T("extern"));
+    // Ausgangsfassung bewusst wiederherstellen: nur, solange „extern“ noch der angezeigte Stand ist
+    expect((await repo.applyRecoveryBefore(c[0]!.opId)).status).toBe("ok");
+    expect(await readFile(join(root, "A.md"), "utf8")).toBe(T("alt"));
+    expect(repo.getState().recovery).toEqual([]);
+    expect(await new FsAdapter(root, journal).recover()).toEqual([]);
+  });
+  it("Abbruch: Fall nach Neustart mit Vorher-, Wunsch- und aktueller Fassung", async () => {
+    await writeFile(join(root, "A.md"), T("alt"));
+    const a = new FsAdapter(root, journal, crashAt("write", "before-rename"));
+    await expect(a.write("tasks/A.md", T("neu"), hashText(T("alt")))).rejects.toThrow(CrashSimulation);
+    const repo = new Repository({
+      adapter: new FsAdapter(root, journal),
+      kv: new MemoryKeyValueStore(),
+      folder: root,
+      clock: () => clockAtLocal("2026-10-12T10:00", "Europe/Berlin"),
+    });
+    await repo.open();
+    const c = repo.getState().recovery[0]!;
+    expect(c).toMatchObject({ before: T("alt"), desired: T("neu"), current: T("alt") });
+    expect((await repo.applyRecovery(c.opId)).status).toBe("ok");
+    expect(await readFile(join(root, "A.md"), "utf8")).toBe(T("neu"));
   });
 });

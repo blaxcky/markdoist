@@ -4,8 +4,10 @@
 # installierte App (Release-Build, oder Debug-Build mit Metro und MAESTRO_DEV=true).
 set -euo pipefail
 cd "$(dirname "$0")"
-export PATH="$PATH:$HOME/Android/Sdk/platform-tools:$HOME/.local/opt/maestro/bin"
-export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-21-openjdk}"
+export PATH="$PATH:$HOME/Android/Sdk/platform-tools:$HOME/.local/opt/maestro/bin:$HOME/.maestro/bin"
+if [ -z "${JAVA_HOME:-}" ]; then
+  for j in /usr/lib/jvm/java-21-openjdk "$HOME/.local/opt/jdk-21"; do [ -d "$j" ] && export JAVA_HOME="$j" && break; done
+fi
 DIR=/sdcard/Documents/MarkdoistTest
 adb shell rm -rf "$DIR"
 adb shell mkdir -p "$DIR"

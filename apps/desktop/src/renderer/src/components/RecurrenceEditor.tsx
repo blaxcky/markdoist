@@ -6,11 +6,13 @@ import {
   defaultForm,
   formFromSeries,
   needsMonthEndChoice,
+  previewAction,
   previewForm,
-  specFromForm,
+  ruleFormAction,
   type RuleForm,
 } from "@markdoist/app";
-import { describeOccurrence, Temporal, type Series, type SeriesSpec, type Weekday } from "@markdoist/core";
+import { describeOccurrence, parseKey, Temporal, type Series, type Task, type TaskAction, type Weekday } from "@markdoist/core";
+import { clock } from "../repo";
 
 const WD: [Weekday, string][] = [
   ["MO", "Mo"],
@@ -23,20 +25,30 @@ const WD: [Weekday, string][] = [
 ];
 
 interface Props {
+  task: Task;
   series: Series | null;
+  /** „Serie mit neuer Regel fortsetzen“: Zählung beginnt neu (5.4) */
+  continueSeries?: boolean;
   today: Temporal.PlainDate;
   defaultField: "due" | "scheduled";
   onCancel(): void;
-  onSave(spec: SeriesSpec, opts: { restartCount: boolean; resetChecklists: boolean }): void;
+  onSave(action: TaskAction): void;
 }
 
-export function RecurrenceEditor({ series, today, defaultField, onCancel, onSave }: Props) {
-  const [f, setF] = useState<RuleForm>(() =>
-    series ? formFromSeries(series, today) : defaultForm(today, defaultField),
-  );
+export function RecurrenceEditor({ task, series, continueSeries, today, defaultField, onCancel, onSave }: Props) {
+  const [f, setF] = useState<RuleForm>(() => {
+    const form = series ? formFromSeries(series, today) : defaultForm(today, defaultField);
+    if (continueSeries) form.restartCount = true;
+    return form;
+  });
+  // Künftige Ausnahmen des alten Abschnitts werden nur nach ausdrücklicher Auswahl übernommen (5.1).
+  const futureExceptions = series ? [...series.S].filter((d) => d > today.toString()).sort() : [];
+  const [carry, setCarry] = useState<string[]>([]);
   const dialog = useDialog<HTMLDivElement>(onCancel);
   const set = <K extends keyof RuleForm>(k: K, v: RuleForm[K]) => setF((x) => ({ ...x, [k]: v }));
   const preview = useMemo(() => previewForm(f, today, !!series), [f, today, series]);
+  const action = useMemo(() => ruleFormAction(f, series, carry), [f, series, carry]);
+  const effect = useMemo(() => (preview.ok ? previewAction(task, action, clock()) : null), [preview.ok, task, action]);
   const simple = f.mode === "simple";
   const toggleDay = (d: Weekday) =>
     set("weekdays", f.weekdays.includes(d) ? f.weekdays.filter((x) => x !== d) : [...f.weekdays, d]);
@@ -44,7 +56,7 @@ export function RecurrenceEditor({ series, today, defaultField, onCancel, onSave
   return (
     <div className="modal-back" onClick={onCancel}>
       <div ref={dialog} className="modal" role="dialog" aria-modal="true" aria-label="Wiederholung" onClick={(e) => e.stopPropagation()} data-testid="recurrence-editor">
-        <h2>Wiederholung</h2>
+        <h2>{continueSeries ? "Serie mit neuer Regel fortsetzen" : "Wiederholung"}</h2>
         <div className="fields" style={{ padding: 0 }}>
           <label>Art</label>
           <select value={f.anchor} onChange={(e) => set("anchor", e.target.value as RuleForm["anchor"])} data-testid="rec-anchor">
@@ -192,6 +204,24 @@ export function RecurrenceEditor({ series, today, defaultField, onCancel, onSave
               <label style={{ color: "var(--fg)" }}>
                 <input type="checkbox" checked={f.restartCount} onChange={(e) => set("restartCount", e.target.checked)} data-testid="rec-restart" /> ab jetzt neu zählen („noch N-mal“)
               </label>
+              {futureExceptions.length > 0 && (
+                <>
+                  <label>Ausnahmen</label>
+                  <div data-testid="rec-carry">
+                    {futureExceptions.map((d) => (
+                      <label key={d} style={{ display: "block", color: "var(--fg)" }}>
+                        <input
+                          type="checkbox"
+                          checked={carry.includes(d)}
+                          onChange={(e) => setCarry((c) => (e.target.checked ? [...c, d] : c.filter((x) => x !== d)))}
+                          data-testid={`rec-carry-${d}`}
+                        />{" "}
+                        {parseKey(d) ? describeOccurrence(parseKey(d)!) : d} weiterhin überspringen
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
               <label>Checklisten</label>
               <label style={{ color: "var(--fg)" }}>
                 <input type="checkbox" checked={f.resetChecklists} onChange={(e) => set("resetChecklists", e.target.checked)} /> Haken zurücksetzen
@@ -206,11 +236,17 @@ export function RecurrenceEditor({ series, today, defaultField, onCancel, onSave
                 <b>{preview.description ?? preview.rule}</b>
                 {preview.description && <span style={{ color: "var(--fg-muted)" }}> ({preview.rule})</span>}
               </div>
-              {series && <div>Neuer Abschnitt; die bisherige Historie bleibt im Archiv und zählt nicht mit.</div>}
               <div>
                 Nächste Termine: {preview.dates.map((d) => describeOccurrence(d)).join(" · ")}
                 {preview.exhausted ? " (Ende)" : ""}
               </div>
+              {effect && (
+                <ul className="preview-lines" data-testid="rec-effect">
+                  {effect.lines.map((l) => (
+                    <li key={l}>{l}</li>
+                  ))}
+                </ul>
+              )}
             </>
           ) : (
             <span style={{ color: "var(--danger)" }}>{preview.message}</span>
@@ -220,8 +256,8 @@ export function RecurrenceEditor({ series, today, defaultField, onCancel, onSave
           <button className="btn" onClick={onCancel}>Abbrechen</button>
           <button
             className="btn primary"
-            disabled={!preview.ok}
-            onClick={() => onSave(specFromForm(f), { restartCount: f.restartCount, resetChecklists: f.resetChecklists })}
+            disabled={!preview.ok || effect?.preview.result === "blocked"}
+            onClick={() => (effect?.preview.result === "noop" ? onCancel() : onSave(action))}
             data-testid="rec-save"
           >
             Speichern

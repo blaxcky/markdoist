@@ -19,6 +19,8 @@ describe("Deutsche Regelbeschreibung", () => {
     ["FREQ=MONTHLY;BYMONTHDAY=15;COUNT=5", "monatlich am 15., 5-mal"],
     ["FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=-1", "jährlich am letzten Tag im Februar"],
     ["FREQ=WEEKLY;BYDAY=FR;UNTIL=20261231", "wöchentlich am Fr, bis 31.12.2026"],
+    ["FREQ=MONTHLY;BYMONTHDAY=28,29,30;BYSETPOS=-1", "monatlich am 30. oder letzten Tag"],
+    ["FREQ=MONTHLY;BYMONTHDAY=28,29;BYSETPOS=-1", "monatlich am 29. oder letzten Tag"],
   ])("%s", (rule, text) => {
     expect(d(rule)).toBe(text);
   });

@@ -4,7 +4,8 @@ import { Switch, Text, TextInput, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { search, type TaskView } from "@markdoist/core";
+import { matchesFilter, search, sortViews, type TaskView } from "@markdoist/core";
+import { useFilter } from "../filter";
 import { TaskRow } from "../components/task-row";
 import { ActionsSheet } from "../components/actions-sheet";
 import { useRepo, useRepoState, systemClock } from "../repo";
@@ -21,12 +22,14 @@ export function SearchScreen() {
   const [q, setQ] = useState("");
   const [includeDone, setIncludeDone] = useState(false);
   const [actions, setActions] = useState<TaskView | null>(null);
+  const { filter, sort } = useFilter();
+  const tz = systemClock().timeZone;
+  // Filter und Sortierung gelten auch für Suchergebnisse (4.3), wie auf dem Desktop.
   const { results, ms } = useMemo(() => {
     const t0 = Date.now();
-    const r = search(state.index, q, { includeDone });
+    const r = sortViews(search(state.index, q, { includeDone }).filter((v) => matchesFilter(v, filter, state.index.today)), sort, tz);
     return { results: r, ms: Date.now() - t0 };
-  }, [state.index, q, includeDone]);
-  const tz = systemClock().timeZone;
+  }, [state.index, q, includeDone, filter, sort, tz]);
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <View style={{ padding: 12, gap: 8 }}>

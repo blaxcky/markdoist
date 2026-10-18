@@ -1,0 +1,18 @@
+# Vorschau vor dem Erledigen (5.2, 5.4): Folgetermin und übergangene Ausnahme sind sichtbar,
+# beide Varianten von „Serie beenden“ werden angeboten (ohne sie auszulösen).
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-all
+- tapOn: "Wochenrückblick"
+- scrollUntilVisible:
+    element:
+      id: complete-preview
+- assertVisible: ".*Nächstes Vorkommen: .*"
+- assertVisible: ".*ist als Ausnahme übersprungen und wird übergangen.*"
+- assertVisible:
+    id: series-end-complete
+- assertVisible:
+    id: series-end
+- back

@@ -182,7 +182,8 @@ function datesForInstance(
   task: Task,
   series: Pick<Series, "field" | "offsetDays" | "start">,
   k: Temporal.PlainDate,
-  explicitOffset?: number | null,
+  explicitOffset: number | null | undefined,
+  timeZone: string,
 ): { set: Record<string, YamlValue>; error?: string } {
   const set: Record<string, YamlValue> = {};
   const time = series.start?.time ?? null;
@@ -203,18 +204,19 @@ function datesForInstance(
   if (off === null) {
     const refVal = task.fields[series.field];
     if (!refVal) return { set, error: `Ungültiges Datum in ${series.field} – bitte zuerst korrigieren` };
-    off = datePart(refVal, "UTC").until(datePart(otherVal, "UTC"), { largestUnit: "days" }).days;
+    // Kalendertage in der Gerätezone, damit Offset-Werte ihren lokalen Tag behalten (3.3).
+    off = datePart(refVal, timeZone).until(datePart(otherVal, timeZone), { largestUnit: "days" }).days;
   }
   const newOther = k.add({ days: off });
-  set[other] = withTimeOf(newOther, otherVal);
+  set[other] = withTimeOf(newOther, otherVal, timeZone);
   return { set };
 }
 
-function withTimeOf(d: Temporal.PlainDate, v: DateValue): string {
+function withTimeOf(d: Temporal.PlainDate, v: DateValue, timeZone: string): string {
   if (v.kind === "date") return d.toString();
   if (v.kind === "local") return dateValueString(d, v.dateTime.toPlainTime());
-  // Offset-Import: Wanduhrzeit des Instants in UTC-Notation nicht neu erfinden; lokale Zeit übernehmen.
-  const z = v.instant.toZonedDateTimeISO("UTC");
+  // Offset-Import: die lokale Wanduhrzeit des Instants bleibt, geschrieben wird lokal (3.3, 5.3).
+  const z = v.instant.toZonedDateTimeISO(timeZone);
   return dateValueString(d, z.toPlainTime());
 }
 
@@ -256,7 +258,12 @@ function planInner(task: Task, series: Series | null, action: TaskAction, ctx: A
     }
     case "setStatus": {
       if (action.status === "done") return planInner(task, series, { type: "complete" }, ctx);
-      if (task.fields.status === "done") return planInner(task, series, { type: "reopen" }, ctx);
+      if (task.fields.status === "done") {
+        // Wiederöffnen; ein ausdrücklich gewähltes „in Arbeit“ bleibt erhalten.
+        const p = planInner(task, series, { type: "reopen" }, ctx);
+        if (p.kind === "edit" && action.status === "in-progress") p.set.status = "in-progress";
+        return p;
+      }
       return { kind: "edit", set: { status: action.status }, remove: [] };
     }
     case "setPriority":
@@ -278,13 +285,19 @@ function planInner(task: Task, series: Series | null, action: TaskAction, ctx: A
     case "assignNewId":
       return { kind: "edit", set: { id: ctx.newId() }, remove: [] };
     case "setDate":
-      return planSetDate(task, series, action.field, action.value);
+      return planSetDate(task, series, action.field, action.value, ctx.timeZone);
     default:
       return planSeries(task, series, action, ctx, now);
   }
 }
 
-function planSetDate(task: Task, series: Series | null, field: RefField, value: string | null): Plan {
+function planSetDate(
+  task: Task,
+  series: Series | null,
+  field: RefField,
+  value: string | null,
+  timeZone: string,
+): Plan {
   if (value !== null && !parseDateValue(value)) return blocked("Ungültiges Datum");
   const set: Record<string, YamlValue> = {};
   const remove: string[] = [];
@@ -294,14 +307,18 @@ function planSetDate(task: Task, series: Series | null, field: RefField, value: 
     if (value === null && field === series.field) {
       return blocked("Bezugsdatum einer laufenden Serie kann nicht entfernt werden");
     }
+    // Einzelverschieben ändert K nicht (5.1): einen nur abgeleiteten Schlüssel festhalten.
+    if (field === series.field && series.instance && !("recurrence_instance" in task.data)) {
+      set.recurrence_instance = series.instance.toString();
+    }
     // Vor dem ersten Einzelverschieben einen nur abgeleiteten Abstand festhalten (5.3).
     if (series.offsetDays === null) {
       const ref = task.fields[series.field];
       const otherField: RefField = series.field === "due" ? "scheduled" : "due";
       const other = task.fields[otherField];
       if (ref && other) {
-        set.recurrence_offset_days = datePart(ref, "UTC")
-          .until(datePart(other, "UTC"), { largestUnit: "days" }).days;
+        set.recurrence_offset_days = datePart(ref, timeZone)
+          .until(datePart(other, timeZone), { largestUnit: "days" }).days;
       }
     }
   }
@@ -386,7 +403,7 @@ function planSeries(
         set.completedDate = now;
         return { kind: "edit", set, remove: [], note: "Serie beendet – kein weiteres Vorkommen" };
       }
-      const dates = datesForInstance(task, series, next.date);
+      const dates = datesForInstance(task, series, next.date, undefined, ctx.timeZone);
       if (dates.error) return blocked(dates.error);
       Object.assign(set, dates.set);
       set.recurrence_instance = next.date.toString();
@@ -431,7 +448,7 @@ function planSeries(
         exclude: (d) => series.C.has(d.toString()) || series.S.has(d.toString()),
       });
       if (next.kind !== "found") return blocked("Serie ist erschöpft – Serie mit neuer Regel fortsetzen");
-      const dates = datesForInstance(task, series, next.date);
+      const dates = datesForInstance(task, series, next.date, undefined, ctx.timeZone);
       if (dates.error) return blocked(dates.error);
       const body = resetCheckboxes(task.body);
       return {
@@ -461,12 +478,13 @@ function planSeries(
     }
     case "changeReference": {
       if (!K) return blocked("Kein aktuelles Vorkommen");
-      const dates = datesForInstance(task, { ...series, field: action.field }, K, action.offsetDays);
+      // Ein geleerter Abstand entfernt den gespeicherten; dann gilt die Differenz der aktuellen Felder (5.3).
+      const dates = datesForInstance(task, { ...series, field: action.field, offsetDays: null }, K, action.offsetDays, ctx.timeZone);
       if (dates.error) return blocked(dates.error);
       const set: Record<string, YamlValue> = { ...dates.set, recurrence_field: action.field };
       const remove: string[] = [];
       if (action.offsetDays !== null) set.recurrence_offset_days = action.offsetDays;
-      else if (series.offsetDays !== null && action.field !== series.field) remove.push("recurrence_offset_days");
+      else if (series.offsetDays !== null) remove.push("recurrence_offset_days");
       return { kind: "edit", set, remove };
     }
     case "removeRecurrence": {
@@ -571,6 +589,7 @@ function planNewSection(
     { field: spec.field, offsetDays: null, start: { date: k, time: chosen.time } },
     k,
     spec.offsetDays,
+    ctx.timeZone,
   );
   if (dates.error) return blocked(dates.error);
   Object.assign(set, dates.set);

@@ -12,6 +12,9 @@ interface FilterState {
   setSort(s: SortChoice): void;
   open: boolean;
   setOpen(o: boolean): void;
+  /** Eingang: neueste zuerst (Standard) oder älteste zuerst (4.1) */
+  inboxNewest: boolean;
+  setInboxNewest(v: boolean): void;
 }
 
 const Ctx = createContext<FilterState | null>(null);
@@ -25,17 +28,18 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   const [filter, setFilter] = useState<Filter>({});
   const [sort, setSort] = useState<SortChoice>("default");
   const [open, setOpen] = useState(false);
-  return <Ctx value={{ filter, setFilter, sort, setSort, open, setOpen }}>{children}</Ctx>;
+  const [inboxNewest, setInboxNewest] = useState(true);
+  return <Ctx value={{ filter, setFilter, sort, setSort, open, setOpen, inboxNewest, setInboxNewest }}>{children}</Ctx>;
 }
 
-export function filterActive(f: Filter, s: SortChoice): boolean {
-  return Object.keys(f).length > 0 || s !== "default";
+export function filterActive(f: Filter, s: SortChoice, inboxNewest = true): boolean {
+  return Object.keys(f).length > 0 || s !== "default" || !inboxNewest;
 }
 
 type Opt<V> = [V, string];
 
 export function FilterSheet({ today }: { today: Temporal.PlainDate }) {
-  const { filter, setFilter, sort, setSort, open, setOpen } = useFilter();
+  const { filter, setFilter, sort, setSort, open, setOpen, inboxNewest, setInboxNewest } = useFilter();
   const c = useTheme();
   if (!open) return null;
   const set = <K extends keyof Filter>(k: K, v: Filter[K] | "any") => {
@@ -58,6 +62,29 @@ export function FilterSheet({ today }: { today: Temporal.PlainDate }) {
               style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: active ? c.primary : c.outline, backgroundColor: active ? c.primaryContainer : "transparent" }}
             >
               <Text style={{ color: c.fg }}>{l}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+  // Mehrfachauswahl: ODER innerhalb des Merkmals (4.3)
+  const multiRow = <V extends string>(label: string, value: V[], opts: Opt<V>[], on: (v: V[]) => void, testID: string) => (
+    <View style={{ gap: 6 }}>
+      <Text style={{ color: c.muted, fontSize: 13 }}>{label} (mehrere möglich)</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {opts.map(([v, l]) => {
+          const active = value.includes(v);
+          return (
+            <Pressable
+              key={v}
+              onPress={() => on(active ? value.filter((x) => x !== v) : [...value, v])}
+              testID={`${testID}-${l}`}
+              accessibilityState={{ checked: active }}
+              accessibilityRole="checkbox"
+              style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: active ? c.primary : c.outline, backgroundColor: active ? c.primaryContainer : "transparent" }}
+            >
+              <Text style={{ color: c.fg }}>{active ? "✓ " : ""}{l}</Text>
             </Pressable>
           );
         })}
@@ -89,8 +116,9 @@ export function FilterSheet({ today }: { today: Temporal.PlainDate }) {
         <Pressable onPress={() => {}} style={{ backgroundColor: c.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: "85%" }}>
           <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} testID="filter-sheet">
             {row("Sortierung", sort, (Object.keys(SORT_LABELS) as SortChoice[]).map((k) => [k, SORT_LABELS[k]] as Opt<SortChoice>), setSort, "sort")}
-            {row("Status", filter.status?.[0] ?? "any", [["any", "egal"], ["open", "offen"], ["in-progress", "in Arbeit"], ["done", "erledigt"]] as Opt<string>[], (v) => set("status", v === "any" ? "any" : [v as never]), "status")}
-            {row("Priorität", filter.priority?.[0] ?? "any", [["any", "egal"], ["high", "hoch"], ["normal", "normal"], ["low", "niedrig"], ["none", "keine"]] as Opt<string>[], (v) => set("priority", v === "any" ? "any" : [v as never]), "priority")}
+            {row("Eingang sortieren", inboxNewest, [[true, "neueste zuerst"], [false, "älteste zuerst"]] as Opt<boolean>[], setInboxNewest, "inbox-sort")}
+            {multiRow("Status", filter.status ?? [], [["open", "offen"], ["in-progress", "in Arbeit"], ["done", "erledigt"]], (v) => set("status", v.length ? v : "any"), "status")}
+            {multiRow("Priorität", filter.priority ?? [], [["high", "hoch"], ["normal", "normal"], ["low", "niedrig"], ["none", "keine"]], (v) => set("priority", v.length ? v : "any"), "priority")}
             {row("Eingang", filter.inbox ?? "any", [["any", "egal"], ["yes", "ja"], ["no", "nein"]] as Opt<string>[], (v) => set("inbox", v as never), "inbox")}
             {row("Frist", dueValue, [["any", "egal"], ["none", "keine"], ["overdue", "überfällig"], ["today", "heute"], ["next7", "7 Tage"], ["range", "Zeitraum"]] as Opt<string>[], (v) => set("due", (v === "range" ? defaultRange : v) as never), "due")}
             {rangeRow("due")}
@@ -98,7 +126,7 @@ export function FilterSheet({ today }: { today: Temporal.PlainDate }) {
             {rangeRow("scheduled")}
             {row("Wiederholung", filter.recurrence ?? "any", [["any", "egal"], ["none", "keine"], ["calendar", "Kalender"], ["completion", "ab Erledigung"], ["invalid", "fehlerhaft"]] as Opt<string>[], (v) => set("recurrence", v as never), "recurrence")}
             <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
-              <Pressable onPress={() => { setFilter({}); setSort("default"); }} testID="filter-reset">
+              <Pressable onPress={() => { setFilter({}); setSort("default"); setInboxNewest(true); }} testID="filter-reset">
                 <Text style={{ color: c.danger }}>Zurücksetzen</Text>
               </Pressable>
               <Pressable onPress={() => setOpen(false)} testID="filter-close">

@@ -2,21 +2,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Linking, Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { WebView } from "react-native-webview";
+import { diffLines } from "diff";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { renderMarkdown, T, type Outcome } from "@markdoist/app";
+import { previewAction, renderMarkdown, splitDateValue, T, type Outcome } from "@markdoist/app";
 import {
   describeOccurrence,
   describeRule,
+  formatGermanDate,
   parseKey,
+  Temporal,
   upcomingForExceptions,
   type Priority,
   type Status,
   type TaskAction,
 } from "@markdoist/core";
 import { pickDate } from "../components/actions-sheet";
-import { useRepo, useRepoState } from "../repo";
+import { systemClock, useRepo, useRepoState } from "../repo";
 import { useNotify } from "../notify";
 import { useTheme, type Theme } from "../theme";
 import type { RootStack } from "../navigation";
@@ -90,6 +93,12 @@ export function DetailScreen() {
     return unsub;
   }); // beim Verlassen speichern
 
+  // Extern umbenannt: Detail über die ID nachführen (7.1).
+  const moved = !view ? repo.resolveRef(ref) : null;
+  useEffect(() => {
+    if (moved && moved !== ref) nav.setParams({ ref: moved });
+  }, [moved, ref, nav]);
+
   if (!view) {
     return (
       <View style={{ flex: 1, backgroundColor: c.bg, padding: 24 }}>
@@ -109,6 +118,15 @@ export function DetailScreen() {
   const s = view.series;
   const K = s?.instance?.toString() ?? "";
   const act = (a: TaskAction, label: string) => void repo.perform(ref, a, label).then((o: Outcome) => notify(o, label));
+  // Vorschau vor dem Abschluss (5.2, 5.4)
+  const clock = systemClock();
+  const complete = s && s.phase === "active" ? previewAction(t, { type: "completeOccurrence", revision: s.revisionKey, instance: K }, clock) : null;
+  const reopen = s && s.phase === "ended" ? previewAction(t, { type: "reopenSeries", revision: s.revisionKey }, clock) : null;
+  const previewLinesFor = (complete ?? reopen)?.lines ?? [];
+  const upcoming = s ? upcomingForExceptions(s) : [];
+  const extraSkipped = s
+    ? [...s.S].filter((d) => s.instance && d > s.instance.toString() && !upcoming.some((u) => u.date.toString() === d) && parseKey(d)).sort()
+    : [];
 
   const onBody = (text: string) => {
     setBody(text);
@@ -121,15 +139,14 @@ export function DetailScreen() {
 
   const dateRow = (field: "due" | "scheduled") => {
     const raw = typeof t.data[field] === "string" ? (t.data[field] as string) : null;
-    const m = raw ? /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?/.exec(raw) : null;
-    const date = m?.[1] ?? "";
-    const time = m?.[2] ?? "";
+    // Werte mit Offset in Ortszeit anzeigen (3.3); erst eine Bearbeitung schreibt lokal.
+    const { date, time } = splitDateValue(raw, systemClock().timeZone);
     const set = (d: string, tm: string) => act({ type: "setDate", field, value: d ? (tm ? `${d}T${tm}` : d) : null }, field === "due" ? "Frist geändert" : "Planung geändert");
     return (
       <View style={{ gap: 6 }}>
         <Text style={{ color: c.muted, fontSize: 13 }}>{T.fields[field]}</Text>
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <Chip c={c} disabled={ro} testID={`field-${field}`} label={date ? date.split("-").reverse().join(".") : "Datum wählen"} active={!!date} onPress={() => pickDate(raw, (d) => set(d, time))} />
+          <Chip c={c} disabled={ro} testID={`field-${field}`} label={date ? formatGermanDate(Temporal.PlainDate.from(date)) : "Datum wählen"} active={!!date} onPress={() => pickDate(date || null, (d) => set(d, time))} />
           {date && (time ? (
             <Chip c={c} disabled={ro} label={time} active onPress={() => {
               const [h, mi] = time.split(":").map(Number);
@@ -153,14 +170,14 @@ export function DetailScreen() {
 
   const history = (() => {
     const out: { label: string; items: string[] }[] = [];
-    if (s) out.push({ label: "Aktiver Abschnitt", items: [...[...s.C].map((d) => `${d}|erledigt`), ...[...s.S].map((d) => `${d}|übersprungen`)].sort().reverse() });
+    if (s) out.push({ label: `Aktiver Abschnitt (${s.rule ? (describeRule(s.rule, s.anchor) ?? s.raw) : s.raw})`, items: [...[...s.C].map((d) => `${d}|erledigt`), ...[...s.S].map((d) => `${d}|übersprungen`)].sort().reverse() });
     const arch = t.data.recurrence_archive;
     if (Array.isArray(arch)) {
       for (const a of arch) {
         if (!a || typeof a !== "object" || Array.isArray(a)) continue;
         const r = a as Record<string, unknown>;
         const list = (k: string) => (Array.isArray(r[k]) ? [...new Set((r[k] as unknown[]).map(String))] : []);
-        out.push({ label: `Archiv (${String(r.recurrence)})`, items: [...list("complete_instances").map((d) => `${d}|erledigt`), ...list("skipped_instances").map((d) => `${d}|übersprungen`)].sort().reverse() });
+        out.push({ label: `Archiv (${String(r.recurrence)}, ${r.closed_reason === "removed" ? "entfernt" : "Regel geändert"})`, items: [...list("complete_instances").map((d) => `${d}|erledigt`), ...list("skipped_instances").map((d) => `${d}|übersprungen`)].sort().reverse() });
       }
     }
     return out.filter((h) => h.items.length);
@@ -179,14 +196,15 @@ export function DetailScreen() {
         testID="field-title"
         accessibilityLabel={T.fields.title}
       />
-      {view.diagnostics.filter((d) => d.severity !== "info").map((d, i) => (
-        <Text key={i} selectable style={{ color: d.severity === "error" ? c.danger : c.warn, backgroundColor: c.badge, padding: 10, borderRadius: 8 }}>{d.message}</Text>
+      {view.diagnostics.map((d, i) => (
+        <Text key={i} selectable style={{ color: d.severity === "error" ? c.danger : d.severity === "info" ? c.muted : c.warn, backgroundColor: c.badge, padding: 10, borderRadius: 8 }}>{d.message}</Text>
       ))}
       <View style={{ gap: 6 }}>
         <Text style={{ color: c.muted, fontSize: 13 }}>{T.fields.status}</Text>
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-          {(["open", "in-progress", "done"] as Status[]).map((x) => (
-            <Chip key={x} c={c} disabled={ro} label={T.status[x]} active={f.status === x} onPress={() => act({ type: "setStatus", status: x }, "Status geändert")} testID={`status-${x}`} />
+          {/* Bei Serien kein „Erledigt“: Erledigen und Beenden nur über die Serienknöpfe (Entscheidung 18.10.2026). */}
+          {(["open", "in-progress", "done"] as Status[]).filter((x) => !(s && x === "done" && f.status !== "done")).map((x) => (
+            <Chip key={x} c={c} disabled={ro || (!!s && x === "done")} label={T.status[x]} active={f.status === x} onPress={() => act({ type: "setStatus", status: x }, "Status geändert")} testID={`status-${x}`} />
           ))}
         </View>
       </View>
@@ -216,16 +234,25 @@ export function DetailScreen() {
         <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           {s && s.phase === "active" && btn("Vorkommen erledigen", () => act({ type: "completeOccurrence", revision: s.revisionKey, instance: K }, "Vorkommen erledigt"), "series-complete", true)}
           {s && s.phase === "active" && btn(T.actions.skip, () => act({ type: "skipOccurrence", revision: s.revisionKey, instance: K }, "Übersprungen"), "series-skip")}
-          {s && s.phase === "active" && btn("Serie beenden", () => act({ type: "endSeries", revision: s.revisionKey, instance: K, completeCurrent: false }, "Serie beendet"))}
-          {s && s.phase === "ended" && btn("Serie wiederöffnen", () => act({ type: "reopenSeries", revision: s.revisionKey }, "Serie wiederöffnet"))}
+          {s && s.phase === "active" && btn("Erledigen und Serie beenden", () => act({ type: "endSeries", revision: s.revisionKey, instance: K, completeCurrent: true }, "Serie beendet"), "series-end-complete")}
+          {s && s.phase === "active" && btn("Serie ohne Erledigung beenden", () => act({ type: "endSeries", revision: s.revisionKey, instance: K, completeCurrent: false }, "Serie beendet"), "series-end")}
+          {s && s.phase === "ended" && reopen?.preview.result === "change" && btn("Serie wiederöffnen", () => act({ type: "reopenSeries", revision: s.revisionKey }, "Serie wiederöffnet"), "series-reopen")}
+          {s && s.phase === "ended" && reopen?.preview.result === "blocked" && btn("Serie mit neuer Regel fortsetzen", () => nav.navigate("Recurrence", { ref, continueSeries: true }), "series-continue")}
           {btn(s ? "Regel bearbeiten" : "Wiederholung …", () => nav.navigate("Recurrence", { ref }), "edit-recurrence")}
           {s && btn("Wiederholung entfernen", () => act({ type: "removeRecurrence", revision: s.revisionKey }, "Wiederholung entfernt"))}
         </View>
-        {s && upcomingForExceptions(s).length > 0 && (
+        {previewLinesFor.length > 0 && (
+          <View testID={s?.phase === "ended" ? "reopen-preview" : "complete-preview"} accessibilityLabel={s?.phase === "ended" ? "Beim Wiederöffnen" : "Beim Erledigen"}>
+            {previewLinesFor.map((l) => (
+              <Text key={l} style={{ color: c.muted, fontSize: 13 }}>• {l}</Text>
+            ))}
+          </View>
+        )}
+        {s && s.phase === "active" && s.anchor === "calendar" && (
           <View style={{ gap: 6 }} testID="exceptions">
             <Text style={{ color: c.muted, fontSize: 13 }}>Ausnahmen – nächste Termine (antippen zum Überspringen)</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {upcomingForExceptions(s).map((u) => (
+              {[...upcomingForExceptions(s), ...extraSkipped.map((d) => ({ date: parseKey(d)!, skipped: true }))].map((u) => (
                 <Chip
                   key={u.date.toString()}
                   c={c}
@@ -241,6 +268,16 @@ export function DetailScreen() {
                   }
                 />
               ))}
+              <Chip
+                c={c}
+                disabled={ro}
+                active={false}
+                testID="exception-add"
+                label="Weiteren Termin …"
+                onPress={() =>
+                  pickDate(null, (d) => act({ type: "setException", revision: s.revisionKey, date: d, skipped: true }, "Termin wird übersprungen"))
+                }
+              />
             </View>
           </View>
         )}
@@ -267,9 +304,30 @@ export function DetailScreen() {
           {{ idle: "", pending: T.save.pending, draft: T.save.draft, saved: T.save.saved, failed: T.save.failed, conflict: T.save.conflict }[save]}
         </Text>
       </View>
+      {save === "failed" && (
+        <View style={{ backgroundColor: c.badge, borderRadius: 8, padding: 10, gap: 8 }} testID="save-failed">
+          <Text selectable style={{ color: c.danger }}>Speichern fehlgeschlagen. Dein Entwurf ist lokal gesichert.</Text>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+            <Chip c={c} active={false} testID="retry-save" label="Erneut speichern" onPress={() => void repo.retryDraft(ref).then((o) => {
+              notify(o, "Notiz");
+              if (o.status === "ok" || o.status === "noop") { pending.current = false; setSave("saved"); }
+            })} />
+            <Chip c={c} active={false} testID="save-as-new" label="Als neue Datei speichern" onPress={() => void repo.saveDraftAsNew(ref).then((o) => notify(o, "Als neue Datei gespeichert"))} />
+          </View>
+        </View>
+      )}
       {save === "conflict" && (
         <View style={{ backgroundColor: c.badge, borderRadius: 8, padding: 10, gap: 8 }} testID="draft-conflict">
           <Text selectable style={{ color: c.warn }}>Die Datei wurde extern geändert. Dein Entwurf ist lokal gesichert.</Text>
+          {/* Datei-Version und eigener Entwurf bleiben sichtbar (7.3) */}
+          <Text style={{ color: c.muted, fontSize: 12 }}>Unterschied Datei-Version → mein Entwurf</Text>
+          <View style={{ borderWidth: 1, borderColor: c.outline, borderRadius: 6, padding: 6 }}>
+            {diffLines(t.body, body).map((part, j) => (
+              <Text key={j} selectable style={{ fontFamily: "monospace", fontSize: 12, color: c.fg, backgroundColor: part.added ? "rgba(46,125,50,0.2)" : part.removed ? "rgba(198,40,40,0.2)" : "transparent" }}>
+                {part.value}
+              </Text>
+            ))}
+          </View>
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             {(["mine", "file", "both"] as const).map((ch) => (
               <Chip

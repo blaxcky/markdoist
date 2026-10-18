@@ -18,22 +18,30 @@ export interface ReadResult {
   invalidUtf8?: boolean;
 }
 
+/** Offener Journalvorgang nach einem Fehlschlag (7.3): sofort als Wiederherstellungsfall anzeigen. */
+export interface OpenCase {
+  recovery?: RecoveryCase;
+}
+
 export type WriteResult =
   | { status: "ok"; ref: string; name: string; hash: string }
   /** aktueller Hash weicht von der erwarteten Ausgangsfassung ab */
-  | { status: "conflict"; currentHash: string | null }
-  | { status: "permission"; message: string }
-  | { status: "missing"; message: string }
-  | { status: "full"; message: string }
+  | ({ status: "conflict"; currentHash: string | null } & OpenCase)
+  | ({ status: "permission"; message: string } & OpenCase)
+  | ({ status: "missing"; message: string } & OpenCase)
+  | ({ status: "full"; message: string } & OpenCase)
   /** Ziel existiert bereits (exklusive Neuanlage) */
-  | { status: "exists"; message: string }
+  | ({ status: "exists"; message: string } & OpenCase)
   /** unklarer Ausgang: vor erneutem Versuch Journal prüfen */
-  | { status: "unknown"; message: string };
+  | ({ status: "unknown"; message: string } & OpenCase);
 
 export interface RecoveryCase {
   opId: string;
   kind: "write" | "create" | "trash" | "restore" | "rename" | "delete";
+  /** Zielreferenz des Vorgangs */
   ref: string;
+  /** Quellreferenz bei Verschieben/Umbenennen (sonst wie ref oder fehlend) */
+  source?: string;
   name: string;
   /** Inhalt vor dem Vorgang (falls bekannt) */
   before: string | null;
@@ -50,6 +58,10 @@ export interface StorageAdapter {
   read(ref: string): Promise<ReadResult>;
   /** Optional: mehrere Dateien in einem Aufruf lesen; null je Datei bei Fehler. */
   readMany?(refs: string[]): Promise<(ReadResult | null)[]>;
+  /**
+   * Bleibt nach einem Fehlschlag ein Journalvorgang offen, liefert das Ergebnis ihn in `recovery`,
+   * damit der Wiederherstellungsfall sofort sichtbar ist (7.3).
+   */
   write(ref: string, text: string, expectedHash: string): Promise<WriteResult>;
   /** Exklusive Neuanlage in der obersten Ebene; liefert den tatsächlich vergebenen Namen. */
   create(name: string, text: string): Promise<WriteResult>;

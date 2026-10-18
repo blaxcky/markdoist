@@ -1,4 +1,4 @@
-# Filter (4.3): Priorität „hoch“ in „Alle“ zeigt nur passende Aufgaben; Zurücksetzen.
+# Filter (4.3): Priorität „hoch“ in „Alle“ zeigt nur passende Aufgaben; Mehrfachauswahl (ODER); Zurücksetzen.
 appId: de.markdoist.aufgaben
 ---
 - runFlow: ../launch.yaml
@@ -12,6 +12,14 @@ appId: de.markdoist.aufgaben
     id: filter-close
 - assertVisible: ".*Zahnarzttermin vereinbaren"
 - assertNotVisible: "Maestro Aufgabe"
+- tapOn:
+    id: nav-filter
+- tapOn:
+    id: priority-keine
+- tapOn:
+    id: filter-close
+- assertVisible: ".*Zahnarzttermin vereinbaren"
+- assertVisible: "Maestro Aufgabe"
 - tapOn:
     id: nav-filter
 - tapOn:

@@ -1,12 +1,12 @@
 // Wiederholungseditor Android (Abschnitt 6, M6) auf Basis des gemeinsamen Formularmodells.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { defaultForm, formFromSeries, needsMonthEndChoice, previewForm, specFromForm, type RuleForm } from "@markdoist/app";
-import { describeOccurrence, type Weekday } from "@markdoist/core";
+import { defaultForm, formFromSeries, needsMonthEndChoice, previewAction, previewForm, ruleFormAction, type RuleForm } from "@markdoist/app";
+import { describeOccurrence, parseKey, type Weekday } from "@markdoist/core";
 import { pickDate } from "../components/actions-sheet";
-import { useRepo, useRepoState } from "../repo";
+import { systemClock, useRepo, useRepoState } from "../repo";
 import { useNotify } from "../notify";
 import { useTheme, type Theme } from "../theme";
 import type { RootStack } from "../navigation";
@@ -35,26 +35,34 @@ export function RecurrenceScreen() {
   const view = state.index.tasks.find((v) => v.task.ref === route.params.ref);
   const series = view?.series ?? null;
   const today = state.index.today;
-  const [f, setF] = useState<RuleForm>(() =>
-    series ? formFromSeries(series, today) : defaultForm(today, view?.task.fields.due ? "due" : view?.task.fields.scheduled ? "scheduled" : "due"),
-  );
+  const continueSeries = route.params.continueSeries === true;
+  const [f, setF] = useState<RuleForm>(() => {
+    const form = series ? formFromSeries(series, today) : defaultForm(today, view?.task.fields.due ? "due" : view?.task.fields.scheduled ? "scheduled" : "due");
+    if (continueSeries) form.restartCount = true;
+    return form;
+  });
+  // Künftige Ausnahmen werden nur nach ausdrücklicher Auswahl übernommen (5.1).
+  const futureExceptions = series ? [...series.S].filter((d) => d > today.toString()).sort() : [];
+  const [carry, setCarry] = useState<string[]>([]);
   const set = <K extends keyof RuleForm>(k: K, v: RuleForm[K]) => setF((x) => ({ ...x, [k]: v }));
   const preview = useMemo(() => previewForm(f, today, !!series), [f, today, series]);
+  const action = useMemo(() => ruleFormAction(f, series, carry), [f, series, carry]);
+  const effect = useMemo(() => (preview.ok && view ? previewAction(view.task, action, systemClock()) : null), [preview.ok, view, action]);
+  useEffect(() => {
+    if (continueSeries) nav.setOptions({ title: "Serie fortsetzen" });
+  }, [continueSeries, nav]);
   if (!view) return null;
   const label = (t: string) => <Text style={{ color: c.muted, fontSize: 13, marginTop: 8 }}>{t}</Text>;
   const num = (value: number, on: (n: number) => void, testID?: string) => (
     <TextInput keyboardType="number-pad" value={String(value)} onChangeText={(t) => on(Math.max(1, parseInt(t, 10) || 1))} testID={testID} style={{ borderWidth: 1, borderColor: c.outline, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, color: c.fg, width: 70 }} />
   );
   const save = () => {
-    const spec = specFromForm(f);
+    if (effect?.preview.result === "noop") {
+      nav.goBack();
+      return;
+    }
     void repo
-      .perform(
-        view.task.ref,
-        series
-          ? { type: "changeRule", revision: series.revisionKey, spec, restartCount: f.restartCount, resetChecklists: f.resetChecklists }
-          : { type: "createSeries", spec },
-        series ? "Regel geändert" : "Wiederholung angelegt",
-      )
+      .perform(view.task.ref, action, series ? "Regel geändert" : "Wiederholung angelegt")
       .then((o) => {
         notify(o, series ? "Regel geändert" : "Wiederholung angelegt");
         if (o.status === "ok" || o.status === "noop") nav.goBack();
@@ -154,20 +162,33 @@ export function RecurrenceScreen() {
             <Switch value={f.resetChecklists} onValueChange={(v) => set("resetChecklists", v)} trackColor={{ true: c.primary }} />
             <Text style={{ color: c.fg, flex: 1 }}>Haken der Checklisten zurücksetzen</Text>
           </View>
+          {futureExceptions.length > 0 && label("Ausnahmen weiterhin überspringen")}
+          {futureExceptions.map((d) => (
+            <View key={d} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Switch value={carry.includes(d)} onValueChange={(v) => setCarry((x) => (v ? [...x, d] : x.filter((y) => y !== d)))} trackColor={{ true: c.primary }} testID={`rec-carry-${d}`} />
+              <Text style={{ color: c.fg, flex: 1 }}>{parseKey(d) ? describeOccurrence(parseKey(d)!) : d}</Text>
+            </View>
+          ))}
         </>
       )}
       <View style={{ backgroundColor: c.surface, borderRadius: 12, padding: 12, gap: 4, marginTop: 12 }} testID="rec-preview">
         {preview.ok ? (
           <>
             <Text style={{ color: c.fg, fontWeight: "600" }}>{preview.description ?? preview.rule}</Text>
-            {series && <Text style={{ color: c.muted }}>Neuer Abschnitt; die bisherige Historie bleibt im Archiv und zählt nicht mit.</Text>}
             <Text style={{ color: c.fg }}>Nächste Termine: {preview.dates.map((d) => describeOccurrence(d)).join(" · ")}{preview.exhausted ? " (Ende)" : ""}</Text>
+            {effect && (
+              <View testID="rec-effect">
+                {effect.lines.map((l) => (
+                  <Text key={l} style={{ color: c.muted }}>• {l}</Text>
+                ))}
+              </View>
+            )}
           </>
         ) : (
           <Text selectable style={{ color: c.danger }}>{preview.message}</Text>
         )}
       </View>
-      <Pressable onPress={preview.ok ? save : undefined} testID="rec-save" style={{ marginTop: 12, alignSelf: "flex-end", paddingVertical: 12, paddingHorizontal: 24, borderRadius: 20, backgroundColor: c.primary, opacity: preview.ok ? 1 : 0.5 }}>
+      <Pressable onPress={preview.ok && effect?.preview.result !== "blocked" ? save : undefined} testID="rec-save" style={{ marginTop: 12, alignSelf: "flex-end", paddingVertical: 12, paddingHorizontal: 24, borderRadius: 20, backgroundColor: c.primary, opacity: preview.ok && effect?.preview.result !== "blocked" ? 1 : 0.5 }}>
         <Text style={{ color: c.onPrimary, fontWeight: "600" }}>Speichern</Text>
       </Pressable>
     </ScrollView>

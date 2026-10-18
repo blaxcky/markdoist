@@ -237,15 +237,39 @@ export class FsAdapter implements StorageAdapter {
       this.hook("write", "after-rename");
       e.phase = "replaced";
       const after = await this.currentHash(path);
-      if (after === null || after !== e.desiredHash) return { status: "unknown", message: "Nachher-Hash weicht ab" };
+      if (after === null || after !== e.desiredHash) {
+        await this.journal(e);
+        return this.unclear(e, "Nachher-Hash weicht ab");
+      }
       await this.finish(e);
       return { status: "ok", ref, name: this.resolve(ref).name, hash: after };
     } catch (err) {
-      if (err instanceof CrashSimulation) throw err;
-      if (e && e.tmp) await fs.unlink(e.tmp).catch(() => {});
-      if (e) await this.finish(e).catch(() => {});
-      return mapError(err);
+      return this.failure(err, e);
     }
+  }
+
+  /**
+   * Fehler nach Beginn eines Vorgangs: Bei unklarem Ausgang bleibt das Journal offen und der Fall
+   * wird sofort mitgeliefert (7.3); sonst ist das Ziel unberührt und der Vorgang wird abgeschlossen.
+   */
+  private async failure(err: unknown, e: JournalEntry | null): Promise<WriteResult> {
+    if (err instanceof CrashSimulation) throw err;
+    const r = mapError(err);
+    if (e && r.status === "unknown") return this.unclear(e, r.message);
+    if (e?.tmp) await fs.unlink(e.tmp).catch(() => {});
+    if (e) await this.finish(e).catch(() => {});
+    return r;
+  }
+
+  /** Unklarer Ausgang zur Laufzeit: Vorgang wie beim Start bewerten, offenen Fall zurückgeben. */
+  private async unclear(e: JournalEntry, message: string): Promise<WriteResult> {
+    let recovery: RecoveryCase | null;
+    try {
+      recovery = await this.assess(e, true);
+    } catch {
+      recovery = this.caseOf(e, null, message);
+    }
+    return recovery ? { status: "unknown", message, recovery } : { status: "unknown", message };
   }
 
   /** Exklusiv: link() scheitert, wenn das Ziel existiert; nie eine vorhandene Datei ersetzen. */
@@ -275,10 +299,7 @@ export class FsAdapter implements StorageAdapter {
       await this.finish(e);
       return { status: "ok", ref, name, hash: sha(text) };
     } catch (err) {
-      if (err instanceof CrashSimulation) throw err;
-      if (e?.tmp) await fs.unlink(e.tmp).catch(() => {});
-      if (e) await this.finish(e).catch(() => {});
-      return mapError(err);
+      return this.failure(err, e);
     }
   }
 
@@ -338,9 +359,7 @@ export class FsAdapter implements StorageAdapter {
       await this.finish(e);
       return { status: "ok", ref: dstRef, name, hash: expectedHash };
     } catch (err) {
-      if (err instanceof CrashSimulation) throw err;
-      if (e) await this.finish(e).catch(() => {});
-      return mapError(err);
+      return this.failure(err, e);
     }
   }
 
@@ -404,6 +423,79 @@ export class FsAdapter implements StorageAdapter {
     }
   }
 
+  private caseOf(e: JournalEntry, current: string | null, message: string): RecoveryCase {
+    return {
+      opId: e.opId,
+      kind: e.kind,
+      ref: e.dst,
+      ...(e.src !== e.dst ? { source: e.src } : {}),
+      name: this.resolve(e.dst).name,
+      before: e.beforeText,
+      desired: e.desired,
+      current,
+      message,
+    };
+  }
+
+  /**
+   * Einen offenen Vorgang bewerten: eindeutige Fälle abschließen (null), sonst Wiederherstellungsfall.
+   * Zur Laufzeit (runtime) gilt ein unberührtes Ziel ebenfalls als abgeschlossen: Der Fehler wird
+   * gemeldet, die ausstehende Änderung liegt noch bei der Oberfläche.
+   */
+  private async assess(e: JournalEntry, runtime = false): Promise<RecoveryCase | null> {
+    // Temp-Datei: Inhalt ist im Journal gesichert und darf entfernt werden.
+    const cleanTmp = async () => {
+      if (e.tmp) await fs.unlink(e.tmp).catch(() => {});
+    };
+    if (e.kind === "write") {
+      const cur = await this.readText(e.dst);
+      await cleanTmp();
+      if (cur && cur.hash === e.desiredHash) {
+        await this.finish(e);
+        return null;
+      }
+      if (cur && cur.hash === e.beforeHash) {
+        if (runtime) {
+          await this.finish(e);
+          return null;
+        }
+        return this.caseOf(e, cur.text, "Änderung wurde nicht gespeichert – erneut speichern?");
+      }
+      return this.caseOf(e, cur?.text ?? null, cur ? "Datei hat einen dritten Inhalt" : "Datei fehlt");
+    }
+    if (e.kind === "create") {
+      const cur = await this.readText(e.dst);
+      await cleanTmp();
+      if ((cur && cur.hash === e.desiredHash) || (runtime && !cur)) {
+        await this.finish(e);
+        return null;
+      }
+      return this.caseOf(e, cur?.text ?? null, "Neuanlage wurde nicht abgeschlossen");
+    }
+    if (e.kind === "delete") {
+      const cur = await this.readText(e.src);
+      if (!cur) {
+        await this.finish(e);
+        return null;
+      }
+      return this.caseOf(e, cur.text, "Endgültiges Löschen wurde nicht abgeschlossen");
+    }
+    // trash / restore / rename: link + unlink
+    const src = await this.readText(e.src);
+    const dst = await this.readText(e.dst);
+    if (src && dst && src.hash === e.beforeHash && dst.hash === e.beforeHash) {
+      // Abbruch zwischen Kopie und Löschen: nicht erneut kopieren, Quelle nach Prüfung entfernen.
+      await fs.unlink(this.resolve(e.src).path);
+      await this.finish(e);
+      return null;
+    }
+    if ((!src && dst && dst.hash === e.beforeHash) || (src && !dst && src.hash === e.beforeHash)) {
+      await this.finish(e); // abgeschlossen bzw. nichts geschehen
+      return null;
+    }
+    return this.caseOf(e, dst?.text ?? src?.text ?? null, "Verschieben unklar – beide Orte prüfen");
+  }
+
   /** Offene Vorgänge klären (7.3). Eindeutige Fälle werden abgeschlossen, unklare zurückgegeben. */
   async recover(): Promise<RecoveryCase[]> {
     const cases: RecoveryCase[] = [];
@@ -412,57 +504,8 @@ export class FsAdapter implements StorageAdapter {
         if (Date.now() - e.createdAt > KEEP_DONE_MS) await fs.unlink(this.journalPath(e.opId)).catch(() => {});
         continue;
       }
-      const caseOf = (current: string | null, message: string): RecoveryCase => ({
-        opId: e.opId,
-        kind: e.kind,
-        ref: e.dst,
-        name: this.resolve(e.dst).name,
-        before: e.beforeText,
-        desired: e.desired,
-        current,
-        message,
-      });
-      // Temp-Datei: Inhalt ist im Journal gesichert und darf entfernt werden.
-      const cleanTmp = async () => {
-        if (e.tmp) await fs.unlink(e.tmp).catch(() => {});
-      };
-      if (e.kind === "write") {
-        const cur = await this.readText(e.dst);
-        if (cur && cur.hash === e.desiredHash) {
-          await cleanTmp();
-          await this.finish(e);
-        } else if (cur && cur.hash === e.beforeHash) {
-          await cleanTmp();
-          cases.push(caseOf(cur.text, "Änderung wurde nicht gespeichert – erneut speichern?"));
-        } else {
-          await cleanTmp();
-          cases.push(caseOf(cur?.text ?? null, cur ? "Datei hat einen dritten Inhalt" : "Datei fehlt"));
-        }
-      } else if (e.kind === "create") {
-        const cur = await this.readText(e.dst);
-        await cleanTmp();
-        if (cur && cur.hash === e.desiredHash) await this.finish(e);
-        else cases.push(caseOf(cur?.text ?? null, "Neuanlage wurde nicht abgeschlossen"));
-      } else if (e.kind === "delete") {
-        const cur = await this.readText(e.src);
-        if (!cur) await this.finish(e);
-        else cases.push(caseOf(cur.text, "Endgültiges Löschen wurde nicht abgeschlossen"));
-      } else {
-        // trash / restore / rename: link + unlink
-        const src = await this.readText(e.src);
-        const dst = await this.readText(e.dst);
-        if (src && dst && src.hash === e.beforeHash && dst.hash === e.beforeHash) {
-          // Abbruch zwischen Kopie und Löschen: nicht erneut kopieren, Quelle nach Prüfung entfernen.
-          await fs.unlink(this.resolve(e.src).path);
-          await this.finish(e);
-        } else if (!src && dst && dst.hash === e.beforeHash) {
-          await this.finish(e);
-        } else if (src && !dst && src.hash === e.beforeHash) {
-          await this.finish(e); // nichts geschehen
-        } else {
-          cases.push(caseOf(dst?.text ?? src?.text ?? null, "Verschieben unklar – beide Orte prüfen"));
-        }
-      }
+      const c = await this.assess(e);
+      if (c) cases.push(c);
     }
     return cases;
   }

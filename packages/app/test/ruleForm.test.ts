@@ -34,3 +34,30 @@ describe("Regelformular", () => {
     expect(buildRuleText(f)).toBe("FREQ=DAILY;INTERVAL=14");
   });
 });
+
+describe("Vorschautexte (seriesPreview)", () => {
+  it("nennt nächstes Vorkommen und Kollision", async () => {
+    const { previewLines } = await import("../src");
+    const { Temporal } = await import("@markdoist/core");
+    const lines = previewLines(
+      {
+        result: "change",
+        message: null,
+        newSection: false,
+        ended: false,
+        reopened: false,
+        instance: Temporal.PlainDate.from("2026-10-26"),
+        dates: [{ field: "due", from: "2026-10-19", to: "2026-10-26" }],
+        shifted: false,
+        supersededOverdue: null,
+        passedOver: [{ date: Temporal.PlainDate.from("2026-10-19"), reason: "done" }],
+      },
+      "Europe/Berlin",
+    );
+    expect(lines).toEqual([
+      "Nächstes Vorkommen: Mo, 26.10.2026",
+      "Mo, 19.10.2026 ist schon erledigt und wird übergangen",
+      "Frist: Mo, 19.10.2026 → Mo, 26.10.2026",
+    ]);
+  });
+});

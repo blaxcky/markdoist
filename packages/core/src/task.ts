@@ -29,6 +29,7 @@ export type DiagnosticCode =
   | "invalid-recurrence-structure"
   | "series-needs-clarification"
   | "series-end-pending"
+  | "series-start-mismatch"
   | "series-conflicting-history"
   | "duplicate-id"
   | "conflict-variant"

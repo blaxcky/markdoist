@@ -17,6 +17,7 @@ export function ProblemsScreen() {
   const c = useTheme();
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
   const entries = problemsView(state.index);
+  const drafts = repo.pendingDrafts(5000);
   const card = { backgroundColor: c.surface, borderRadius: 12, padding: 12, gap: 8 } as const;
   const btn = (label: string, onPress: () => void, testID?: string) => (
     <Pressable onPress={onPress} testID={testID} style={{ alignSelf: "flex-start", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: c.outline }}>
@@ -26,23 +27,44 @@ export function ProblemsScreen() {
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: 16, gap: 12 }}>
       {state.recovery.map((r) => (
-        <View key={r.opId} style={card}>
+        <View key={r.opId} style={card} testID="recovery-case">
           <Text selectable style={{ color: c.danger, fontWeight: "600" }}>Wiederherstellung: {r.name}</Text>
           <Text selectable style={{ color: c.fg }}>{r.message}</Text>
-          {r.desired !== null && <Text selectable style={{ color: c.muted, fontFamily: "monospace", fontSize: 12 }} numberOfLines={12}>{r.desired}</Text>}
-          {r.desired !== null && btn(r.current === null ? "Gewünschte Fassung als Datei anlegen" : "Gewünschte Fassung übernehmen (überschreibt den aktuellen Stand)", () => void repo.applyRecovery(r.opId).then((o) => notify(o, "Fassung übernommen")))}
+          {/* Aktuelle Datei, Vorher- und gewünschte Fassung (7.3, AK-22) */}
+          {(
+            [
+              ["Aktueller Stand", r.current === null ? "(Datei fehlt)" : r.current],
+              ["Ausgangsfassung", r.before],
+              ["Gewünschte Fassung", r.desired],
+            ] as const
+          ).map(([label, text]) =>
+            text === null ? null : (
+              <View key={label}>
+                <Text style={{ color: c.muted, fontSize: 12 }}>{label}</Text>
+                <Text selectable style={{ color: c.fg, fontFamily: "monospace", fontSize: 12 }} numberOfLines={10}>{text}</Text>
+              </View>
+            ),
+          )}
+          {r.desired !== null && btn(r.current === null ? "Gewünschte Fassung als Datei anlegen" : "Gewünschte Fassung übernehmen (überschreibt den aktuellen Stand)", () => void repo.applyRecovery(r.opId).then((o) => notify(o, "Fassung übernommen")), "apply-recovery")}
+          {r.kind === "write" && r.before !== null && btn(`Ausgangsfassung wiederherstellen${r.current === null ? "" : " (überschreibt den aktuellen Stand)"}`, () => void repo.applyRecoveryBefore(r.opId).then((o) => notify(o, "Ausgangsfassung wiederhergestellt")), "apply-recovery-before")}
           {btn("Aktuellen Stand behalten", () => void repo.resolveRecovery(r.opId))}
         </View>
       ))}
-      {repo.orphanDrafts().map((d) => (
-        <View key={d.ref} style={card} testID="orphan-draft">
-          <Text selectable style={{ color: c.warn, fontWeight: "600" }}>Entwurf ohne Datei ({d.ref.replace(/^tasks\//, "")})</Text>
-          <Text selectable style={{ color: c.fg, fontFamily: "monospace", fontSize: 12 }} numberOfLines={8}>{d.text}</Text>
-          {btn("Als neue Datei speichern", () => void repo.resolveDraftConflict(d.ref, "both").then((o) => notify(o, "Als neue Datei gespeichert")))}
-          {btn("Verwerfen", () => void repo.discardDraft(d.ref))}
-        </View>
-      ))}
-      {entries.length === 0 && state.recovery.length === 0 && repo.orphanDrafts().length === 0 && <Text style={{ color: c.muted }}>Keine Probleme.</Text>}
+      {drafts.map((d) => {
+        const orphan = !state.files.has(d.ref);
+        const name = d.ref.replace(/^tasks\//, "");
+        return (
+          <View key={d.ref} style={card} testID={orphan ? "orphan-draft" : "pending-draft"}>
+            <Text selectable style={{ color: c.warn, fontWeight: "600" }}>{orphan ? `Entwurf ohne Datei (${name})` : `Ungespeicherter Entwurf (${name})`}</Text>
+            <Text selectable style={{ color: c.fg, fontFamily: "monospace", fontSize: 12 }} numberOfLines={8}>{d.text}</Text>
+            {!orphan && btn("Öffnen", () => nav.navigate("Detail", { ref: d.ref }))}
+            {!orphan && btn("In die Datei speichern", () => void repo.retryDraft(d.ref).then((o) => notify(o, "Entwurf gespeichert")), "retry-draft")}
+            {btn("Als neue Datei speichern", () => void repo.saveDraftAsNew(d.ref).then((o) => notify(o, "Als neue Datei gespeichert")), "draft-as-new")}
+            {btn("Verwerfen", () => void repo.discardDraft(d.ref))}
+          </View>
+        );
+      })}
+      {entries.length === 0 && state.recovery.length === 0 && drafts.length === 0 && <Text style={{ color: c.muted }}>Keine Probleme.</Text>}
       {entries.map((p, i) => {
         if (p.kind === "conflict") {
           const files = p.conflict!.files;
@@ -51,7 +73,7 @@ export function ProblemsScreen() {
               <Text selectable style={{ color: c.warn }}>{p.diagnostics[0]!.message}</Text>
               {(() => {
                 const keys = [...new Set(files.flatMap((f) => Object.keys(f.data)))].filter(
-                  (k) => JSON.stringify(files[0]!.data[k]) !== JSON.stringify(files[1]?.data[k]),
+                  (k) => files.some((f) => JSON.stringify(files[0]!.data[k]) !== JSON.stringify(f.data[k])),
                 );
                 return keys.length ? (
                   <View style={{ gap: 2 }}>
@@ -64,22 +86,24 @@ export function ProblemsScreen() {
                   </View>
                 ) : null;
               })()}
-              {files[1] && files[0]!.body !== files[1].body && (
-                <View style={{ borderWidth: 1, borderColor: c.outline, borderRadius: 6, padding: 6 }}>
-                  {diffLines(files[0]!.body, files[1].body).map((part, j) => (
+              {/* Notiz jeder weiteren Variante gegenüber der ersten (7.4) */}
+              {files.slice(1).filter((b) => b.body !== files[0]!.body).map((b) => (
+                <View key={b.ref} style={{ borderWidth: 1, borderColor: c.outline, borderRadius: 6, padding: 6 }}>
+                  {files.length > 2 && <Text style={{ color: c.muted, fontSize: 12 }}>Notiz: {files[0]!.name} → {b.name}</Text>}
+                  {diffLines(files[0]!.body, b.body).map((part, j) => (
                     <Text key={j} selectable style={{ fontFamily: "monospace", fontSize: 12, color: c.fg, backgroundColor: part.added ? "rgba(46,125,50,0.2)" : part.removed ? "rgba(198,40,40,0.2)" : "transparent" }}>
                       {part.value}
                     </Text>
                   ))}
                 </View>
-              )}
+              ))}
               {files.map((f) => (
                 <View key={f.ref} style={{ gap: 4 }}>
                   <Text selectable style={{ color: c.fg, fontWeight: "600" }}>{f.name}</Text>
                   {btn(T.actions.keepVariant, () => void repo.keepVariant(f.ref, files.filter((x) => x !== f).map((x) => x.ref)).then((o) => notify(o, "Variante behalten")), "keep-variant")}
                 </View>
               ))}
-              {btn(`${T.actions.keepBoth} (Kopie erhält neue ID)`, () => {
+              {btn(files.length > 2 ? "Alle behalten (Kopien erhalten neue IDs)" : `${T.actions.keepBoth} (Kopie erhält neue ID)`, () => {
                 for (const f of files.slice(1)) void repo.keepBoth(f.ref).then((o) => notify(o, "Beide behalten"));
               })}
             </View>

@@ -3,7 +3,7 @@ import { Temporal } from "temporal-polyfill";
 import { parseDateValue, type DateValue } from "../dates";
 import type { YamlValue } from "../frontmatter";
 import type { Diagnostic, Task } from "../task";
-import { nextOccurrence, queryOccurrences } from "./engine";
+import { isOccurrence, nextOccurrence, queryOccurrences } from "./engine";
 import { parseRule, type Rule, type RuleParse } from "./rule";
 
 export type Anchor = "calendar" | "completion";
@@ -290,6 +290,16 @@ export function readSeries(task: Task): Series | null {
         });
       }
     } else phase = "active";
+  }
+
+  // Fremddateien: rrule.js-Verhalten gilt, ein nicht zur Regel passender Start wird benannt (6).
+  if (rule && start && anchor === "calendar" && !isOccurrence(rule, start.date, start.date)) {
+    diagnostics.push({
+      code: "series-start-mismatch",
+      message: `Start ${start.date} ist kein Termin der Regel; gerechnet wird ab dem ersten passenden Termin`,
+      severity: "info",
+      field: "recurrence_start",
+    });
   }
 
   return {

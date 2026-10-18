@@ -10,6 +10,7 @@ import {
   type Rule,
   type Series,
   type SeriesSpec,
+  type TaskAction,
   type Weekday,
 } from "@markdoist/core";
 
@@ -287,5 +288,24 @@ export function specFromForm(f: RuleForm): SeriesSpec {
     field: f.field,
     start: f.startTime ? `${f.startDate}T${f.startTime}` : f.startDate,
     offsetDays: offset === null || Number.isNaN(offset) ? null : offset,
+  };
+}
+
+/** Aktion zum Speichern des Editors: Serie anlegen oder Regel ändern (5.4). */
+export function ruleFormAction(f: RuleForm, series: Series | null, carryExceptions: string[] = []): TaskAction {
+  let spec: SeriesSpec;
+  try {
+    spec = specFromForm(f);
+  } catch {
+    spec = { rule: "", anchor: f.anchor, field: f.field, start: f.startDate, offsetDays: null };
+  }
+  if (!series) return { type: "createSeries", spec };
+  return {
+    type: "changeRule",
+    revision: series.revisionKey,
+    spec,
+    restartCount: f.restartCount,
+    resetChecklists: f.resetChecklists,
+    ...(carryExceptions.length ? { carryExceptions } : {}),
   };
 }

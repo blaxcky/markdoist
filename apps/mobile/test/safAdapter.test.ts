@@ -202,3 +202,57 @@ describe("Kein Scheinfall nach frühem Fehler", () => {
     expect(await adapter(n).recover()).toEqual([]);
   });
 });
+
+describe("Unklarer Ausgang zur Laufzeit (7.3)", () => {
+  it("dritter Inhalt: Fall kommt sofort mit und bleibt im Journal", async () => {
+    const n = new FakeSaf();
+    n.put("A.md", T("alt"));
+    const a = adapter(n, (k, p) => {
+      if (k === "write" && p === "before-truncate") {
+        n.put("A.md", T("extern"));
+        throw new Error("E/A-Fehler");
+      }
+    });
+    await a.list("tasks");
+    const r = await a.write("tasks/A.md", T("neu"), hashText(T("alt")));
+    expect(r.status).toBe("unknown");
+    if (r.status !== "unknown") return;
+    expect(r.recovery).toMatchObject({ kind: "write", ref: "tasks/A.md", before: T("alt"), desired: T("neu"), current: T("extern") });
+    expect((await adapter(n).recover()).map((c) => c.opId)).toEqual([r.recovery!.opId]);
+    expect(n.text("A.md")).toBe(T("extern"));
+  });
+  it("Fehler bei unberührtem Ziel: gemeldet, kein offener Fall", async () => {
+    const n = new FakeSaf();
+    n.put("A.md", T("A"));
+    const a = adapter(n);
+    await a.list("tasks");
+    n.failOnce.writeFile = "ERR_FULL";
+    const r = await a.write("tasks/A.md", "neu", hashText(T("A")));
+    expect(r.status).toBe("full");
+    expect(r.status === "full" && r.recovery).toBeFalsy();
+    expect(await adapter(n).recover()).toEqual([]);
+  });
+  it("Quelle während des Verschiebens geändert: Fall mit Quelle und Ziel, Repository sperrt beide", async () => {
+    const n = new FakeSaf();
+    n.put("A.md", T("A"));
+    let inject = false;
+    const repo = new Repository({
+      adapter: adapter(n, (k, p) => {
+        if (inject && k === "trash" && p === "after-copy") n.put("A.md", T("extern"));
+      }),
+      kv: nativeKv(n),
+      folder: n.tree,
+      clock: () => clockAtLocal("2026-10-12T10:00", "Europe/Berlin"),
+    });
+    await repo.open();
+    inject = true;
+    expect((await repo.moveToTrash("tasks/A.md")).status).toBe("conflict");
+    inject = false;
+    const c = repo.getState().recovery;
+    expect(c).toHaveLength(1);
+    expect(c[0]).toMatchObject({ kind: "trash", ref: "trash/A.md", source: "tasks/A.md" });
+    await repo.scan();
+    expect((await repo.perform("tasks/A.md", { type: "setPriority", priority: "high" })).status).toBe("blocked");
+    expect(n.text("A.md")).toBe(T("extern"));
+  });
+});

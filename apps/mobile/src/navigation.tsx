@@ -15,7 +15,7 @@ import { ProblemsScreen } from "./screens/problems-screen";
 import { TrashScreen } from "./screens/trash-screen";
 import { SettingsScreen } from "./screens/settings-screen";
 import { RecurrenceScreen } from "./screens/recurrence-screen";
-import { useRepoState, systemClock } from "./repo";
+import { useRepo, useRepoState, systemClock } from "./repo";
 import { useTheme } from "./theme";
 import { filterActive, FilterProvider, FilterSheet, useFilter } from "./filter";
 
@@ -28,7 +28,7 @@ export type RootStack = {
   Problems: undefined;
   Trash: undefined;
   Settings: undefined;
-  Recurrence: { ref: string };
+  Recurrence: { ref: string; continueSeries?: boolean };
 };
 
 const Tab = createBottomTabNavigator<Tabs>();
@@ -42,10 +42,11 @@ export const linking: LinkingOptions<RootStack> = {
 function HeaderButtons() {
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
   const state = useRepoState();
+  const repo = useRepo();
   const c = useTheme();
   const problems = useMemo(
-    () => problemsView(state.index).length + state.recovery.length + state.drafts.filter((d) => !state.files.has(d.ref)).length,
-    [state.index, state.recovery, state.drafts, state.files],
+    () => problemsView(state.index).length + state.recovery.length + repo.pendingDrafts(5000).length,
+    [state.index, state.recovery, state.drafts, state.files, repo],
   );
   const f = useFilter();
   const btn = (label: string, to: keyof RootStack, testID: string, color = c.fg) => (
@@ -57,7 +58,7 @@ function HeaderButtons() {
     <View style={{ flexDirection: "row", alignItems: "center" }}>
       {problems > 0 && btn(`⚠ ${problems}`, "Problems", "nav-problems", c.warn)}
       <Pressable onPress={() => f.setOpen(true)} hitSlop={8} testID="nav-filter" accessibilityLabel="Filter und Sortierung" style={{ paddingHorizontal: 10 }}>
-        <Text style={{ fontSize: 20, color: filterActive(f.filter, f.sort) ? c.primary : c.fg }}>⏷</Text>
+        <Text style={{ fontSize: 20, color: filterActive(f.filter, f.sort, f.inboxNewest) ? c.primary : c.fg }}>⏷</Text>
       </Pressable>
       {btn("⌕", "Search", "nav-search")}
       {btn("⋮", "Settings", "nav-settings")}

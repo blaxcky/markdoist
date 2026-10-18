@@ -35,7 +35,7 @@ function code(e: unknown): string {
   return (e as { code?: string })?.code ?? "";
 }
 
-function mapError(e: unknown): WriteResult {
+function mapError(e: unknown): Exclude<WriteResult, { status: "ok" }> {
   const message = e instanceof Error ? e.message : String(e);
   switch (code(e)) {
     case "ERR_PERMISSION":
@@ -171,12 +171,13 @@ export class SafAdapter implements StorageAdapter {
   // ---------------------------------------------------------------- Schreiben
 
   async write(ref: string, text: string, expectedHash: string): Promise<WriteResult> {
+    let j: Journal | null = null;
     try {
       const uri = await this.uriOf(ref, true);
       if (!uri) return { status: "missing", message: ref };
       const cur = await this.native.readFile(uri);
       if (cur.hash !== expectedHash) return { status: "conflict", currentHash: cur.hash };
-      const j = await this.begin("write", ref, ref, { text: cur.text, hash: cur.hash }, text, uri, uri);
+      j = await this.begin("write", ref, ref, { text: cur.text, hash: cur.hash }, text, uri, uri);
       // Ziel erneut prüfen, unmittelbar vor dem Kürzen.
       const again = await this.native.hashFile(uri);
       if (again !== expectedHash) {
@@ -186,14 +187,32 @@ export class SafAdapter implements StorageAdapter {
       this.hook("write", "before-truncate");
       const after = await this.native.writeFile(uri, text);
       this.hook("write", "after-write");
-      if (after !== j.desiredHash) return { status: "unknown", message: "Nachher-Hash weicht ab – Wiederherstellung prüfen" };
+      if (after !== j.desiredHash) return this.unclear(j, { status: "unknown", message: "Nachher-Hash weicht ab – Wiederherstellung prüfen" });
       await this.finish(j);
       return { status: "ok", ref, name: this.split(ref).name, hash: after };
     } catch (e) {
-      if (e instanceof CrashSimulation) throw e;
-      // Journal bleibt offen: Wiederherstellung klärt den Ausgang.
-      return mapError(e);
+      return this.failure(e, j);
     }
+  }
+
+  /**
+   * Fehler nach Beginn eines Vorgangs: Ausgang sofort klären (7.3). Unberührtes Ziel schließt den
+   * Vorgang ab; sonst bleibt das Journal offen und der Fall wird mitgeliefert.
+   */
+  private async failure(e: unknown, j: Journal | null): Promise<WriteResult> {
+    if (e instanceof CrashSimulation) throw e;
+    const r = mapError(e);
+    return j ? this.unclear(j, r) : r;
+  }
+
+  private async unclear(j: Journal, r: Exclude<WriteResult, { status: "ok" }>): Promise<WriteResult> {
+    let recovery: RecoveryCase | null;
+    try {
+      recovery = await this.assess(j, true);
+    } catch {
+      recovery = await this.caseOf(j, null, r.status === "conflict" ? "Vorgang unklar" : r.message);
+    }
+    return recovery ? { ...r, recovery } : r;
   }
 
   private exists(scope: Scope, name: string): boolean {
@@ -213,21 +232,14 @@ export class SafAdapter implements StorageAdapter {
       if (doc.status !== "ok") return doc.result;
       this.hook("create", "after-create");
       const after = await this.native.writeFile(doc.uri, text);
-      if (after !== j.desiredHash) return { status: "unknown", message: "Neuanlage nicht vollständig geschrieben" };
+      if (after !== j.desiredHash) return this.unclear(j, { status: "unknown", message: "Neuanlage nicht vollständig geschrieben" });
       j.phase = "written";
       await this.finish(j);
       await this.list("tasks");
       return { status: "ok", ref, name, hash: after };
     } catch (e) {
-      if (e instanceof CrashSimulation) throw e;
-      await this.finishUntouched(j);
-      return mapError(e);
+      return this.failure(e, j);
     }
-  }
-
-  /** Fehler, bevor ein Dokument angelegt wurde: Vorgang abschließen statt Scheinfall zu melden. */
-  private async finishUntouched(j: Journal | null) {
-    if (j && j.dstUri === null) await this.finish(j).catch(() => {});
   }
 
   /** Legt ein Dokument an und stellt den exakten Namen sicher (`.md` darf nicht zu `.md.txt` werden). */
@@ -293,14 +305,18 @@ export class SafAdapter implements StorageAdapter {
       if (doc.status !== "ok") return doc.result;
       this.hook(kind, "after-create");
       const after = await this.native.writeFile(doc.uri, cur.text);
-      if (after !== expectedHash) return { status: "unknown", message: "Kopie nicht vollständig" };
+      if (after !== expectedHash) return this.unclear(j, { status: "unknown", message: "Kopie nicht vollständig" });
       j.phase = "written";
       await this.journal(j);
       this.hook(kind, "after-copy");
       const again = await this.native.hashFile(srcUri);
       if (again !== expectedHash) {
         // Quelle hat sich geändert: beide Fassungen behalten, Vorgang offen melden.
-        return { status: "conflict", currentHash: again };
+        return {
+          status: "conflict",
+          currentHash: again,
+          recovery: await this.caseOf(j, doc.uri, "Quelle wurde während des Verschiebens geändert – beide Fassungen behalten"),
+        };
       }
       await this.native.deleteDocument(srcUri);
       this.hook(kind, "after-delete");
@@ -309,9 +325,7 @@ export class SafAdapter implements StorageAdapter {
       await this.list(to);
       return { status: "ok", ref: dstRef, name, hash: after };
     } catch (e) {
-      if (e instanceof CrashSimulation) throw e;
-      await this.finishUntouched(j);
-      return mapError(e);
+      return this.failure(e, j);
     }
   }
 
@@ -324,46 +338,50 @@ export class SafAdapter implements StorageAdapter {
   }
 
   async rename(ref: string, newName: string, expectedHash: string): Promise<WriteResult> {
+    let j: Journal | null = null;
     try {
       const uri = await this.uriOf(ref, true);
       if (!uri) return { status: "missing", message: ref };
       if (this.exists("tasks", newName)) return { status: "exists", message: newName };
       const cur = await this.native.readFile(uri);
       if (cur.hash !== expectedHash) return { status: "conflict", currentHash: cur.hash };
-      const j = await this.begin("rename", ref, `tasks/${newName}`, { text: cur.text, hash: cur.hash }, null, uri);
+      const started = await this.begin("rename", ref, `tasks/${newName}`, { text: cur.text, hash: cur.hash }, null, uri);
+      j = started;
       let r;
       try {
         r = await this.native.renameDocument(uri, newName);
       } catch (e) {
         // Anbieter hat abgelehnt: Quelle unverändert, Vorgang abschließen.
-        if ((await this.hashOf(uri)) === expectedHash) await this.finish(j);
+        if ((await this.hashOf(uri)) === expectedHash) {
+          await this.finish(started);
+          j = null;
+        }
         throw e;
       }
-      j.dstUri = r.uri;
-      if (r.name !== newName) return { status: "unknown", message: `Anbieter vergab ${r.name}` };
-      await this.finish(j);
+      started.dstUri = r.uri;
+      if (r.name !== newName) return this.unclear(started, { status: "unknown", message: `Anbieter vergab ${r.name}` });
+      await this.finish(started);
       await this.list("tasks");
       return { status: "ok", ref: `tasks/${newName}`, name: newName, hash: expectedHash };
     } catch (e) {
-      if (e instanceof CrashSimulation) throw e;
-      return mapError(e);
+      return this.failure(e, j);
     }
   }
 
   async deletePermanently(ref: string, expectedHash: string): Promise<WriteResult> {
+    let j: Journal | null = null;
     try {
       const uri = await this.uriOf(ref, true);
       if (!uri) return { status: "missing", message: ref };
       const cur = await this.native.readFile(uri);
       if (cur.hash !== expectedHash) return { status: "conflict", currentHash: cur.hash };
-      const j = await this.begin("delete", ref, ref, { text: cur.text, hash: cur.hash }, null, uri);
+      j = await this.begin("delete", ref, ref, { text: cur.text, hash: cur.hash }, null, uri);
       await this.native.deleteDocument(uri);
       await this.finish(j);
       await this.list(this.split(ref).scope);
       return { status: "ok", ref, name: this.split(ref).name, hash: expectedHash };
     } catch (e) {
-      if (e instanceof CrashSimulation) throw e;
-      return mapError(e);
+      return this.failure(e, j);
     }
   }
 
@@ -401,6 +419,79 @@ export class SafAdapter implements StorageAdapter {
     }
   }
 
+  private async caseOf(j: Journal, uri: string | null, message: string): Promise<RecoveryCase> {
+    return {
+      opId: j.opId,
+      kind: j.kind,
+      ref: j.dst,
+      ...(j.src !== j.dst ? { source: j.src } : {}),
+      name: this.split(j.dst).name,
+      before: j.beforeText,
+      desired: j.desired,
+      current: await this.textOf(uri),
+      message,
+    };
+  }
+
+  /**
+   * Einen offenen Vorgang bewerten: eindeutige Fälle abschließen (null), sonst Wiederherstellungsfall.
+   * Zur Laufzeit (runtime) gilt ein unberührtes Ziel ebenfalls als abgeschlossen: Der Fehler wird
+   * gemeldet, die ausstehende Änderung liegt noch bei der Oberfläche.
+   */
+  private async assess(j: Journal, runtime = false): Promise<RecoveryCase | null> {
+    const done = async () => {
+      await this.finish(j);
+      return null;
+    };
+    if (j.kind === "write") {
+      const h = await this.hashOf(j.dstUri);
+      if (h === j.desiredHash) return done();
+      if (h === j.beforeHash) {
+        if (runtime) return done();
+        return this.caseOf(j, j.dstUri, "Änderung wurde nicht gespeichert – erneut speichern?");
+      }
+      return this.caseOf(j, j.dstUri, h === null ? "Datei fehlt" : "Datei hat einen unerwarteten Inhalt (Ausgangs- und Zielfassung im Journal)");
+    }
+    if (j.kind === "create") {
+      const h = await this.hashOf(j.dstUri);
+      if (h !== null && h === j.desiredHash) return done();
+      if (j.dstUri === null) {
+        // Kein Dokument angelegt: nichts geschehen, Inhalt zum erneuten Speichern anbieten.
+        if (runtime) return done();
+        return this.caseOf(j, null, "Neuanlage wurde nicht abgeschlossen");
+      }
+      return this.caseOf(j, j.dstUri, "Neuanlage unvollständig – Datei nicht erneut anlegen, bitte prüfen");
+    }
+    if (j.kind === "trash" || j.kind === "restore") {
+      const src = await this.hashOf(j.srcUri);
+      const dst = await this.hashOf(j.dstUri);
+      if (dst === j.beforeHash && src === j.beforeHash) {
+        // Abbruch zwischen Kopie und Löschen: nicht erneut kopieren, Quelle nach Prüfung löschen.
+        await this.native.deleteDocument(j.srcUri!);
+        return done();
+      }
+      if (dst === j.beforeHash && src === null) return done();
+      if (src === j.beforeHash) {
+        // Kopie unvollständig: eigene, journalverknüpfte Teilkopie entfernen.
+        if (j.dstUri && dst !== null) await this.native.deleteDocument(j.dstUri).catch(() => {});
+        return done();
+      }
+      return this.caseOf(j, j.dstUri ?? j.srcUri, "Verschieben unklar – beide Orte prüfen");
+    }
+    if (j.kind === "rename") {
+      await this.list("tasks");
+      const newName = this.split(j.dst).name;
+      const oldName = this.split(j.src).name;
+      if (this.docs.tasks.has(newName) || this.docs.tasks.has(oldName)) return done();
+      return this.caseOf(j, null, "Umbenennen unklar – Datei nicht gefunden");
+    }
+    // delete
+    const h = await this.hashOf(j.srcUri);
+    if (h === null) return done();
+    if (runtime && h === j.beforeHash) return done();
+    return this.caseOf(j, j.srcUri, "Endgültiges Löschen nicht abgeschlossen");
+  }
+
   async recover(): Promise<RecoveryCase[]> {
     const cases: RecoveryCase[] = [];
     for (const j of await this.entries()) {
@@ -408,57 +499,8 @@ export class SafAdapter implements StorageAdapter {
         if (Date.now() - j.createdAt > KEEP_DONE_MS) await this.native.journalDelete(j.opId);
         continue;
       }
-      const caseOf = async (uri: string | null, message: string): Promise<RecoveryCase> => ({
-        opId: j.opId,
-        kind: j.kind,
-        ref: j.dst,
-        name: this.split(j.dst).name,
-        before: j.beforeText,
-        desired: j.desired,
-        current: await this.textOf(uri),
-        message,
-      });
-      if (j.kind === "write") {
-        const h = await this.hashOf(j.dstUri);
-        if (h === j.desiredHash) await this.finish(j);
-        else if (h === j.beforeHash) cases.push(await caseOf(j.dstUri, "Änderung wurde nicht gespeichert – erneut speichern?"));
-        else cases.push(await caseOf(j.dstUri, h === null ? "Datei fehlt" : "Datei hat einen unerwarteten Inhalt (Ausgangs- und Zielfassung im Journal)"));
-      } else if (j.kind === "create") {
-        const h = await this.hashOf(j.dstUri);
-        if (h !== null && h === j.desiredHash) await this.finish(j);
-        else if (j.dstUri === null) {
-          // Kein Dokument angelegt: nichts geschehen, Inhalt zum erneuten Speichern anbieten.
-          cases.push(await caseOf(null, "Neuanlage wurde nicht abgeschlossen"));
-        } else {
-          cases.push(await caseOf(j.dstUri, "Neuanlage unvollständig – Datei nicht erneut anlegen, bitte prüfen"));
-        }
-      } else if (j.kind === "trash" || j.kind === "restore") {
-        const src = await this.hashOf(j.srcUri);
-        const dst = await this.hashOf(j.dstUri);
-        if (dst === j.beforeHash && src === j.beforeHash) {
-          // Abbruch zwischen Kopie und Löschen: nicht erneut kopieren, Quelle nach Prüfung löschen.
-          await this.native.deleteDocument(j.srcUri!);
-          await this.finish(j);
-        } else if (dst === j.beforeHash && src === null) {
-          await this.finish(j);
-        } else if (src === j.beforeHash) {
-          // Kopie unvollständig: eigene, journalverknüpfte Teilkopie entfernen.
-          if (j.dstUri && dst !== null) await this.native.deleteDocument(j.dstUri).catch(() => {});
-          await this.finish(j);
-        } else {
-          cases.push(await caseOf(j.dstUri ?? j.srcUri, "Verschieben unklar – beide Orte prüfen"));
-        }
-      } else if (j.kind === "rename") {
-        await this.list("tasks");
-        const newName = this.split(j.dst).name;
-        const oldName = this.split(j.src).name;
-        if (this.docs.tasks.has(newName) || this.docs.tasks.has(oldName)) await this.finish(j);
-        else cases.push(await caseOf(null, "Umbenennen unklar – Datei nicht gefunden"));
-      } else if (j.kind === "delete") {
-        const h = await this.hashOf(j.srcUri);
-        if (h === null) await this.finish(j);
-        else cases.push(await caseOf(j.srcUri, "Endgültiges Löschen nicht abgeschlossen"));
-      }
+      const c = await this.assess(j);
+      if (c) cases.push(c);
     }
     await this.list("tasks").catch(() => {});
     return cases;

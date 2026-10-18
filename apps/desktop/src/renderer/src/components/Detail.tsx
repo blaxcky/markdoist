@@ -1,6 +1,7 @@
 // Detailansicht (4.4): Formularfelder, Serienbereich, Markdown-Editor und Vorschau.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { renderMarkdown, T, type Outcome, type Repository } from "@markdoist/app";
+import { diffLines } from "diff";
+import { previewAction, renderMarkdown, T, type Outcome, type Repository } from "@markdoist/app";
 import {
   describeOccurrence,
   describeRule,
@@ -15,6 +16,7 @@ import {
 import { MarkdownEditor } from "./MarkdownEditor";
 import { RecurrenceEditor } from "./RecurrenceEditor";
 import { splitDateValue } from "../format";
+import { clock } from "../repo";
 
 type SaveState = "idle" | "pending" | "draft" | "saved" | "failed" | "conflict";
 
@@ -36,7 +38,8 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
   const [tab, setTab] = useState<"edit" | "preview">("edit");
   const [title, setTitle] = useState(f.title);
   const [save, setSave] = useState<SaveState>(draftText !== null ? "draft" : "idle");
-  const [editRule, setEditRule] = useState(false);
+  const [editRule, setEditRule] = useState<false | "edit" | "continue">(false);
+  const [extraException, setExtraException] = useState("");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef(false);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -98,7 +101,7 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
 
   const dateEditor = (field: "due" | "scheduled") => {
     const raw = t.data[field];
-    const { date, time } = splitDateValue(raw);
+    const { date, time } = splitDateValue(raw, clock().timeZone);
     const invalid = raw !== undefined && raw !== null && raw !== "" && !f[field];
     return (
       <div className="dateedit">
@@ -128,6 +131,18 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
 
   const K = s?.instance?.toString() ?? "";
   const seriesActive = s && s.phase === "active";
+  // Vorschau vor dem Abschluss (5.2, 5.4): was Erledigen bzw. Wiederöffnen tatsächlich bewirkt.
+  const completePreview = useMemo(
+    () => (s && s.phase === "active" ? previewAction(t, { type: "completeOccurrence", revision: s.revisionKey, instance: K }, clock()).lines : []),
+    [t, s, K, today],
+  );
+  const reopenPreview = useMemo(
+    () => (s && s.phase === "ended" ? previewAction(t, { type: "reopenSeries", revision: s.revisionKey }, clock()) : null),
+    [t, s, today],
+  );
+  const futureExceptions = s ? [...s.S].filter((d) => s.instance && d > s.instance.toString()).sort() : [];
+  const upcoming = s ? upcomingForExceptions(s) : [];
+  const extraSkipped = futureExceptions.filter((d) => !upcoming.some((u) => u.date.toString() === d));
 
   const onPreviewClick = (e: React.MouseEvent) => {
     const el = e.target as HTMLElement;
@@ -182,13 +197,11 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
           data-testid="field-title"
         />
       </div>
-      {view.diagnostics
-        .filter((d) => d.severity !== "info")
-        .map((d, i) => (
-          <div key={i} className={`diag ${d.severity === "error" ? "error" : "warn"}`}>
-            {d.message}
-          </div>
-        ))}
+      {view.diagnostics.map((d, i) => (
+        <div key={i} className={`diag ${d.severity === "error" ? "error" : d.severity === "info" ? "info" : "warn"}`}>
+          {d.message}
+        </div>
+      ))}
       <div className="fields">
         <label>{T.fields.status}</label>
         <select
@@ -197,8 +210,9 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
           onChange={(e) => void act({ type: "setStatus", status: e.target.value as Status }, "Status geändert")}
           data-testid="field-status"
         >
-          {(["open", "in-progress", "done"] as Status[]).map((x) => (
-            <option key={x} value={x}>
+          {/* Bei Serien kein „Erledigt“: Erledigen und Beenden nur über die Serienknöpfe (Entscheidung 18.10.2026). */}
+          {(["open", "in-progress", "done"] as Status[]).filter((x) => !(s && x === "done" && f.status !== "done")).map((x) => (
+            <option key={x} value={x} disabled={!!s && x === "done"}>
               {T.status[x]}
             </option>
           ))}
@@ -238,7 +252,7 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
             {s ? (s.rule ? describeRule(s.rule, s.anchor) ?? s.raw : s.raw) : "keine"}
             {s && s.anchor === "completion" && s.rule ? "" : ""}
           </span>
-          <button className="btn" disabled={ro} onClick={() => setEditRule(true)} data-testid="edit-recurrence">
+          <button className="btn" disabled={ro} onClick={() => setEditRule("edit")} data-testid="edit-recurrence">
             {s ? "Regel bearbeiten" : "Wiederholung …"}
           </button>
           {s && (
@@ -277,16 +291,35 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
                 </button>
               </>
             )}
-            {s.phase === "ended" && (
-              <button className="btn" disabled={ro} onClick={() => void act({ type: "reopenSeries", revision: s.revisionKey }, "Serie wiederöffnet")}>
+            {s.phase === "ended" && reopenPreview?.preview.result === "change" && (
+              <button className="btn" disabled={ro} onClick={() => void act({ type: "reopenSeries", revision: s.revisionKey }, "Serie wiederöffnet")} data-testid="series-reopen">
                 Serie wiederöffnen
               </button>
             )}
+            {s.phase === "ended" && reopenPreview?.preview.result === "blocked" && (
+              <button className="btn" disabled={ro} onClick={() => setEditRule("continue")} data-testid="series-continue">
+                Serie mit neuer Regel fortsetzen
+              </button>
+            )}
           </div>
-          {upcomingForExceptions(s).length > 0 && (
+          {seriesActive && completePreview.length > 0 && (
+            <ul className="preview-lines" data-testid="complete-preview" aria-label="Beim Erledigen">
+              {completePreview.map((l) => (
+                <li key={l}>{l}</li>
+              ))}
+            </ul>
+          )}
+          {reopenPreview && (
+            <ul className="preview-lines" data-testid="reopen-preview" aria-label="Beim Wiederöffnen">
+              {reopenPreview.lines.map((l) => (
+                <li key={l}>{l}</li>
+              ))}
+            </ul>
+          )}
+          {seriesActive && s.anchor === "calendar" && (
             <details style={{ marginTop: 6 }} data-testid="exceptions">
-              <summary>Ausnahmen (nächste Termine)</summary>
-              {upcomingForExceptions(s).map((u) => (
+              <summary>Ausnahmen (künftige Termine überspringen)</summary>
+              {upcoming.map((u) => (
                 <label key={u.date.toString()} style={{ display: "block", color: "var(--fg)" }}>
                   <input
                     type="checkbox"
@@ -303,6 +336,33 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
                   {describeOccurrence(u.date)} überspringen
                 </label>
               ))}
+              {extraSkipped.map((d) => (
+                <label key={d} style={{ display: "block", color: "var(--fg)" }}>
+                  <input
+                    type="checkbox"
+                    checked
+                    disabled={ro}
+                    data-testid={`exception-${d}`}
+                    onChange={() => void act({ type: "setException", revision: s.revisionKey, date: d, skipped: false }, "Ausnahme entfernt")}
+                  />{" "}
+                  {parseKey(d) ? describeOccurrence(parseKey(d)!) : d} überspringen
+                </label>
+              ))}
+              <div className="dateedit" style={{ marginTop: 4 }}>
+                <input type="date" value={extraException} disabled={ro} onChange={(e) => setExtraException(e.target.value)} aria-label="Weiteren Termin überspringen" data-testid="exception-date" />
+                <button
+                  className="btn"
+                  disabled={ro || !extraException}
+                  onClick={() =>
+                    void act({ type: "setException", revision: s.revisionKey, date: extraException, skipped: true }, "Termin wird übersprungen").then(
+                      (o) => o.status === "ok" && setExtraException(""),
+                    )
+                  }
+                  data-testid="exception-add"
+                >
+                  Diesen Termin überspringen
+                </button>
+              </div>
             </details>
           )}
         </div>
@@ -370,9 +430,42 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
           {save === "conflict" && T.save.conflict}
         </span>
       </div>
+      {save === "failed" && (
+        <div className="diag error" data-testid="save-failed">
+          Speichern fehlgeschlagen. Dein Entwurf ist lokal gesichert.
+          <div className="actions" style={{ padding: "6px 0 0" }}>
+            <button
+              className="btn"
+              data-testid="retry-save"
+              onClick={() =>
+                void repo.retryDraft(ref).then((o) => {
+                  onOutcome(o, "Notiz");
+                  setSave(o.status === "ok" || o.status === "noop" ? "saved" : o.status === "conflict" ? "conflict" : "failed");
+                })
+              }
+            >
+              Erneut speichern
+            </button>
+            <button className="btn" data-testid="save-as-new" onClick={() => void repo.saveDraftAsNew(ref).then((o) => onOutcome(o, "Als neue Datei gespeichert"))}>
+              Als neue Datei speichern
+            </button>
+          </div>
+        </div>
+      )}
       {save === "conflict" && (
         <div className="diag warn" data-testid="draft-conflict">
           Die Datei wurde extern geändert, während du geschrieben hast. Dein Entwurf ist lokal gesichert.
+          {/* Datei-Version und eigener Entwurf bleiben sichtbar (7.3) */}
+          <details>
+            <summary>Unterschied Datei-Version → mein Entwurf</summary>
+            <div className="diff" data-testid="draft-conflict-diff">
+              {diffLines(t.body, body).map((p, i) => (
+                <span key={i} className={p.added ? "add" : p.removed ? "del" : ""}>
+                  {p.value}
+                </span>
+              ))}
+            </div>
+          </details>
           <div className="actions" style={{ padding: "6px 0 0" }}>
             {(["mine", "file", "both"] as const).map((ch) => (
               <button
@@ -399,18 +492,15 @@ export function Detail({ repo, view, today, draftText, focusField, onOutcome }: 
       )}
       {editRule && (
         <RecurrenceEditor
+          task={t}
           series={s}
+          continueSeries={editRule === "continue"}
           today={today}
           defaultField={f.due ? "due" : f.scheduled ? "scheduled" : "due"}
           onCancel={() => setEditRule(false)}
-          onSave={(spec, opts) => {
+          onSave={(action) => {
             setEditRule(false);
-            void act(
-              s
-                ? { type: "changeRule", revision: s.revisionKey, spec, restartCount: opts.restartCount, resetChecklists: opts.resetChecklists }
-                : { type: "createSeries", spec },
-              s ? "Regel geändert" : "Wiederholung angelegt",
-            );
+            void act(action, s ? "Regel geändert" : "Wiederholung angelegt");
           }}
         />
       )}

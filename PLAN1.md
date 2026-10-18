@@ -49,6 +49,8 @@ Du willst eine persönliche, lokal arbeitende Todo-App mit einer Markdown-Datei 
 - **Keine Lizenz** [F]: alle Rechte vorbehalten, keine Lizenzdatei; RPM-Lizenzfeld `UNLICENSED`. Später änderbar.
 - Expo-CLI ist angemeldet; der Expo-MCP kann für Emulator-Prüfungen genutzt werden (2.3).
 
+**Entscheidung aus `.fragen/2026-10-18-1242-serienstatus.md` (18.10.2026):** Das Statusfeld einer wiederkehrenden Aufgabe bietet kein „Erledigt“ an. Erledigen und Beenden laufen nur über die Serienknöpfe („Vorkommen erledigen“, „Erledigen und Serie beenden“, „Serie ohne Erledigung beenden“); Wischen, Leertaste und Listen-Checkbox erledigen das aktuelle Vorkommen. Eine beendete Serie zeigt „Erledigt“ weiter als aktuellen Wert (3.2).
+
 **Zusätzliche Entscheidung (Chat, 12.10.2026) [F]:** Wird eine Wiederholung auf „noch fünfmal“ geändert, gelten **ab der Änderung fünf weitere Vorkommen**. Frühere Erledigungen werden nicht angerechnet; die alte Historie bleibt in derselben Datei erhalten (3.2, 5.1, 5.4).
 
 Das Projektverzeichnis `/home/markus/GitHub/local-first-todo` enthält bislang nur die Planungsdokumente. Festgestellte Umgebung (in M0 erneut prüfen):
@@ -248,7 +250,7 @@ Nicht genutzt: alle `eas-*`-Skills (kein EAS Build, Update, Hosting, Workflows o
 | `id` | ULID-String | geschrieben immer | stabile Identität, bleibt bei Umbenennen und Verschieben gleich | temporäre, ordnerbezogene Identität aus der Dateireferenz. Die App vergibt eine echte ULID erst beim ersten **aktiven** Schreiben. | [V] |
 | `format_version` | positive Ganzzahl, zunächst `1` | bei neuen Dateien | Version der von Markdoist interpretierten Semantik | fehlt = tolerant gelesene Altfassung, siehe unten | [V] |
 | `title` | String | geschrieben immer | maßgeblicher Titel | Dateiname ohne `.md`, mit Hinweis | [F] |
-| `status` | `open` \| `in-progress` \| `done` | geschrieben immer | Zustand. Bei einer Serie: `done` = Serie beendet | `open`. Unbekannter Wert (z. B. `waiting`): wird als offen gelistet, Warnsymbol, Rohwert bleibt erhalten. | [F]-Feld, Werte [V] |
+| `status` | `open` \| `in-progress` \| `done` | geschrieben immer | Zustand. Bei einer Serie: `done` = Serie beendet (gesetzt nur über die Serienknöpfe, Entscheidung 18.10.2026) | `open`. Unbekannter Wert (z. B. `waiting`): wird als offen gelistet, Warnsymbol, Rohwert bleibt erhalten. | [F]-Feld, Werte [V] |
 | `priority` | `none` \| `low` \| `normal` \| `high` | geschrieben immer | Priorität | `none`. Unbekannter Wert: `none` + Hinweis, Rohwert bleibt. | [F]-Feld, Werte [V] |
 | `inbox` | YAML-Boolean `true`/`false` | geschrieben immer | Eingangszustand | `true` bei offenen Aufgaben (extern angelegte Dateien gehen nicht verloren). Nicht-Boolean (z. B. `"yes"`): `true` + Hinweis. | [V] |
 | `due` | Datum `YYYY-MM-DD` oder lokale Datumszeit `YYYY-MM-DDTHH:mm` | optional | Frist | keine Frist. Ungültiger Wert: wird ignoriert, Hinweis, bleibt unverändert. | [F] |

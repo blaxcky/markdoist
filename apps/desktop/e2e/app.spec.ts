@@ -305,3 +305,100 @@ test("Ausnahme: künftigen Termin überspringen (5.4)", async () => {
   await page.getByTestId("series-complete").click();
   await expect.poll(() => file("Wochenrückblick.md")).toContain("due: 2026-10-26");
 });
+
+test("Vorschau vor dem Erledigen nennt Folgetermin und übergangene Ausnahme (5.2, 5.4)", async () => {
+  await row("Wochenrückblick").click();
+  await expect(page.getByTestId("complete-preview")).toContainText("Nächstes Vorkommen: Mo, 19.10.2026");
+  await page.getByTestId("exceptions").locator("summary").click();
+  await page.getByTestId("exception-2026-10-19").click();
+  await expect(page.getByTestId("complete-preview")).toContainText("Nächstes Vorkommen: Mo, 26.10.2026");
+  await expect(page.getByTestId("complete-preview")).toContainText("19.10.2026 ist als Ausnahme übersprungen");
+  // weiter entfernter Termin über das Datumsfeld
+  await page.getByTestId("exception-date").fill("2027-03-01");
+  await page.getByTestId("exception-add").click();
+  await expect.poll(() => file("Wochenrückblick.md")).toContain("  - 2027-03-01");
+  await expect(page.getByTestId("exception-2027-03-01")).toBeChecked();
+});
+
+test("Regel ändern: Ausnahmen ausdrücklich übernehmen, Vorschau zeigt Wirkung (5.1)", async () => {
+  await row("Wochenrückblick").click();
+  await page.getByTestId("exceptions").locator("summary").click();
+  await page.getByTestId("exception-2026-10-26").click();
+  await expect.poll(() => file("Wochenrückblick.md")).toContain("  - 2026-10-26");
+  await page.getByTestId("edit-recurrence").click();
+  await expect(page.getByTestId("rec-effect")).toContainText("Keine Änderung");
+  await page.getByTestId("rec-end").selectOption("count");
+  await page.getByTestId("rec-count").fill("3");
+  await expect(page.getByTestId("rec-effect")).toContainText("Neuer Abschnitt");
+  await page.getByTestId("rec-carry-2026-10-26").check();
+  await page.getByTestId("rec-save").click();
+  await expect.poll(() => file("Wochenrückblick.md")).toContain("recurrence: FREQ=WEEKLY;BYDAY=MO;COUNT=3");
+  const t = await file("Wochenrückblick.md");
+  expect(t).toMatch(/\nskipped_instances:\n {2}- 2026-10-26\n/);
+  expect(t).toContain("closed_reason: rule-change");
+});
+
+test("Beendete Serie: mit neuer Regel fortsetzen (5.4, AK-32)", async () => {
+  await writeFile(
+    join(folder, "Einmal.md"),
+    fm([
+      "id: 01K7EINMAL0000000000000000",
+      "format_version: 1",
+      "title: Einmalige Serie",
+      "status: done",
+      "priority: none",
+      "inbox: false",
+      "due: 2026-10-05",
+      "completedDate: 2026-10-05T10:00:00+02:00",
+      "recurrence: FREQ=WEEKLY;BYDAY=MO;COUNT=1",
+      "recurrence_revision: REVEINMAL",
+      "recurrence_start: 2026-10-05",
+      "recurrence_anchor: calendar",
+      "recurrence_field: due",
+      "recurrence_instance: 2026-10-05",
+      "complete_instances: [2026-10-05]",
+    ]),
+  );
+  await page.getByTestId("rescan").click();
+  await page.getByTestId("nav-done").click();
+  await row("Einmalige Serie").click();
+  await expect(page.getByTestId("series-reopen")).toHaveCount(0);
+  await page.getByTestId("series-continue").click();
+  await expect(page.getByTestId("rec-restart")).toBeChecked();
+  await expect(page.getByTestId("rec-effect")).toContainText("Erster Termin: Mo, 12.10.2026");
+  await page.getByTestId("rec-save").click();
+  await expect.poll(() => file("Einmal.md")).toContain("status: open");
+  const t = await file("Einmal.md");
+  expect(t).toContain("due: 2026-10-12");
+  expect(t).not.toMatch(/^recurrence_revision: REVEINMAL$/m);
+  expect(t).toContain("closed_reason: rule-change");
+});
+
+test("Filter: Mehrfachauswahl Priorität (ODER) und Frist mit Offset in Ortszeit (4.3, 3.3)", async () => {
+  await writeFile(
+    join(folder, "Import.md"),
+    fm(["id: 01K7IMPORT0000000000000000", "title: Importierte Frist", "status: open", "priority: high", "inbox: false", "due: 2026-10-14T15:00Z"]),
+  );
+  await page.getByTestId("rescan").click();
+  await page.getByTestId("nav-all").click();
+  await page.getByTestId("filter-toggle").click();
+  await page.getByTestId("filter-priority-high").check();
+  await page.getByTestId("filter-priority-low").check();
+  const titles = await page.locator("[data-testid=task-row]").evaluateAll((els) => els.map((e) => e.getAttribute("data-title")).sort());
+  expect(titles).toEqual(["Bettwäsche wechseln", "Importierte Frist"]);
+  await row("Importierte Frist").click();
+  await expect(page.getByTestId("field-due")).toHaveValue("2026-10-14");
+  await expect(page.getByLabel("Uhrzeit").first()).toHaveValue("17:00");
+  expect(await file("Import.md")).toContain("due: 2026-10-14T15:00Z");
+});
+
+test("Papierkorb leeren ist endgültig: kein „Rückgängig“ (4.4)", async () => {
+  await row("Zahnarzttermin vereinbaren").click();
+  await page.getByTestId("delete").click();
+  await expect(page.getByTestId("toast-undo")).toBeVisible();
+  await page.getByTestId("nav-trash").click();
+  await page.getByTestId("empty-trash").click();
+  await page.getByTestId("confirm-empty").click();
+  await expect.poll(async () => (await readdir(join(folder, ".todo-trash"))).length).toBe(0);
+  await expect(page.getByTestId("toast-undo")).toHaveCount(0);
+});

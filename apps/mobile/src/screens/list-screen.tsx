@@ -28,7 +28,7 @@ export function ListScreen({ kind }: { kind: ListKind }) {
   const c = useTheme();
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
   const [actions, setActions] = useState<TaskView | null>(null);
-  const { filter, sort } = useFilter();
+  const { filter, sort, inboxNewest } = useFilter();
   const idx = state.index;
   const tz = systemClock().timeZone;
 
@@ -42,7 +42,7 @@ export function ListScreen({ kind }: { kind: ListKind }) {
       }));
     switch (kind) {
       case "inbox":
-        return tasks(inboxView(idx, tz));
+        return tasks(inboxView(idx, tz, inboxNewest));
       case "today": {
         const t = todayView(idx, tz);
         const out: Item[] = [];
@@ -92,7 +92,7 @@ export function ListScreen({ kind }: { kind: ListKind }) {
           </Pressable>
         </View>
       )}
-      {state.readError && <Text selectable style={{ padding: 8, backgroundColor: c.badge, color: c.danger, fontSize: 12 }}>{state.readError}</Text>}
+      {state.readError && <Text selectable style={{ padding: 8, backgroundColor: c.badge, color: c.danger, fontSize: 12 }}>{state.readError}{state.stale ? " – letzter bekannter Stand, schreibgeschützt" : ""}</Text>}
       <FlashList
         data={items}
         keyExtractor={(i) => i.key}

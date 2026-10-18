@@ -11,16 +11,22 @@ export class MemoryAdapter implements StorageAdapter {
   readonly hidden = new Map<string, string>();
   writes = 0;
   listFails = false;
-  private faults: Fault[] = [];
+  /** Metadaten unbekannt wie bei manchen SAF-Anbietern (mtime/size null) */
+  unknownMeta = false;
+  /** offene Vorgänge des simulierten Journals */
+  readonly journal = new Map<string, RecoveryCase>();
+  private faults: { fault: Fault; applied: boolean }[] = [];
   private clock = 1;
+  private opCounter = 0;
 
-  failNext(fault: Fault) {
-    this.faults.push(fault);
+  /** Nächsten Schreibvorgang scheitern lassen; bei „unknown“ optional mit tatsächlich geschriebenem Inhalt. */
+  failNext(fault: Fault, opts: { applied?: boolean } = {}) {
+    this.faults.push({ fault, applied: opts.applied ?? false });
   }
 
   private fault(): WriteResult | null {
     const f = this.faults.shift();
-    return f ? ({ status: f, message: `injiziert: ${f}` } as WriteResult) : null;
+    return f ? ({ status: f.fault, message: `injiziert: ${f.fault}` } as WriteResult) : null;
   }
 
   private map(scope: Scope) {
@@ -43,8 +49,8 @@ export class MemoryAdapter implements StorageAdapter {
     return [...this.map(scope).entries()].map(([name, f]) => ({
       name,
       ref: `${scope}/${name}`,
-      mtime: f.mtime,
-      size: f.text.length,
+      mtime: this.unknownMeta ? null : f.mtime,
+      size: this.unknownMeta ? null : f.text.length,
     }));
   }
 
@@ -65,13 +71,36 @@ export class MemoryAdapter implements StorageAdapter {
   }
 
   async write(ref: string, text: string, expectedHash: string): Promise<WriteResult> {
-    const fault = this.fault();
-    if (fault) return fault;
+    const f = this.faults.shift();
+    if (f?.fault === "unknown") return this.unclear(ref, text, f.applied);
+    if (f) return { status: f.fault, message: `injiziert: ${f.fault}` } as WriteResult;
     const c = this.check(ref, expectedHash);
     if ("status" in c) return c;
     this.map(c.scope).set(c.name, { text, mtime: this.clock++ });
     this.writes++;
     return { status: "ok", ref, name: c.name, hash: hashText(text) };
+  }
+
+  /** Unklarer Ausgang: Journal bleibt offen und wird als Fall zurückgegeben (7.3). */
+  private unclear(ref: string, text: string, applied: boolean): WriteResult {
+    const { scope, name } = this.parse(ref);
+    const before = this.map(scope).get(name)?.text ?? null;
+    if (applied && before !== null) {
+      this.map(scope).set(name, { text, mtime: this.clock++ });
+      this.writes++;
+    }
+    const recovery: RecoveryCase = {
+      opId: `mem-${++this.opCounter}`,
+      kind: "write",
+      ref,
+      name,
+      before,
+      desired: text,
+      current: this.map(scope).get(name)?.text ?? null,
+      message: "Ausgang unklar",
+    };
+    this.journal.set(recovery.opId, recovery);
+    return { status: "unknown", message: "injiziert: unknown", recovery };
   }
 
   private free(map: Map<string, unknown>, name: string): string {
@@ -128,7 +157,12 @@ export class MemoryAdapter implements StorageAdapter {
     return { status: "ok", ref, name: c.name, hash: expectedHash };
   }
   async recover(): Promise<RecoveryCase[]> {
-    return [];
+    return [...this.journal.values()].map((c) => {
+      const { scope, name } = this.parse(c.ref);
+      return { ...c, current: this.map(scope).get(name)?.text ?? null };
+    });
   }
-  async resolveRecovery(): Promise<void> {}
+  async resolveRecovery(opId: string): Promise<void> {
+    this.journal.delete(opId);
+  }
 }

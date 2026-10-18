@@ -112,7 +112,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   }, []);
 
   const notify = useCallback((o: Outcome, label?: string) => {
-    if (o.status === "ok") setToast({ text: o.message ?? label ?? "Gespeichert", undo: true, id: Date.now() });
+    // „Rückgängig“ nur, wenn die Aktion einen Undo-Eintrag angelegt hat; „Papierkorb leeren“ u. a. sind endgültig (4.4).
+    if (o.status === "ok") setToast({ text: o.message ?? label ?? "Gespeichert", undo: o.undoable === true, id: Date.now() });
     else if (o.status === "blocked" || o.status === "error" || o.status === "conflict")
       setToast({ text: o.message, error: true, id: Date.now() });
   }, []);
@@ -151,10 +152,16 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
 
   const flat = sections.flatMap((s) => s.items);
   const selectedView = idx.tasks.find((v) => v.task.ref === selected) ?? null;
+  // Extern umbenannt: Auswahl über die ID nachführen (7.1).
+  useEffect(() => {
+    if (!selected || selectedView) return;
+    const moved = repo.resolveRef(selected);
+    if (moved && moved !== selected) setSelected(moved);
+  }, [selected, selectedView, repo]);
   const occurrences = view === "done" && !query ? doneView(idx).occurrences : [];
   const problems = useMemo(
-    () => problemsView(idx).length + state.recovery.length + state.drafts.filter((d) => !state.files.has(d.ref)).length,
-    [idx, state.recovery, state.drafts, state.files],
+    () => problemsView(idx).length + state.recovery.length + repo.pendingDrafts(5000).length,
+    [idx, state.recovery, state.drafts, state.files, repo],
   );
   const counts = useMemo(() => {
     const t = todayView(idx, tz);
@@ -385,25 +392,20 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         </div>
         {showFilters && (
           <div className="filters" data-testid="filters">
-            <label>
-              Status
-              <select value={filter.status?.[0] ?? ""} onChange={(e) => setF("status", e.target.value ? [e.target.value as never] : "")}>
-                <option value="">egal</option>
-                <option value="open">offen</option>
-                <option value="in-progress">in Arbeit</option>
-                <option value="done">erledigt</option>
-              </select>
-            </label>
-            <label>
-              Priorität
-              <select value={filter.priority?.[0] ?? ""} onChange={(e) => setF("priority", e.target.value ? [e.target.value as never] : "")} data-testid="filter-priority">
-                <option value="">egal</option>
-                <option value="high">hoch</option>
-                <option value="normal">normal</option>
-                <option value="low">niedrig</option>
-                <option value="none">keine</option>
-              </select>
-            </label>
+            <MultiCheck
+              label="Status"
+              testId="filter-status"
+              value={filter.status ?? []}
+              options={[["open", "offen"], ["in-progress", "in Arbeit"], ["done", "erledigt"]]}
+              onChange={(v) => setF("status", v.length ? v : "")}
+            />
+            <MultiCheck
+              label="Priorität"
+              testId="filter-priority"
+              value={filter.priority ?? []}
+              options={[["high", "hoch"], ["normal", "normal"], ["low", "niedrig"], ["none", "keine"]]}
+              onChange={(v) => setF("priority", v.length ? v : "")}
+            />
             <label>
               Eingang
               <select value={filter.inbox ?? "any"} onChange={(e) => setF("inbox", e.target.value as Filter["inbox"])} data-testid="filter-inbox">
@@ -473,7 +475,12 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
             </button>
           </div>
         )}
-        {state.readError && <div className="banner error">{state.readError}</div>}
+        {state.readError && (
+          <div className="banner error" data-testid="read-error">
+            {state.readError}
+            {state.stale && " – letzter bekannter Stand, schreibgeschützt bis zum nächsten erfolgreichen Abgleich"}
+          </div>
+        )}
         {view === "problems" && !query ? (
           <Problems repo={repo} state={state} onSelect={(r) => setSelected(r)} onOutcome={notify} />
         ) : view === "trash" && !query ? (
@@ -571,5 +578,37 @@ function RangeInputs({ value, onChange }: { value: { from: string; to: string };
       <input type="date" value={value.from} onChange={(e) => e.target.value && onChange({ ...value, from: e.target.value })} aria-label="von" />
       <input type="date" value={value.to} onChange={(e) => e.target.value && onChange({ ...value, to: e.target.value })} aria-label="bis" />
     </>
+  );
+}
+
+/** Mehrfachauswahl eines Filtermerkmals: ODER innerhalb, UND zu den anderen Merkmalen (4.3). */
+function MultiCheck<V extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  testId,
+}: {
+  label: string;
+  value: V[];
+  options: [V, string][];
+  onChange(v: V[]): void;
+  testId: string;
+}) {
+  return (
+    <fieldset className="multicheck" data-testid={testId}>
+      <legend>{label}</legend>
+      {options.map(([v, l]) => (
+        <label key={v}>
+          <input
+            type="checkbox"
+            checked={value.includes(v)}
+            onChange={(e) => onChange(e.target.checked ? [...value, v] : value.filter((x) => x !== v))}
+            data-testid={`${testId}-${v}`}
+          />{" "}
+          {l}
+        </label>
+      ))}
+    </fieldset>
   );
 }

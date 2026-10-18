@@ -1,6 +1,6 @@
 // Dateinamen aus dem Titel bilden (3.1, F002).
 // eslint-disable-next-line no-control-regex -- Steuerzeichen werden absichtlich entfernt
-const FORBIDDEN = /[/\\:*?"<>|#^[\]\u0000-\u001f\u007f]/g;
+const FORBIDDEN = /[/\\:*?"<>|#^[\]\u0000-\u001f\u007f-\u009f]/g;
 const MAX_CHARS = 100;
 const MAX_BYTES = 240;
 

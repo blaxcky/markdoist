@@ -12,3 +12,4 @@ export * from "./recurrence/series";
 export * from "./views";
 export * from "./recurrence/describe";
 export * from "./fastyaml";
+export * from "./recurrence/preview";

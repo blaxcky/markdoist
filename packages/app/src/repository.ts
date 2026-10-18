@@ -7,10 +7,12 @@ import {
   deepEqual,
   fileNameForTitle,
   freeName,
+  hashText,
   newTaskText,
   planAction,
   readTaskFile,
   sanitizeTitle,
+  SUPPORTED_FORMAT_VERSION,
   ulid,
   type ActionContext,
   type Clock,
@@ -26,7 +28,8 @@ import type { FileMeta, KeyValueStore, ReadResult, RecoveryCase, StorageAdapter,
 import { writeResultMessage } from "./texts";
 
 export type Outcome =
-  | { status: "ok"; message?: string; ref?: string }
+  /** undoable: true genau dann, wenn die Aktion einen Undo-Eintrag angelegt hat (4.4) */
+  | { status: "ok"; message?: string; ref?: string; undoable?: boolean }
   | { status: "noop" }
   | { status: "blocked"; message: string }
   | { status: "conflict"; message: string; ref: string; mine?: string; theirs?: string }
@@ -54,6 +57,8 @@ export interface Draft {
   baseText: string;
   text: string;
   updatedAt: number;
+  /** Hash der Dateifassung, mit der zuletzt ein Konflikt festgestellt wurde (7.3) */
+  conflictHash?: string;
 }
 
 export interface RepoState {
@@ -65,6 +70,8 @@ export interface RepoState {
   scanning: boolean;
   /** letzter Fehler beim Einlesen; Index bleibt dann veraltet und schreibgeschützt */
   readError: string | null;
+  /** Verzeichnisabfrage fehlgeschlagen: letzter Stand sichtbar, aber schreibgeschützt bis zum nächsten Abgleich (7.1) */
+  stale: boolean;
   undo: UndoEntry[];
   recovery: RecoveryCase[];
   drafts: Draft[];
@@ -124,6 +131,12 @@ export class Repository {
   private drafts: Draft[] = [];
   private unverified = true;
   private scanning: Promise<void> | null = null;
+  private scanningFull = false;
+  /** nachzuholender Vollabgleich, angefordert während eines Teilabgleichs (7.1) */
+  private fullFollowUp: Promise<void> | null = null;
+  private stale = false;
+  /** extern umbenannte Referenzen: alt → neu (Zuordnung über ID, 7.1) */
+  private renamed = new Map<string, string>();
   private readError: string | null = null;
   private lastScan: RepoState["lastScan"] = null;
   private scanProgress: RepoState["scanProgress"] = null;
@@ -185,6 +198,7 @@ export class Repository {
       unverified: this.unverified,
       scanning: this.scanning !== null,
       readError: this.readError,
+      stale: this.stale,
       undo: [...this.undoStack],
       recovery: [...this.recovery],
       drafts: [...this.drafts],
@@ -289,13 +303,32 @@ export class Repository {
     await this.scan();
   }
 
+  /** Fehlschlag mit offenem Journalvorgang sofort als Wiederherstellungsfall zeigen (7.3). */
+  private noteFailure(res: WriteResult): boolean {
+    if (res.status === "ok" || !res.recovery) return false;
+    const c = res.recovery;
+    this.recovery = [...this.recovery.filter((r) => r.opId !== c.opId), c];
+    this.emit();
+    return true;
+  }
+
   // -------------------------------------------------------------------------
   // Einlesen (7.1) – schreibt nie
 
   scan(opts: { full?: boolean } = {}): Promise<void> {
-    if (this.scanning) return this.scanning;
+    const full = opts.full ?? true;
+    if (this.scanning) {
+      if (!full || this.scanningFull) return this.scanning;
+      // Vollabgleich während eines Teilabgleichs angefordert: anschließend nachholen (7.1).
+      this.fullFollowUp ??= this.scanning.then(() => {
+        this.fullFollowUp = null;
+        return this.scan({ full: true });
+      });
+      return this.fullFollowUp;
+    }
     this.scanCancelled = false;
-    this.scanning = this.doScan(opts.full ?? true).finally(() => {
+    this.scanningFull = full;
+    this.scanning = this.doScan(full).finally(() => {
       this.scanning = null;
       this.scanProgress = null;
       this.emit();
@@ -310,23 +343,26 @@ export class Repository {
     try {
       metas = (await this.adapter.list("tasks")).filter(isTaskFileName);
     } catch (e) {
-      // Fehler sind keine Löschungen: letzter Stand bleibt sichtbar.
+      // Fehler sind keine Löschungen: letzter Stand bleibt sichtbar, aber schreibgeschützt.
       this.readError = `Ordner konnte nicht gelesen werden: ${errMessage(e)}`;
+      this.stale = true;
       return;
     }
+    this.stale = false;
     try {
       this.trash = (await this.adapter.list("trash")).filter((m) => m.name.toLowerCase().endsWith(".md"));
     } catch {
       /* Papierkorb fehlt oder ist nicht lesbar */
     }
+    const known = new Set(this.files.keys());
     const seen = new Set<string>();
     const toRead: FileMeta[] = [];
     for (const m of metas) {
       seen.add(m.ref);
       const old = this.metas.get(m.ref);
-      const known = this.files.get(m.ref);
+      const knownFile = this.files.get(m.ref);
       const changed =
-        !old || !known || m.mtime === null || m.size === null || old.mtime !== m.mtime || old.size !== m.size;
+        !old || !knownFile || m.mtime === null || m.size === null || old.mtime !== m.mtime || old.size !== m.size;
       if (full || changed) toRead.push(m);
       else this.metas.set(m.ref, m);
     }
@@ -376,16 +412,79 @@ export class Repository {
         }
       }
     }
-    for (const ref of [...this.files.keys()]) {
-      if (!seen.has(ref)) {
-        this.files.delete(ref);
-        this.metas.delete(ref);
-      }
+    const gone = [...this.files.keys()].filter((ref) => !seen.has(ref));
+    if (gone.length) await this.followRenames(gone, known);
+    for (const ref of gone) {
+      this.files.delete(ref);
+      this.metas.delete(ref);
     }
     this.readError = readFailures ? `${readFailures} Datei(en) konnten nicht gelesen werden` : null;
     if (full && !readFailures) this.unverified = false;
     this.lastScan = { files: metas.length, read: toRead.length, ms: Date.now() - t0, full, readMs, parseMs };
     await this.saveCache();
+  }
+
+  /**
+   * Externe Umbenennung über die ID zuordnen (7.1): Eine verschwundene Datei gilt nur dann als
+   * umbenannt, wenn genau eine neu aufgetauchte Datei dieselbe ID trägt und keine andere.
+   */
+  private async followRenames(gone: string[], known: Set<string>) {
+    const byId = new Map<string, string[]>();
+    for (const f of this.files.values()) {
+      if (f.kind !== "task" || !f.fields.id) continue;
+      byId.set(f.fields.id, [...(byId.get(f.fields.id) ?? []), f.ref]);
+    }
+    let changed = false;
+    for (const old of gone) {
+      const f = this.files.get(old);
+      const id = f?.kind === "task" ? f.fields.id : null;
+      if (!id) continue;
+      const others = (byId.get(id) ?? []).filter((r) => r !== old);
+      if (others.length !== 1 || known.has(others[0]!)) continue;
+      changed = this.remapRef(old, others[0]!) || changed;
+    }
+    if (changed) await this.persistRefs();
+  }
+
+  /** Lokale Referenzen (Entwürfe, bei externer Umbenennung auch Undo) auf eine neue Referenz umstellen. */
+  private remapRef(oldRef: string, newRef: string, undo = true): boolean {
+    this.renamed.set(oldRef, newRef);
+    let changed = false;
+    if (!this.drafts.some((d) => d.ref === newRef)) {
+      for (const d of this.drafts) {
+        if (d.ref === oldRef) {
+          d.ref = newRef;
+          changed = true;
+        }
+      }
+    }
+    for (const e of undo ? this.undoStack : []) {
+      if (e.ref === oldRef) {
+        e.ref = newRef;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  private async persistRefs() {
+    await this.saveDrafts();
+    await this.kv.set(this.key("undo"), JSON.stringify(this.undoStack));
+  }
+
+  /**
+   * Aktuelle Referenz zu einer früheren (nach Umbenennung über dieselbe ID, 7.1).
+   * null, wenn die Datei nicht mehr eindeutig zuzuordnen ist.
+   */
+  resolveRef(oldRef: string): string | null {
+    let ref = oldRef;
+    for (let i = 0; i < 100; i++) {
+      if (this.files.has(ref)) return ref;
+      const next = this.renamed.get(ref);
+      if (!next) return null;
+      ref = next;
+    }
+    return null;
   }
 
   /** Laufenden Abgleich abbrechen (7.1). */
@@ -416,6 +515,23 @@ export class Repository {
     return next;
   }
 
+  /**
+   * Gemeinsame Vorbedingungen jeder Schreibaktion: Ordner erreichbar (7.1) und kein offener
+   * Wiederherstellungsfall auf den betroffenen Dateien (7.3).
+   */
+  private writeBlock(...refs: string[]): Outcome | null {
+    if (this.closed) return { status: "blocked", message: "Ordner wurde gewechselt" };
+    if (this.stale) {
+      return { status: "blocked", message: "Ordner nicht erreichbar – angezeigter Stand ist veraltet und schreibgeschützt. Bitte neu einlesen." };
+    }
+    if (this.readError && this.unverified) return { status: "blocked", message: "Ordner nicht erreichbar – schreibgeschützt" };
+    const c = this.recovery.find((r) => refs.includes(r.ref) || (r.source !== undefined && refs.includes(r.source)));
+    if (c) {
+      return { status: "blocked", message: `Offener Wiederherstellungsfall für „${c.name}“ – bitte zuerst unter Probleme klären` };
+    }
+    return null;
+  }
+
   // -------------------------------------------------------------------------
   // Aktionen
 
@@ -425,14 +541,26 @@ export class Repository {
   }
 
   perform(ref: string, action: TaskAction, label = "Änderung"): Promise<Outcome> {
-    return this.enqueue(ref, () => this.doPerform(ref, action, label)) as Promise<Outcome>;
+    return this.performWith(ref, action, label);
   }
 
-  private async doPerform(ref: string, action: TaskAction, label: string): Promise<Outcome> {
-    if (this.readError && this.unverified) return { status: "blocked", message: "Ordner nicht erreichbar – schreibgeschützt" };
+  /** strictHash: nur auf genau diese Dateifassung anwenden, keine unabhängige Übertragung (7.3 Konfliktdialog). */
+  private performWith(ref: string, action: TaskAction, label: string, strictHash?: string): Promise<Outcome> {
+    const ctx = this.ctx(); // fester Aktionszeitpunkt ab dem Einreihen, auch für Wiederholungen (7.3)
+    return this.enqueue(ref, () => this.doPerform(ref, action, label, ctx, strictHash)) as Promise<Outcome>;
+  }
+
+  private async doPerform(
+    ref: string,
+    action: TaskAction,
+    label: string,
+    ctx: ActionContext,
+    strictHash?: string,
+  ): Promise<Outcome> {
+    const block = this.writeBlock(ref);
+    if (block) return block;
     const current = this.files.get(ref);
     if (!current || current.kind !== "task") return { status: "error", message: "Aufgabe nicht gefunden" };
-    const ctx = this.ctx(); // fester Aktionszeitpunkt, auch für Wiederholungen
     let base: Task = current;
     let plan: Plan = planAction(base, action, ctx);
     if (plan.kind === "noop") return { status: "noop" };
@@ -445,6 +573,12 @@ export class Repository {
       } catch (e) {
         await this.scan({ full: false });
         return { status: "error", message: `Datei nicht mehr vorhanden oder nicht lesbar: ${errMessage(e)}` };
+      }
+      if (strictHash !== undefined && (fresh.hash !== strictHash || base.hash !== strictHash)) {
+        // Inzwischen eine weitere Änderung: erneut entscheiden lassen, nichts übergehen.
+        this.files.set(ref, readTaskFile({ ref, name: base.name, text: fresh.text, hash: fresh.hash, mtime: fresh.mtime }));
+        this.emit();
+        return { status: "conflict", ref, message: "Die Datei wurde seit dem Vergleich erneut geändert", theirs: fresh.text };
       }
       if (fresh.hash !== base.hash) {
         const ft = readTaskFile({ ref, name: base.name, text: fresh.text, hash: fresh.hash, mtime: fresh.mtime });
@@ -481,10 +615,10 @@ export class Repository {
         this.setFile(ref, base.name, applied.text, res.hash);
         await this.pushUndo({ id: this.newId(), kind: "edit", label, ref, afterHash: res.hash, beforeText: base.text });
         this.emit();
-        return { status: "ok", ...(plan.kind === "edit" && plan.note ? { message: plan.note } : {}) };
+        return { status: "ok", undoable: true, ...(plan.kind === "edit" && plan.note ? { message: plan.note } : {}) };
       }
-      if (res.status === "conflict") continue; // erneut lesen und prüfen
-      return { status: "error", message: writeResultMessage(res) };
+      if (res.status === "conflict" && !res.recovery) continue; // erneut lesen und prüfen
+      return this.failed(res);
     }
     return { status: "conflict", ref, message: "Datei ändert sich laufend – bitte erneut versuchen" };
   }
@@ -497,10 +631,22 @@ export class Repository {
 
   /** Neue Eingangsaufgabe (4.1). Übernimmt keinen Termin aus der Ansicht. */
   async create(input: NewTaskInput): Promise<Outcome> {
+    const block = this.writeBlock();
+    if (block) return block;
     if (!input.title.trim()) return { status: "blocked", message: "Titel fehlt" };
     const ctx = this.ctx();
     const { id, text } = newTaskText(input, ctx);
+    const note = input.note ?? "";
+    const problem = verifyGenerated(text, {
+      id,
+      title: input.title.trim(),
+      body: note === "" ? "" : note.endsWith("\n") ? note : `${note}\n`,
+      data: { due: input.due ?? undefined, scheduled: input.scheduled ?? undefined },
+    });
+    if (problem) return { status: "error", message: `Selbstprüfung fehlgeschlagen: ${problem} – nichts geschrieben` };
     const names = new Set([...this.files.values()].map((f) => f.name.toLowerCase()));
+    // Namen offener Wiederherstellungsfälle nicht erneut vergeben (7.3).
+    for (const r of this.recovery) if (r.ref.startsWith("tasks/")) names.add(r.name.toLowerCase());
     for (let attempt = 0; attempt < 5; attempt++) {
       const name = fileNameForTitle(input.title, (n) => names.has(n.toLowerCase()), id.slice(-6));
       const res = await this.adapter.create(name, text);
@@ -508,50 +654,71 @@ export class Repository {
         this.setFile(res.ref, res.name, text, res.hash);
         await this.pushUndo({ id: this.newId(), kind: "create", label: "Neue Aufgabe", ref: res.ref, afterHash: res.hash });
         this.emit();
-        return { status: "ok", ref: res.ref };
+        return { status: "ok", ref: res.ref, undoable: true };
       }
-      if (res.status === "exists") {
+      if (res.status === "exists" && !res.recovery) {
         names.add(name.toLowerCase());
         continue;
       }
-      return { status: "error", message: writeResultMessage(res) };
+      return this.failed(res);
     }
     return { status: "error", message: "Kein freier Dateiname" };
   }
 
   /** „Als Aufgabe übernehmen“ für eine Datei ohne Frontmatter (3.1). */
   adopt(ref: string): Promise<Outcome> {
+    const at = this.ctx(); // fester Aktionszeitpunkt ab dem Einreihen (7.3)
     return this.enqueue(ref, async () => {
+      const block = this.writeBlock(ref);
+      if (block) return block;
       const f = this.files.get(ref);
       if (!f || f.kind !== "unrecognized") return { status: "blocked", message: "Datei ist keine unerkannte Datei" };
-      const text = adoptFileText(f.name, f.text, this.ctx());
+      let id = "";
+      const text = adoptFileText(f.name, f.text, {
+        ...at,
+        newId: () => (id = at.newId()),
+      });
+      const problem = verifyGenerated(text, {
+        id,
+        title: f.name.replace(/\.md$/i, ""),
+        body: f.text.startsWith("﻿") ? f.text.slice(1) : f.text,
+      });
+      if (problem) return { status: "error", message: `Selbstprüfung fehlgeschlagen: ${problem} – nichts geschrieben` };
       const res = await this.adapter.write(ref, text, f.hash);
-      if (res.status !== "ok") return { status: "error", message: writeResultMessage(res) };
+      if (res.status !== "ok") {
+        return this.failed(res);
+      }
       this.setFile(ref, f.name, text, res.hash);
       await this.pushUndo({ id: this.newId(), kind: "edit", label: "Als Aufgabe übernommen", ref, afterHash: res.hash, beforeText: f.text });
       this.emit();
-      return { status: "ok" };
+      return { status: "ok", undoable: true };
     }) as Promise<Outcome>;
   }
 
   /** Löschen = in den Papierkorb (4.4). */
   moveToTrash(ref: string): Promise<Outcome> {
     return this.enqueue(ref, async () => {
+      const block = this.writeBlock(ref);
+      if (block) return block;
       const f = this.files.get(ref);
       if (!f) return { status: "error", message: "Datei nicht gefunden" };
       const res = await this.adapter.moveToTrash(ref, f.hash);
-      if (res.status !== "ok") return this.failed(res);
+      if (res.status !== "ok") {
+        return this.failed(res);
+      }
       this.files.delete(ref);
       this.metas.delete(ref);
       this.bump(ref);
       await this.pushUndo({ id: this.newId(), kind: "trash", label: "Gelöscht", ref: res.ref, afterHash: res.hash });
       await this.refreshTrash();
       this.emit();
-      return { status: "ok", ref: res.ref };
+      return { status: "ok", ref: res.ref, undoable: true };
     }) as Promise<Outcome>;
   }
 
   async restoreFromTrash(trashRef: string): Promise<Outcome> {
+    const block = this.writeBlock(trashRef);
+    if (block) return block;
     let read;
     try {
       read = await this.adapter.read(trashRef);
@@ -564,21 +731,26 @@ export class Repository {
     await this.pushUndo({ id: this.newId(), kind: "restore", label: "Wiederhergestellt", ref: res.ref, afterHash: res.hash });
     await this.refreshTrash();
     this.emit();
-    return { status: "ok", ref: res.ref };
+    return { status: "ok", ref: res.ref, undoable: true };
   }
 
-  /** „Papierkorb leeren“: nur die bestätigten Dateien mit unverändertem Hash (7.3). Kein Undo. */
+  /** „Papierkorb leeren“: nur die bestätigten Dateien mit unverändertem Hash (7.3). Endgültig, kein Undo. */
   async emptyTrash(confirmed: { ref: string; hash: string }[]): Promise<Outcome> {
+    const block = this.writeBlock(...confirmed.map((c) => c.ref));
+    if (block) return block;
     let failed = 0;
     for (const c of confirmed) {
       const res = await this.adapter.deletePermanently(c.ref, c.hash);
-      if (res.status !== "ok") failed++;
+      if (res.status !== "ok") {
+        failed++;
+        this.noteFailure(res);
+      }
     }
     await this.refreshTrash();
     this.emit();
     return failed
       ? { status: "error", message: `${failed} Datei(en) wurden inzwischen geändert und nicht gelöscht` }
-      : { status: "ok" };
+      : { status: "ok", undoable: false };
   }
 
   async trashHashes(): Promise<{ ref: string; name: string; hash: string }[]> {
@@ -605,6 +777,8 @@ export class Repository {
   /** „Dateinamen an Titel angleichen“ (3.1). */
   renameToTitle(ref: string): Promise<Outcome> {
     return this.enqueue(ref, async () => {
+      const block = this.writeBlock(ref);
+      if (block) return block;
       const f = this.files.get(ref);
       if (!f || f.kind !== "task") return { status: "error", message: "Aufgabe nicht gefunden" };
       const desired = sanitizeTitle(f.fields.title);
@@ -614,30 +788,38 @@ export class Repository {
       const name = fileNameForTitle(f.fields.title, (n) => names.has(n.toLowerCase()), (f.fields.id ?? "x").slice(-6));
       if (name === f.name) return { status: "noop" };
       const res = await this.adapter.rename(ref, name, f.hash);
-      if (res.status !== "ok") return this.failed(res);
+      if (res.status !== "ok") {
+        return this.failed(res);
+      }
       this.files.delete(ref);
       this.metas.delete(ref);
       this.bump(ref);
       this.setFile(res.ref, res.name, f.text, res.hash);
+      // Eigene Umbenennung: Undo-Einträge behalten ihren Ort, das Rückgängigmachen stellt ihn wieder her.
+      if (this.remapRef(ref, res.ref, false)) await this.saveDrafts();
       await this.pushUndo({ id: this.newId(), kind: "rename", label: "Umbenannt", ref: res.ref, afterHash: res.hash, beforeName: f.name });
       this.emit();
-      return { status: "ok", ref: res.ref };
+      return { status: "ok", ref: res.ref, undoable: true };
     }) as Promise<Outcome>;
   }
 
   private failed(res: WriteResult): Outcome {
+    const open = this.noteFailure(res);
+    const hint = open ? " – Wiederherstellungsfall unter Probleme" : "";
     if (res.status === "conflict") {
       void this.scan({ full: false });
-      return { status: "conflict", ref: "", message: "Die Datei wurde inzwischen geändert" };
+      return { status: "conflict", ref: "", message: `Die Datei wurde inzwischen geändert${hint}` };
     }
-    return { status: "error", message: writeResultMessage(res) };
+    return { status: "error", message: `${writeResultMessage(res)}${hint}` };
   }
 
   // -------------------------------------------------------------------------
   // Konfliktvarianten (7.4)
 
-  /** Ganze Variante behalten; die übrigen wandern nach geprüftem Abschluss in den Papierkorb. */
+  /** Ganze Variante behalten; die übrigen wandern nach geprüftem Abschluss in den Papierkorb. Kein Undo. */
   async keepVariant(keepRef: string, discardRefs: string[]): Promise<Outcome> {
+    const block = this.writeBlock(keepRef, ...discardRefs);
+    if (block) return block;
     const keep = this.files.get(keepRef);
     if (!keep) return { status: "error", message: "Variante nicht gefunden" };
     try {
@@ -654,13 +836,16 @@ export class Repository {
       if (res.status === "ok") {
         this.files.delete(ref);
         this.metas.delete(ref);
-      } else failed++;
+      } else {
+        failed++;
+        this.noteFailure(res);
+      }
     }
     await this.refreshTrash();
     this.emit();
     return failed
       ? { status: "error", message: `${failed} Variante(n) blieben stehen, weil sie geändert wurden` }
-      : { status: "ok" };
+      : { status: "ok", undoable: false };
   }
 
   /** Beide behalten: die Kopie erhält ausdrücklich eine neue ID. */
@@ -680,6 +865,8 @@ export class Repository {
   async undo(): Promise<Outcome> {
     const e = this.undoStack[this.undoStack.length - 1];
     if (!e) return { status: "noop" };
+    const block = this.writeBlock(e.ref);
+    if (block) return block;
     let current;
     try {
       current = await this.adapter.read(e.ref);
@@ -708,7 +895,9 @@ export class Repository {
         res = await this.adapter.rename(e.ref, e.beforeName ?? "", e.afterHash);
         break;
     }
-    if (res.status !== "ok") return this.failed(res);
+    if (res.status !== "ok") {
+      return this.failed(res);
+    }
     this.undoStack.pop();
     await this.kv.set(this.key("undo"), JSON.stringify(this.undoStack));
     await this.scan({ full: false });
@@ -751,6 +940,13 @@ export class Repository {
     this.emit();
   }
 
+  /** Konflikt am Entwurf festhalten: Eine spätere Entscheidung bezieht sich auf genau diese Fassung (7.3). */
+  private async markConflict(d: Draft, hash: string | undefined) {
+    if (!hash || d.conflictHash === hash) return;
+    d.conflictHash = hash;
+    await this.saveDrafts();
+  }
+
   /** Body aus Entwurf in die Datei schreiben; Entwurf bleibt bei Fehler/Konflikt erhalten. */
   async commitDraft(ref: string): Promise<Outcome> {
     const d = this.drafts.find((x) => x.ref === ref);
@@ -760,36 +956,46 @@ export class Repository {
       return { status: "conflict", ref, message: "Datei fehlt – Entwurf bleibt erhalten", mine: d.text };
     }
     if (f.hash !== d.baseHash && f.body !== d.baseText) {
+      await this.markConflict(d, f.hash);
       return { status: "conflict", ref, message: "Datei wurde extern geändert", mine: d.text, theirs: f.body };
     }
     const r = await this.perform(ref, { type: "setBody", body: d.text }, "Notiz geändert");
     if (r.status === "ok" || r.status === "noop") await this.discardDraft(ref);
-    else if (r.status === "conflict") return { ...r, mine: d.text };
+    else if (r.status === "conflict") {
+      await this.markConflict(d, this.files.get(ref)?.hash);
+      return { ...r, mine: d.text };
+    }
     return r;
+  }
+
+  /** Erneuter Schreibversuch des gesicherten Entwurfs nach fehlgeschlagenem Speichern, auch ohne neue Eingabe (7.6). */
+  retryDraft(ref: string): Promise<Outcome> {
+    return this.commitDraft(ref);
   }
 
   /**
    * Bewusste Entscheidung bei einem Textkonflikt (7.3):
-   * „mine“ schreibt den Entwurf auf die aktuelle Dateifassung, „file“ verwirft den Entwurf,
-   * „both“ speichert den Entwurf als neue Datei und lässt die Datei unverändert.
+   * „mine“ schreibt den Entwurf auf die beim Konflikt verglichene Dateifassung – nur, wenn deren Hash
+   * noch passt; sonst erneut Konflikt. „file“ verwirft den Entwurf, „both“ speichert den Entwurf als
+   * neue Datei und lässt die Datei unverändert.
    */
   async resolveDraftConflict(ref: string, choice: "mine" | "file" | "both"): Promise<Outcome> {
     const d = this.drafts.find((x) => x.ref === ref);
     if (!d) return { status: "noop" };
     if (choice === "file") {
       await this.discardDraft(ref);
-      return { status: "ok", message: "Entwurf verworfen" };
+      return { status: "ok", message: "Entwurf verworfen", undoable: false };
     }
     const f = this.files.get(ref);
-    if (choice === "both" || !f || f.kind !== "task") {
-      const title = f && f.kind === "task" ? `${f.fields.title} (Entwurf)` : "Wiederhergestellter Entwurf";
-      return this.saveDraftAsNew(ref, title);
+    if (choice === "both" || !f || f.kind !== "task") return this.saveDraftAsNew(ref);
+    if (!d.conflictHash) return this.commitDraft(ref);
+    const r = await this.performWith(ref, { type: "setBody", body: d.text }, "Notiz geändert", d.conflictHash);
+    if (r.status === "ok" || r.status === "noop") await this.discardDraft(ref);
+    else if (r.status === "conflict") {
+      await this.markConflict(d, this.files.get(ref)?.hash);
+      return { ...r, mine: d.text };
     }
-    // „Meine Version“: auf die zuletzt verglichene Dateifassung beziehen; der Hash muss noch passen.
-    d.baseHash = f.hash;
-    d.baseText = f.body;
-    await this.saveDrafts();
-    return this.commitDraft(ref);
+    return r;
   }
 
   /** Entwürfe, deren Datei nicht mehr existiert (7.1, 7.6). */
@@ -797,34 +1003,103 @@ export class Repository {
     return this.drafts.filter((d) => !this.files.has(d.ref));
   }
 
+  /** Ungespeicherte Entwürfe: Text weicht vom Dateistand ab oder die Datei fehlt (7.6, Anzeige unter Probleme).
+   *  `quietMs` blendet Entwürfe aus, an denen gerade getippt wird (Autosave läuft noch). */
+  pendingDrafts(quietMs = 0): Draft[] {
+    const now = Date.now();
+    return this.drafts.filter((d) => {
+      if (quietMs > 0 && now - d.updatedAt < quietMs) return false;
+      const f = this.files.get(d.ref);
+      return !f || f.kind !== "task" || f.body !== d.text;
+    });
+  }
+
   /**
    * Wiederherstellungsfall übernehmen: gewünschte Fassung auf die aktuelle Datei schreiben.
-   * Nur auf ausdrücklichen Wunsch; die aktuelle Fassung wird über ihren Hash abgesichert.
+   * Nur auf ausdrücklichen Wunsch und nur, solange die Datei noch der angezeigten aktuellen Fassung
+   * entspricht; ein inzwischen dritter Inhalt wird nicht überschrieben (AK-22). Kein Undo.
    */
-  async applyRecovery(opId: string): Promise<Outcome> {
+  applyRecovery(opId: string): Promise<Outcome> {
+    return this.restoreRecovery(opId, "desired");
+  }
+
+  /** Wiederherstellungsfall mit der Ausgangsfassung (Vorher-Inhalt) abschließen, gleiche Vorbedingungen. */
+  applyRecoveryBefore(opId: string): Promise<Outcome> {
+    return this.restoreRecovery(opId, "before");
+  }
+
+  private async restoreRecovery(opId: string, which: "desired" | "before"): Promise<Outcome> {
+    const block = this.writeBlock();
+    if (block) return block;
     const c = this.recovery.find((r) => r.opId === opId);
-    if (!c || c.desired === null) return { status: "blocked", message: "Keine gewünschte Fassung vorhanden" };
-    let res: WriteResult;
+    if (!c) return { status: "blocked", message: "Wiederherstellungsfall nicht gefunden" };
+    const text = which === "desired" ? c.desired : c.before;
+    if (text === null) {
+      return { status: "blocked", message: which === "desired" ? "Keine gewünschte Fassung vorhanden" : "Keine Ausgangsfassung vorhanden" };
+    }
+    if (which === "before" && c.kind !== "write") {
+      return { status: "blocked", message: "Ausgangsfassung nur bei Schreibvorgängen – bitte beide Orte prüfen" };
+    }
+    let cur: ReadResult | null = null;
     try {
-      const cur = await this.adapter.read(c.ref);
-      res = await this.adapter.write(c.ref, c.desired, cur.hash);
+      cur = await this.adapter.read(c.ref);
     } catch {
+      cur = null;
+    }
+    // Vorbedingung: Datei entspricht noch der im Fall angezeigten aktuellen Fassung.
+    if ((cur === null) !== (c.current === null) || (cur !== null && cur.text !== c.current)) {
+      this.recovery = this.recovery.map((r) => (r.opId === opId ? { ...r, current: cur?.text ?? null } : r));
+      this.emit();
+      return { status: "conflict", ref: c.ref, message: "Datei wurde inzwischen geändert – bitte erneut prüfen", theirs: cur?.text };
+    }
+    let res: WriteResult;
+    if (cur !== null) {
+      if (cur.text === text) res = { status: "ok", ref: c.ref, name: c.name, hash: cur.hash };
+      else res = await this.adapter.write(c.ref, text, cur.hash);
+    } else {
       // Datei fehlt: als neue Datei anlegen statt still neu zu erzeugen.
-      res = await this.adapter.create(freeName(c.name, (n) => [...this.files.values()].some((f) => f.name.toLowerCase() === n.toLowerCase())), c.desired);
+      const taken = (n: string) => [...this.files.values()].some((f) => f.name.toLowerCase() === n.toLowerCase());
+      res = await this.adapter.create(freeName(c.name, taken), text);
     }
     if (res.status !== "ok") return this.failed(res);
     await this.resolveRecovery(opId);
-    return { status: "ok", message: "Fassung übernommen" };
+    return { status: "ok", message: which === "desired" ? "Fassung übernommen" : "Ausgangsfassung wiederhergestellt", undoable: false };
   }
 
-  /** Entwurf als neue Datei speichern (nach externer Löschung, 7.1). */
-  async saveDraftAsNew(ref: string, title: string): Promise<Outcome> {
+  /** Entwurf als neue Datei speichern (nach externer Löschung oder neben einer vorhandenen Datei, 7.1/7.6). */
+  async saveDraftAsNew(ref: string, title?: string): Promise<Outcome> {
     const d = this.drafts.find((x) => x.ref === ref);
     if (!d) return { status: "noop" };
-    const r = await this.create({ title, note: d.text });
+    const f = this.files.get(ref);
+    const t = title ?? (f && f.kind === "task" ? `${f.fields.title} (Entwurf)` : "Wiederhergestellter Entwurf");
+    const r = await this.create({ title: t, note: d.text });
     if (r.status === "ok") await this.discardDraft(ref);
     return r;
   }
+}
+
+/** Selbstprüfung erzeugter Frontmatter vor dem Schreiben (7.2): Text erneut lesen und Felder vergleichen. */
+function verifyGenerated(
+  text: string,
+  expected: { id: string; title: string; body: string; data?: Record<string, YamlValue | undefined> },
+): string | null {
+  const f = readTaskFile({ ref: "tasks/neu.md", name: "neu.md", text, hash: hashText(text), mtime: null });
+  if (f.kind !== "task") return "Text wird nicht als Aufgabe gelesen";
+  if (f.readOnly || f.diagnostics.some((d) => d.severity === "error")) return "Text wäre schreibgeschützt";
+  const want: Record<string, YamlValue | undefined> = {
+    id: expected.id,
+    format_version: SUPPORTED_FORMAT_VERSION,
+    title: expected.title,
+    status: "open",
+    priority: "none",
+    inbox: true,
+    ...expected.data,
+  };
+  for (const [k, v] of Object.entries(want)) {
+    if (v === undefined ? k in f.data : !deepEqual(f.data[k], v)) return `Feld ${k} stimmt nicht`;
+  }
+  if (f.body !== expected.body) return "Notiz stimmt nicht";
+  return null;
 }
 
 export function isTaskFileName(m: FileMeta): boolean {

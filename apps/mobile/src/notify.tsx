@@ -14,7 +14,8 @@ export function NotifyProvider({ children }: { children: ReactNode }) {
   const c = useTheme();
   const [msg, setMsg] = useState<{ text: string; error?: boolean; undo?: boolean; id: number } | null>(null);
   const notify = useCallback<Notify>((o, label) => {
-    if (o.status === "ok") setMsg({ text: o.message ?? label ?? "Gespeichert", undo: true, id: Date.now() });
+    // „Rückgängig“ nur, wenn die Aktion einen Undo-Eintrag angelegt hat (4.4).
+    if (o.status === "ok") setMsg({ text: o.message ?? label ?? "Gespeichert", undo: o.undoable === true, id: Date.now() });
     else if (o.status !== "noop") setMsg({ text: o.message, error: true, id: Date.now() });
   }, []);
   useEffect(() => {

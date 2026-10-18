@@ -2,8 +2,10 @@
 # Android-Leistungsmessung im Emulator (M7, AK-40). Erwartet die installierte Release-APK.
 set -euo pipefail
 cd "$(dirname "$0")"
-export PATH="$PATH:$HOME/Android/Sdk/platform-tools:$HOME/.local/opt/maestro/bin"
-export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-21-openjdk}"
+export PATH="$PATH:$HOME/Android/Sdk/platform-tools:$HOME/.local/opt/maestro/bin:$HOME/.maestro/bin"
+if [ -z "${JAVA_HOME:-}" ]; then
+  for j in /usr/lib/jvm/java-21-openjdk "$HOME/.local/opt/jdk-21"; do [ -d "$j" ] && export JAVA_HOME="$j" && break; done
+fi
 texts() { adb exec-out uiautomator dump /dev/tty 2>/dev/null | grep -oE 'text="[^"]*(Abgleich|Treffer)[^"]*"' | sed 's/^text=//' || true; }
 TMP=$(mktemp -d)
 node perf-seed.mjs "$TMP/MarkdoistPerf" 2000 >/dev/null

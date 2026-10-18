@@ -15,16 +15,27 @@ interface Props {
 export function Problems({ repo, state, onSelect, onOutcome }: Props) {
   const entries = problemsView(state.index);
   const [conflict, setConflict] = useState<ConflictGroup | null>(null);
+  const drafts = repo.pendingDrafts(5000);
   return (
     <div className="list" data-testid="problems">
       {state.recovery.map((r) => (
-        <div key={r.opId} className="diag error">
+        <div key={r.opId} className="diag error" data-testid="recovery-case">
           <b>Wiederherstellung: {r.name}</b> – {r.message}
-          {r.desired !== null && (
-            <details>
-              <summary>Gewünschte Fassung</summary>
-              <pre className="diff">{r.desired}</pre>
-            </details>
+          {/* Aktuelle Datei, Vorher- und gewünschte Fassung (7.3, AK-22) */}
+          {(
+            [
+              ["Aktueller Stand", r.current === null ? "(Datei fehlt)" : r.current],
+              ["Ausgangsfassung", r.before],
+              ["Gewünschte Fassung", r.desired],
+            ] as const
+          ).map(
+            ([label, text]) =>
+              text !== null && (
+                <details key={label}>
+                  <summary>{label}</summary>
+                  <pre className="diff">{text}</pre>
+                </details>
+              ),
           )}
           <div className="actions" style={{ padding: "6px 0 0" }}>
             {r.desired !== null && (
@@ -32,23 +43,48 @@ export function Problems({ repo, state, onSelect, onOutcome }: Props) {
                 {r.current === null ? "Gewünschte Fassung als Datei anlegen" : "Gewünschte Fassung übernehmen (überschreibt den aktuellen Stand)"}
               </button>
             )}
+            {r.kind === "write" && r.before !== null && (
+              <button className="btn" onClick={() => void repo.applyRecoveryBefore(r.opId).then((o) => onOutcome(o, "Ausgangsfassung wiederhergestellt"))} data-testid="apply-recovery-before">
+                Ausgangsfassung wiederherstellen{r.current === null ? "" : " (überschreibt den aktuellen Stand)"}
+              </button>
+            )}
             <button className="btn" onClick={() => void repo.resolveRecovery(r.opId)}>Aktuellen Stand behalten</button>
           </div>
         </div>
       ))}
-      {repo.orphanDrafts().map((d) => (
-        <div key={d.ref} className="diag warn" data-testid="orphan-draft">
-          <b>Entwurf ohne Datei</b> ({d.ref.replace(/^tasks\//, "")}): Die Datei wurde extern gelöscht oder umbenannt.
-          <pre className="diff">{d.text}</pre>
-          <div className="actions" style={{ padding: "6px 0 0" }}>
-            <button className="btn" onClick={() => void repo.resolveDraftConflict(d.ref, "both").then((o) => onOutcome(o, "Als neue Datei gespeichert"))}>
-              Als neue Datei speichern
-            </button>
-            <button className="btn" onClick={() => void repo.discardDraft(d.ref)}>Verwerfen</button>
+      {drafts.map((d) => {
+        const orphan = !state.files.has(d.ref);
+        const name = d.ref.replace(/^tasks\//, "");
+        return (
+          <div key={d.ref} className="diag warn" data-testid={orphan ? "orphan-draft" : "pending-draft"}>
+            {orphan ? (
+              <>
+                <b>Entwurf ohne Datei</b> ({name}): Die Datei wurde extern gelöscht oder umbenannt.
+              </>
+            ) : (
+              <>
+                <b>Ungespeicherter Entwurf</b> ({name}): lokal gesichert, aber noch nicht in die Datei geschrieben.
+              </>
+            )}
+            <pre className="diff">{d.text}</pre>
+            <div className="actions" style={{ padding: "6px 0 0" }}>
+              {!orphan && (
+                <>
+                  <button className="btn" onClick={() => onSelect(d.ref)}>Öffnen</button>
+                  <button className="btn" onClick={() => void repo.retryDraft(d.ref).then((o) => onOutcome(o, "Entwurf gespeichert"))} data-testid="retry-draft">
+                    In die Datei speichern
+                  </button>
+                </>
+              )}
+              <button className="btn" onClick={() => void repo.saveDraftAsNew(d.ref).then((o) => onOutcome(o, "Als neue Datei gespeichert"))} data-testid="draft-as-new">
+                Als neue Datei speichern
+              </button>
+              <button className="btn" onClick={() => void repo.discardDraft(d.ref)}>Verwerfen</button>
+            </div>
           </div>
-        </div>
-      ))}
-      {entries.length === 0 && state.recovery.length === 0 && repo.orphanDrafts().length === 0 && <div className="empty">Keine Probleme.</div>}
+        );
+      })}
+      {entries.length === 0 && state.recovery.length === 0 && drafts.length === 0 && <div className="empty">Keine Probleme.</div>}
       {entries.map((p, i) => {
         if (p.kind === "conflict") {
           const c = p.conflict!;
@@ -119,17 +155,19 @@ function ConflictDialog({
   onKeepBoth(): void;
 }) {
   const dialog = useDialog<HTMLDivElement>(onClose);
-  const [a, b] = group.files as [Task, Task];
-  const keys = [...new Set([...Object.keys(a.data), ...Object.keys(b.data)])];
+  // Alle Varianten nebeneinander; Unterschiede jeweils gegenüber der ersten (7.4).
+  const files = group.files;
+  const a = files[0]!;
+  const keys = [...new Set(files.flatMap((f) => Object.keys(f.data)))];
   const show = (v: unknown) => (v === undefined ? "–" : typeof v === "string" ? v : JSON.stringify(v));
-  const parts = diffLines(a.body, b.body);
+  const differs = (k: string) => files.some((f) => JSON.stringify(f.data[k]) !== JSON.stringify(a.data[k]));
   return (
     <div className="modal-back" onClick={onClose}>
       <div ref={dialog} className="modal" style={{ width: "min(900px, 95vw)" }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Konfliktvarianten" data-testid="conflict-dialog">
         <h2>Konfliktvarianten</h2>
         <p style={{ margin: 0, fontSize: 12 }}>Es wird nichts automatisch entschieden. Die nicht gewählte Variante wandert in den Papierkorb.</p>
         <div className="variants">
-          {[a, b].map((t) => (
+          {files.map((t) => (
             <div key={t.ref}>
               <b>{t.name}</b>
               <table>
@@ -137,7 +175,7 @@ function ConflictDialog({
                   {keys.map((k) => (
                     <tr key={k}>
                       <td>{k}</td>
-                      <td className={JSON.stringify(a.data[k]) !== JSON.stringify(b.data[k]) ? "differs" : ""}>{show(t.data[k])}</td>
+                      <td className={differs(k) ? "differs" : ""}>{show(t.data[k])}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -148,17 +186,26 @@ function ConflictDialog({
             </div>
           ))}
         </div>
-        <div className="diff">
-          {parts.map((p, i) => (
-            <span key={i} className={p.added ? "add" : p.removed ? "del" : ""}>
-              {p.value}
-            </span>
-          ))}
-        </div>
+        {files.slice(1).map((b) => (
+          <div key={b.ref}>
+            {files.length > 2 && (
+              <div style={{ fontSize: 12 }}>
+                Notiz: {a.name} → {b.name}
+              </div>
+            )}
+            <div className="diff">
+              {diffLines(a.body, b.body).map((p, i) => (
+                <span key={i} className={p.added ? "add" : p.removed ? "del" : ""}>
+                  {p.value}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
         <div className="buttons">
           <button className="btn" onClick={onClose}>Abbrechen</button>
           <button className="btn" onClick={onKeepBoth} data-testid="keep-both">
-            {T.actions.keepBoth} (Kopie erhält neue ID)
+            {files.length > 2 ? "Alle behalten (Kopien erhalten neue IDs)" : `${T.actions.keepBoth} (Kopie erhält neue ID)`}
           </button>
         </div>
       </div>
