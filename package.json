@@ -14,6 +14,7 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "vitest run",
     "test:tz": "node scripts/test-tz-matrix.mjs",
+    "desktop:install": "bash scripts/install-desktop-local.sh",
     "e2e:desktop": "pnpm --filter desktop build && pnpm --filter desktop exec playwright test"
   },
   "devDependencies": {

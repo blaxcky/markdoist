@@ -13,6 +13,7 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "dist": "electron-vite build && electron-builder --linux rpm --publish never",
+    "dist:appimage": "electron-vite build && electron-builder --linux AppImage --publish never",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
