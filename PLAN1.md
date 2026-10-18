@@ -484,7 +484,7 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen sin
 ### 4.5 Bedienung [V]
 
 - **Desktop:**
-  - Aufbau: Seitenleiste (Eingang mit Zähler, Heute mit Zähler, Alle offenen, Erledigt, Probleme), Liste, Detailbereich.
+  - Aufbau: Seitenleiste (Erfassen, Suche, Eingang mit Zähler, Heute mit Zähler, Alle offenen, Erledigt, Probleme, Papierkorb), zentrierte Liste, Details als Dialog über der Liste (Klick oder Enter öffnet, Escape schließt, ↑/↓ blättert). Gestaltung nach den Vorlage-Screenshots vom 18.10.2026 (Todoist-ähnlich): warme Seitenleiste, große Ansichtsüberschrift mit Aufgabenzahl, runde Haken in Prioritätsfarbe, Sortierung und Filter im Menü „Anzeige“.
   - Tasten:
     - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…4 für Eingang, Heute, Alle offenen und Erledigt; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
     - Aufgabenaktionen: Leertaste erledigt/öffnet wieder, `E` sortiert ein, `D` setzt die Frist, `S` plant ein, `P` setzt die Priorität, Entf löscht.

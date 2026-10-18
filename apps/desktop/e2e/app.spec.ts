@@ -190,7 +190,7 @@ test("Notiz bearbeiten: Autosave und Checkbox in der Vorschau", async () => {
   await page.getByTestId("tab-preview").click();
   await page.locator(".md-check").nth(1).click();
   await expect.poll(() => file("Bettwäsche.md")).toContain("- [x] Laken");
-  await page.getByRole("button", { name: "Bearbeiten" }).click();
+  await page.getByRole("tab", { name: "Bearbeiten" }).click();
   await page.locator(".cm-content").click();
   await page.keyboard.press("Control+End");
   await page.keyboard.type("Neue Zeile");
@@ -286,10 +286,10 @@ test("Textkonflikt: externe Änderung während der Eingabe, „Meine Version“ 
 
 test("Sortierung wählbar und Zeitraum-Filter (4.3)", async () => {
   await page.getByTestId("nav-all").click();
+  await page.getByTestId("filter-toggle").click();
   await page.getByTestId("sort").selectOption("title");
   const titles = await page.locator("[data-testid=task-row]").evaluateAll((els) => els.map((e) => e.getAttribute("data-title")));
   expect(titles).toEqual([...titles].sort((a, b) => a!.localeCompare(b!, "de")));
-  await page.getByTestId("filter-toggle").click();
   await page.getByTestId("filter-due").selectOption("range");
   await page.getByLabel("von").first().fill("2026-10-12");
   await page.getByLabel("bis").first().fill("2026-10-12");
@@ -394,6 +394,7 @@ test("Filter: Mehrfachauswahl Priorität (ODER) und Frist mit Offset in Ortszeit
 
 test("Papierkorb leeren ist endgültig: kein „Rückgängig“ (4.4)", async () => {
   await row("Zahnarzttermin vereinbaren").click();
+  await page.getByTestId("detail-more").click();
   await page.getByTestId("delete").click();
   await expect(page.getByTestId("toast-undo")).toBeVisible();
   await page.getByTestId("nav-trash").click();

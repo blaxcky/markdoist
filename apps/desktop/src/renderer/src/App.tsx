@@ -22,8 +22,33 @@ import { Detail } from "./components/Detail";
 import { Capture } from "./components/Capture";
 import { Problems } from "./components/Problems";
 import { Trash } from "./components/Trash";
+import { Menu, MenuItem } from "./components/Menu";
+import { useDialog } from "./dialog";
+import {
+  IconBell,
+  IconChevronDown,
+  IconClose,
+  IconDisplay,
+  IconDone,
+  IconFolder,
+  IconHelp,
+  IconInbox,
+  IconPlus,
+  IconPlusCircle,
+  IconRefresh,
+  IconSearch,
+  IconSidebar,
+  IconTasks,
+  IconToday,
+  IconTodayOutline,
+  IconTrash,
+  IconUndo,
+  IconUpcoming,
+  IconWarning,
+} from "./components/Icons";
 
 type ViewName = "inbox" | "today" | "all" | "done" | "problems" | "trash";
+type FocusField = "due" | "scheduled" | "priority" | "title" | "note";
 
 interface Toast {
   text: string;
@@ -102,9 +127,14 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const [inboxNewest, setInboxNewest] = useState(true);
   const [sort, setSort] = useState<SortChoice>("default");
   const [selected, setSelected] = useState<string | null>(null);
+  /** Detaildialog zur ausgewählten Aufgabe offen */
+  const [open, setOpen] = useState(false);
   const [capture, setCapture] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
-  const [focusField, setFocusField] = useState<{ field: "due" | "scheduled" | "priority" | "title"; nonce: number } | null>(null);
+  const [focusField, setFocusField] = useState<{ field: FocusField; nonce: number } | null>(null);
+  const [sidebar, setSidebar] = useState(true);
+  const [userMenu, setUserMenu] = useState(false);
+  const [help, setHelp] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const [version, setVersion] = useState("");
   useEffect(() => {
@@ -170,8 +200,18 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
 
   const selectIndex = (i: number) => {
     const v = flat[Math.max(0, Math.min(flat.length - 1, i))];
-    if (v) setSelected(v.task.ref);
+    if (v) {
+      setFocusField(null);
+      setSelected(v.task.ref);
+    }
   };
+  /** Aufgabe auswählen und im Detaildialog öffnen, optional mit Fokus auf ein Feld */
+  const openTask = (ref: string, field?: FocusField) => {
+    setSelected(ref);
+    setFocusField(field ? { field, nonce: Date.now() } : null);
+    setOpen(true);
+  };
+  const selIndex = selectedView ? flat.findIndex((v) => v.task.ref === selectedView.task.ref) : -1;
 
   const toggleDone = useCallback(
     (v: TaskView) => {
@@ -196,8 +236,9 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
       const el = e.target as HTMLElement;
       const inField = el.closest("input, textarea, select, .cm-editor, [contenteditable]") !== null;
       const ctrl = e.ctrlKey || e.metaKey;
-      // Offene Dialoge haben eigene Tastaturbedienung.
-      if (capture || document.querySelector('[aria-modal="true"]')) return;
+      // Offene Dialoge haben eigene Tastaturbedienung; im Detaildialog gelten die Aufgabenkürzel weiter.
+      if (capture || help || document.querySelector('[aria-modal="true"]:not([data-detail])')) return;
+      const detailOpen = open && !!selectedView;
       if (ctrl && e.key.toLowerCase() === "n") {
         e.preventDefault();
         setCapture(true);
@@ -210,6 +251,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
       }
       if (ctrl && ["1", "2", "3", "4"].includes(e.key)) {
         e.preventDefault();
+        setOpen(false);
         setQuery("");
         setView((["inbox", "today", "all", "done"] as ViewName[])[Number(e.key) - 1]!);
         return;
@@ -230,8 +272,14 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         return;
       }
       const cur = selectedView;
-      const i = cur ? flat.findIndex((v) => v.task.ref === cur.task.ref) : -1;
+      const i = selIndex;
       switch (e.key) {
+        case "Escape":
+          if (detailOpen) {
+            e.preventDefault();
+            setOpen(false);
+          }
+          break;
         case "n":
         case "N":
           e.preventDefault();
@@ -239,6 +287,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           break;
         case "/":
           e.preventDefault();
+          setOpen(false);
           searchRef.current?.focus();
           break;
         case "ArrowDown":
@@ -252,7 +301,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           selectIndex(i < 0 ? 0 : i - 1);
           break;
         case "Enter":
-          if (cur) setFocusField({ field: "title", nonce: Date.now() });
+          if (cur) openTask(cur.task.ref, detailOpen ? "title" : undefined);
           break;
         case " ":
           if (cur && !cur.readOnly) {
@@ -266,15 +315,24 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           break;
         case "d":
         case "D":
-          if (cur) setFocusField({ field: "due", nonce: Date.now() });
+          if (cur) {
+            e.preventDefault();
+            openTask(cur.task.ref, "due");
+          }
           break;
         case "s":
         case "S":
-          if (cur) setFocusField({ field: "scheduled", nonce: Date.now() });
+          if (cur) {
+            e.preventDefault();
+            openTask(cur.task.ref, "scheduled");
+          }
           break;
         case "p":
         case "P":
-          if (cur) setFocusField({ field: "priority", nonce: Date.now() });
+          if (cur) {
+            e.preventDefault();
+            openTask(cur.task.ref, "priority");
+          }
           break;
         case "Delete":
           if (cur && !cur.readOnly) void repo.moveToTrash(cur.task.ref).then((o) => notify(o, "Gelöscht"));
@@ -285,17 +343,24 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const nav = (name: ViewName, label: string, count?: number, testid?: string) => (
+  const viewTitle = query.trim() ? `${T.views.search}: „${query.trim()}“` : T.views[view];
+  const activeDisplay = Object.keys(filter).length + (sort !== "default" ? 1 : 0);
+  const listView = !((view === "problems" || view === "trash") && !query);
+
+  const nav = (name: ViewName, label: string, icon: React.ReactNode, count?: number, testid?: string) => (
     <button
       className={`nav${view === name && !query ? " active" : ""}${name === "problems" ? " problems" : ""}`}
       onClick={() => {
         setQuery("");
+        setOpen(false);
         setView(name);
       }}
       data-testid={testid ?? `nav-${name}`}
+      aria-current={view === name && !query ? "page" : undefined}
     >
-      <span>{label}</span>
-      {count !== undefined && <span className="count">{count}</span>}
+      <span className="nav-icon">{icon}</span>
+      <span className="nav-label">{label}</span>
+      {count !== undefined && count > 0 && <span className="count">{count}</span>}
     </button>
   );
 
@@ -307,246 +372,368 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
       return n;
     });
 
+  const folderName = repo.folder.split("/").filter(Boolean).pop() ?? repo.folder;
+  const day = idx.today.day;
+
   return (
-    <div className="app">
-      <nav className="sidebar" aria-label="Ansichten">
-        <h1>{T.appName}</h1>
-        {nav("inbox", T.views.inbox, counts.inbox)}
-        {nav("today", T.views.today, counts.today)}
-        {nav("all", T.views.all)}
-        {nav("done", T.views.done)}
-        {problems > 0 && nav("problems", `⚠ ${T.views.problems}`, problems)}
-        {nav("trash", T.views.trash, state.trash.length)}
-        <div className="spacer" />
-        <button className="btn" onClick={() => setCapture(true)} data-testid="capture-button">
-          + {T.actions.capture}
-        </button>
-        <div className="meta">
-          <div title={repo.folder}>📁 {repo.folder.split("/").pop()}</div>
-          <button className="btn" style={{ marginTop: 6 }} onClick={() => void bridge().folder.choose().then(setSettings)}>
-            Ordner wechseln
-          </button>
-          {state.lastScan && (
-            <div style={{ marginTop: 6 }} data-testid="last-scan">
-              Abgleich: {state.lastScan.files} Dateien, {state.lastScan.ms} ms
-            </div>
-          )}
-          {version && <div>Version {version}</div>}
-          <div style={{ marginTop: 6 }}>
-            <select
-              value={settings.theme}
-              onChange={(e) => void bridge().settings.setTheme(e.target.value as Settings["theme"]).then(setSettings)}
-              aria-label="Darstellung"
-              data-testid="theme"
-            >
-              <option value="system">System</option>
-              <option value="light">Hell</option>
-              <option value="dark">Dunkel</option>
-            </select>
-          </div>
-        </div>
-      </nav>
-      <section className="listpane">
-        <div className="toolbar">
-          <input
-            ref={searchRef}
-            type="search"
-            placeholder="Suchen (/)"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                setQuery("");
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            data-testid="search"
-            aria-label="Suchen"
-          />
-          {query && (
-            <label style={{ fontSize: 12 }}>
-              <input type="checkbox" checked={includeDone} onChange={(e) => setIncludeDone(e.target.checked)} /> inkl. erledigt
-            </label>
-          )}
-          <button className={`btn${Object.keys(filter).length ? " primary" : ""}`} onClick={() => setShowFilters((x) => !x)} data-testid="filter-toggle">
-            Filter
-          </button>
-          {view === "inbox" && !query && (
-            <button className="btn" onClick={() => setInboxNewest((x) => !x)} title="Sortierung">
-              {inboxNewest ? "Neueste zuerst" : "Älteste zuerst"}
-            </button>
-          )}
-          <select value={sort} onChange={(e) => setSort(e.target.value as SortChoice)} aria-label="Sortierung" data-testid="sort" className="btn">
-            {(Object.keys(SORT_LABELS) as SortChoice[]).map((k) => (
-              <option key={k} value={k}>
-                {k === "default" ? "Sortierung" : SORT_LABELS[k]}
-              </option>
-            ))}
-          </select>
-          <button className="btn" onClick={() => void repo.scan({ full: true })} title="Neu einlesen (F5)" data-testid="rescan">
-            ⟳
-          </button>
-          <button className="btn" onClick={doUndo} disabled={!state.undo.length} title="Rückgängig (Ctrl+Z)" data-testid="undo">
-            ↶
-          </button>
-        </div>
-        {showFilters && (
-          <div className="filters" data-testid="filters">
-            <MultiCheck
-              label="Status"
-              testId="filter-status"
-              value={filter.status ?? []}
-              options={[["open", "offen"], ["in-progress", "in Arbeit"], ["done", "erledigt"]]}
-              onChange={(v) => setF("status", v.length ? v : "")}
-            />
-            <MultiCheck
-              label="Priorität"
-              testId="filter-priority"
-              value={filter.priority ?? []}
-              options={[["high", "hoch"], ["normal", "normal"], ["low", "niedrig"], ["none", "keine"]]}
-              onChange={(v) => setF("priority", v.length ? v : "")}
-            />
-            <label>
-              Eingang
-              <select value={filter.inbox ?? "any"} onChange={(e) => setF("inbox", e.target.value as Filter["inbox"])} data-testid="filter-inbox">
-                <option value="any">egal</option>
-                <option value="yes">ja</option>
-                <option value="no">nein</option>
-              </select>
-            </label>
-            <label>
-              Frist
-              <select
-                value={typeof filter.due === "object" ? "range" : (filter.due ?? "any")}
-                onChange={(e) => setF("due", (e.target.value === "range" ? { from: idx.today.toString(), to: idx.today.add({ days: 30 }).toString() } : e.target.value) as never)}
-                data-testid="filter-due"
-              >
-                <option value="any">egal</option>
-                <option value="none">keine</option>
-                <option value="overdue">überfällig</option>
-                <option value="today">heute</option>
-                <option value="next7">nächste 7 Tage</option>
-                <option value="range">Zeitraum …</option>
-              </select>
-              {typeof filter.due === "object" && (
-                <RangeInputs value={filter.due} onChange={(r) => setF("due", r as never)} />
-              )}
-            </label>
-            <label>
-              Geplant
-              <select
-                value={typeof filter.scheduled === "object" ? "range" : (filter.scheduled ?? "any")}
-                onChange={(e) => setF("scheduled", (e.target.value === "range" ? { from: idx.today.toString(), to: idx.today.add({ days: 30 }).toString() } : e.target.value) as never)}
-              >
-                <option value="any">egal</option>
-                <option value="none">keine</option>
-                <option value="earlier">früher eingeplant</option>
-                <option value="today">heute</option>
-                <option value="next7">nächste 7 Tage</option>
-                <option value="range">Zeitraum …</option>
-              </select>
-              {typeof filter.scheduled === "object" && (
-                <RangeInputs value={filter.scheduled} onChange={(r) => setF("scheduled", r as never)} />
-              )}
-            </label>
-            <label>
-              Wiederholung
-              <select value={filter.recurrence ?? "any"} onChange={(e) => setF("recurrence", e.target.value as never)}>
-                <option value="any">egal</option>
-                <option value="none">keine</option>
-                <option value="calendar">Kalender</option>
-                <option value="completion">ab Erledigung</option>
-                <option value="invalid">fehlerhaft</option>
-              </select>
-            </label>
-            {Object.keys(filter).length > 0 && (
-              <button className="btn" onClick={() => setFilter({})}>
-                zurücksetzen
+    <div className={`app${sidebar ? "" : " no-sidebar"}`}>
+      {sidebar && (
+        <nav className="sidebar" aria-label="Ansichten">
+          <div className="side-head">
+            <span className="menu-anchor">
+              <button className="user" onClick={() => setUserMenu((x) => !x)} data-menu-anchor aria-haspopup="menu" aria-expanded={userMenu} data-testid="user-menu">
+                <span className="avatar" aria-hidden="true">
+                  {folderName.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="user-name">{T.appName}</span>
+                <IconChevronDown size={16} />
               </button>
-            )}
-          </div>
-        )}
-        {state.unverified && !state.scanProgress && <div className="banner">{T.unverified}</div>}
-        {state.scanProgress && state.scanProgress.total > 0 && (
-          <div className="banner" data-testid="scan-progress">
-            Prüfe Dateien {state.scanProgress.done}/{state.scanProgress.total}{" "}
-            <button className="btn" style={{ padding: "0 6px" }} onClick={() => repo.cancelScan()}>
-              Abbrechen
-            </button>
-          </div>
-        )}
-        {state.readError && (
-          <div className="banner error" data-testid="read-error">
-            {state.readError}
-            {state.stale && " – letzter bekannter Stand, schreibgeschützt bis zum nächsten erfolgreichen Abgleich"}
-          </div>
-        )}
-        {view === "problems" && !query ? (
-          <Problems repo={repo} state={state} onSelect={(r) => setSelected(r)} onOutcome={notify} />
-        ) : view === "trash" && !query ? (
-          <Trash repo={repo} state={state} onOutcome={notify} />
-        ) : (
-          <div className="list" role="listbox" aria-label="Aufgaben" data-testid="list">
-            {sections.map((s, i) =>
-              s.items.length || (s.title && view === "today") ? (
-                <div key={i} data-testid={`section-${i}`}>
-                  {s.title && (
-                    <div className="section">
-                      {s.title} <span style={{ fontWeight: 400 }}>{s.items.length}</span>
-                    </div>
-                  )}
-                  {s.items.map((v) => (
-                    <TaskRow
-                      key={v.task.ref}
-                      view={v}
-                      selected={v.task.ref === selected}
-                      today={idx.today}
-                      tz={tz}
-                      showScheduledHint={s.scheduledHint && !!v.scheduled}
-                      onSelect={() => setSelected(v.task.ref)}
-                      onToggle={() => toggleDone(v)}
-                    />
-                  ))}
-                </div>
-              ) : null,
-            )}
-            {flat.length === 0 && (
-              <div className="empty">{query ? "Keine Treffer." : T.empty[view as "inbox" | "today" | "all" | "done"]}</div>
-            )}
-            {occurrences.length > 0 && (
-              <>
-                <div className="section">Erledigte Vorkommen (letzte 30 Tage)</div>
-                {occurrences.map((o, i) => (
-                  <div key={i} className="row" onClick={() => setSelected(o.view.task.ref)}>
-                    <div className="main">
-                      <div className="title">{o.view.task.fields.title}</div>
-                      <div className="sub">Vorkommen {describeOccurrence(o.date)} – erledigt{o.archived ? " (früherer Abschnitt)" : ""}</div>
+              {userMenu && (
+                <Menu label="Einstellungen" align="left" className="user-menu" onClose={() => setUserMenu(false)}>
+                  <div className="menu-info" title={repo.folder}>
+                    <IconFolder size={20} />
+                    <div>
+                      <div className="menu-info-title">{folderName}</div>
+                      <div className="menu-info-sub">{repo.folder}</div>
                     </div>
                   </div>
-                ))}
-              </>
+                  <div className="menu-sep" />
+                  <MenuItem icon={<IconFolder size={20} />} onClick={() => (setUserMenu(false), void bridge().folder.choose().then(setSettings))}>
+                    Ordner wechseln
+                  </MenuItem>
+                  <MenuItem icon={<IconRefresh size={20} />} hint="F5" onClick={() => (setUserMenu(false), void repo.scan({ full: true }))}>
+                    {T.actions.rescan}
+                  </MenuItem>
+                  <label className="menu-row">
+                    <span className="menu-icon">
+                      <IconDisplay size={20} />
+                    </span>
+                    <span className="menu-label">Darstellung</span>
+                    <select
+                      value={settings.theme}
+                      onChange={(e) => void bridge().settings.setTheme(e.target.value as Settings["theme"]).then(setSettings)}
+                      aria-label="Darstellung"
+                      data-testid="theme"
+                    >
+                      <option value="system">System</option>
+                      <option value="light">Hell</option>
+                      <option value="dark">Dunkel</option>
+                    </select>
+                  </label>
+                  <div className="menu-sep" />
+                  <div className="menu-foot">
+                    {state.lastScan && (
+                      <div data-testid="last-scan">
+                        Abgleich: {state.lastScan.files} Dateien, {state.lastScan.ms} ms
+                      </div>
+                    )}
+                    {version && <div>Version {version}</div>}
+                  </div>
+                </Menu>
+              )}
+            </span>
+            <button className="icon-btn" title={T.views.problems} aria-label={T.views.problems} onClick={() => (setQuery(""), setOpen(false), setView("problems"))} data-testid="bell">
+              <IconBell size={24} />
+              {problems > 0 && <span className="dot" />}
+            </button>
+            <button className="icon-btn" title="Seitenleiste ausblenden" aria-label="Seitenleiste ausblenden" onClick={() => setSidebar(false)}>
+              <IconSidebar size={24} />
+            </button>
+          </div>
+          <button className="add-task" onClick={() => setCapture(true)} data-testid="capture-button">
+            <IconPlusCircle size={24} />
+            <span>Aufgabe hinzufügen</span>
+          </button>
+          <label className={`nav search${query ? " active" : ""}`}>
+            <span className="nav-icon">
+              <IconSearch size={24} />
+            </span>
+            <input
+              ref={searchRef}
+              type="search"
+              placeholder="Suchen"
+              value={query}
+              onChange={(e) => {
+                setOpen(false);
+                setQuery(e.target.value);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setQuery("");
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              data-testid="search"
+              aria-label="Suchen"
+            />
+          </label>
+          {nav("inbox", T.views.inbox, <IconInbox size={24} />, counts.inbox)}
+          {nav("today", T.views.today, view === "today" && !query ? <IconToday size={24} day={day} /> : <IconTodayOutline size={24} day={day} />, counts.today)}
+          {nav("all", T.views.all, <IconUpcoming size={24} />)}
+          {nav("done", T.views.done, <IconDone size={24} />)}
+          <div className="side-section" title={repo.folder}>
+            {folderName}
+          </div>
+          {problems > 0 && nav("problems", T.views.problems, <IconWarning size={24} />, problems)}
+          {nav("trash", T.views.trash, <IconTrash size={24} />, state.trash.length)}
+          <div className="spacer" />
+          <button className="help" onClick={() => setHelp(true)} data-testid="help">
+            <IconHelp size={24} />
+            <span>Hilfe &amp; Tastenkürzel</span>
+          </button>
+        </nav>
+      )}
+      <main className="content">
+        <header className="topbar">
+          {!sidebar && (
+            <button className="icon-btn" title="Seitenleiste einblenden" aria-label="Seitenleiste einblenden" onClick={() => setSidebar(true)}>
+              <IconSidebar size={24} />
+            </button>
+          )}
+          <div className="topbar-spacer" />
+          <button className="icon-btn" onClick={doUndo} disabled={!state.undo.length} title="Rückgängig (Ctrl+Z)" aria-label="Rückgängig" data-testid="undo">
+            <IconUndo size={24} />
+          </button>
+          <button className="icon-btn" onClick={() => void repo.scan({ full: true })} title="Neu einlesen (F5)" aria-label="Neu einlesen" data-testid="rescan">
+            <IconRefresh size={24} />
+          </button>
+          {listView && (
+            <span className="menu-anchor">
+              <button
+                className={`display-btn${showFilters || activeDisplay ? " active" : ""}`}
+                onClick={() => setShowFilters((x) => !x)}
+                data-menu-anchor
+                aria-expanded={showFilters}
+                data-testid="filter-toggle"
+              >
+                <IconDisplay size={24} />
+                <span>Anzeige{activeDisplay ? `: ${activeDisplay}` : ""}</span>
+              </button>
+              {showFilters && (
+                <Menu label="Anzeige" className="display-menu" onClose={() => setShowFilters(false)} testId="filters">
+                  <div className="display-title">Sortierung</div>
+                  <label className="display-row">
+                    <span>Sortieren nach</span>
+                    <select value={sort} onChange={(e) => setSort(e.target.value as SortChoice)} aria-label="Sortierung" data-testid="sort">
+                      {(Object.keys(SORT_LABELS) as SortChoice[]).map((k) => (
+                        <option key={k} value={k}>
+                          {k === "default" ? "Standard" : SORT_LABELS[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {view === "inbox" && !query && (
+                    <label className="display-row">
+                      <span>Eingang</span>
+                      <select value={inboxNewest ? "new" : "old"} onChange={(e) => setInboxNewest(e.target.value === "new")} aria-label="Reihenfolge im Eingang">
+                        <option value="new">Neueste zuerst</option>
+                        <option value="old">Älteste zuerst</option>
+                      </select>
+                    </label>
+                  )}
+                  {query && (
+                    <label className="display-row">
+                      <span>Erledigte einbeziehen</span>
+                      <input type="checkbox" checked={includeDone} onChange={(e) => setIncludeDone(e.target.checked)} />
+                    </label>
+                  )}
+                  <div className="display-title">Filter</div>
+                  <MultiCheck
+                    label="Status"
+                    testId="filter-status"
+                    value={filter.status ?? []}
+                    options={[["open", "offen"], ["in-progress", "in Arbeit"], ["done", "erledigt"]]}
+                    onChange={(v) => setF("status", v.length ? v : "")}
+                  />
+                  <MultiCheck
+                    label="Priorität"
+                    testId="filter-priority"
+                    value={filter.priority ?? []}
+                    options={[["high", "hoch"], ["normal", "normal"], ["low", "niedrig"], ["none", "keine"]]}
+                    onChange={(v) => setF("priority", v.length ? v : "")}
+                  />
+                  <label className="display-row">
+                    <span>Eingang</span>
+                    <select value={filter.inbox ?? "any"} onChange={(e) => setF("inbox", e.target.value as Filter["inbox"])} data-testid="filter-inbox">
+                      <option value="any">egal</option>
+                      <option value="yes">ja</option>
+                      <option value="no">nein</option>
+                    </select>
+                  </label>
+                  <label className="display-row">
+                    <span>Frist</span>
+                    <select
+                      value={typeof filter.due === "object" ? "range" : (filter.due ?? "any")}
+                      onChange={(e) => setF("due", (e.target.value === "range" ? { from: idx.today.toString(), to: idx.today.add({ days: 30 }).toString() } : e.target.value) as never)}
+                      data-testid="filter-due"
+                    >
+                      <option value="any">egal</option>
+                      <option value="none">keine</option>
+                      <option value="overdue">überfällig</option>
+                      <option value="today">heute</option>
+                      <option value="next7">nächste 7 Tage</option>
+                      <option value="range">Zeitraum …</option>
+                    </select>
+                  </label>
+                  {typeof filter.due === "object" && <RangeInputs value={filter.due} onChange={(r) => setF("due", r as never)} />}
+                  <label className="display-row">
+                    <span>Geplant</span>
+                    <select
+                      value={typeof filter.scheduled === "object" ? "range" : (filter.scheduled ?? "any")}
+                      onChange={(e) => setF("scheduled", (e.target.value === "range" ? { from: idx.today.toString(), to: idx.today.add({ days: 30 }).toString() } : e.target.value) as never)}
+                    >
+                      <option value="any">egal</option>
+                      <option value="none">keine</option>
+                      <option value="earlier">früher eingeplant</option>
+                      <option value="today">heute</option>
+                      <option value="next7">nächste 7 Tage</option>
+                      <option value="range">Zeitraum …</option>
+                    </select>
+                  </label>
+                  {typeof filter.scheduled === "object" && <RangeInputs value={filter.scheduled} onChange={(r) => setF("scheduled", r as never)} />}
+                  <label className="display-row">
+                    <span>Wiederholung</span>
+                    <select value={filter.recurrence ?? "any"} onChange={(e) => setF("recurrence", e.target.value as never)}>
+                      <option value="any">egal</option>
+                      <option value="none">keine</option>
+                      <option value="calendar">Kalender</option>
+                      <option value="completion">ab Erledigung</option>
+                      <option value="invalid">fehlerhaft</option>
+                    </select>
+                  </label>
+                  {activeDisplay > 0 && (
+                    <button
+                      className="display-reset"
+                      onClick={() => {
+                        setFilter({});
+                        setSort("default");
+                      }}
+                    >
+                      Zurücksetzen
+                    </button>
+                  )}
+                </Menu>
+              )}
+            </span>
+          )}
+        </header>
+        <div className="scroll">
+          <div className="page">
+            <h1 className="page-title">{viewTitle}</h1>
+            {listView && (
+              <div className="page-count">
+                <IconTasks size={16} />
+                {flat.length === 1 ? "1 Aufgabe" : `${flat.length} Aufgaben`}
+              </div>
+            )}
+            {state.unverified && !state.scanProgress && <div className="banner">{T.unverified}</div>}
+            {state.scanProgress && state.scanProgress.total > 0 && (
+              <div className="banner" data-testid="scan-progress">
+                Prüfe Dateien {state.scanProgress.done}/{state.scanProgress.total}{" "}
+                <button className="link-btn" onClick={() => repo.cancelScan()}>
+                  Abbrechen
+                </button>
+              </div>
+            )}
+            {state.readError && (
+              <div className="banner error" data-testid="read-error">
+                {state.readError}
+                {state.stale && " – letzter bekannter Stand, schreibgeschützt bis zum nächsten erfolgreichen Abgleich"}
+              </div>
+            )}
+            {view === "problems" && !query ? (
+              <Problems repo={repo} state={state} onSelect={(r) => openTask(r)} onOutcome={notify} />
+            ) : view === "trash" && !query ? (
+              <Trash repo={repo} state={state} onOutcome={notify} />
+            ) : (
+              <div className="list" role="listbox" aria-label="Aufgaben" data-testid="list">
+                {sections.map((s, i) =>
+                  s.items.length ? (
+                    <div key={i} className="group" data-testid={`section-${i}`}>
+                      {s.title && (
+                        <div className="section">
+                          <span>{s.title}</span>
+                          <span className="section-count">{s.items.length}</span>
+                        </div>
+                      )}
+                      {s.items.map((v) => (
+                        <TaskRow
+                          key={v.task.ref}
+                          view={v}
+                          selected={v.task.ref === selected}
+                          today={idx.today}
+                          tz={tz}
+                          showScheduledHint={s.scheduledHint && !!v.scheduled}
+                          onSelect={() => openTask(v.task.ref)}
+                          onToggle={() => toggleDone(v)}
+                          onEdit={(field) => openTask(v.task.ref, field)}
+                          onFile={() =>
+                            void repo
+                              .perform(v.task.ref, { type: "setInbox", inbox: !v.task.fields.inbox }, v.task.fields.inbox ? "Einsortiert" : "Zurück in den Eingang")
+                              .then((o) => notify(o, v.task.fields.inbox ? "Einsortiert" : "Zurück in den Eingang"))
+                          }
+                          onDelete={() => void repo.moveToTrash(v.task.ref).then((o) => notify(o, "Gelöscht"))}
+                        />
+                      ))}
+                    </div>
+                  ) : null,
+                )}
+                {flat.length === 0 && (
+                  <div className="empty">{query ? "Keine Treffer." : T.empty[view as "inbox" | "today" | "all" | "done"]}</div>
+                )}
+                {!query && view !== "done" && (
+                  <button className="add-inline" onClick={() => setCapture(true)}>
+                    <span className="plus">
+                      <IconPlus size={18} />
+                    </span>
+                    Aufgabe hinzufügen
+                  </button>
+                )}
+                {occurrences.length > 0 && (
+                  <div className="group">
+                    <div className="section">
+                      <span>Erledigte Vorkommen (letzte 30 Tage)</span>
+                    </div>
+                    {occurrences.map((o, i) => (
+                      <div key={i} className="row done" onClick={() => openTask(o.view.task.ref)}>
+                        <span className="check checked prio-none" aria-hidden="true">
+                          <svg viewBox="0 0 24 24">
+                            <path d="M7.5 12.3l3 3 6-6.3" />
+                          </svg>
+                        </span>
+                        <div className="main">
+                          <div className="title">{o.view.task.fields.title}</div>
+                          <div className="sub">
+                            <div className="meta">
+                              Vorkommen {describeOccurrence(o.date)} – erledigt{o.archived ? " (früherer Abschnitt)" : ""}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </section>
-      <section className="detail-wrap" style={{ overflow: "auto", display: "flex" }}>
-        {selectedView ? (
-          <Detail
-            key={selectedView.task.ref}
-            repo={repo}
-            view={selectedView}
-            today={idx.today}
-            draftText={state.drafts.find((d) => d.ref === selectedView.task.ref)?.text ?? null}
-            draftConflict={!!state.drafts.find((d) => d.ref === selectedView.task.ref)?.conflictHash}
-            focusField={focusField}
-            onOutcome={notify}
-          />
-        ) : (
-          <div className="empty" style={{ flex: 1 }}>
-            Keine Aufgabe ausgewählt. <kbd>N</kbd> erfasst eine neue Aufgabe.
-          </div>
-        )}
-      </section>
+        </div>
+      </main>
+      {open && selectedView && (
+        <Detail
+          key={selectedView.task.ref}
+          repo={repo}
+          view={selectedView}
+          today={idx.today}
+          draftText={state.drafts.find((d) => d.ref === selectedView.task.ref)?.text ?? null}
+          draftConflict={!!state.drafts.find((d) => d.ref === selectedView.task.ref)?.conflictHash}
+          focusField={focusField}
+          onOutcome={notify}
+          onClose={() => setOpen(false)}
+          onToggle={() => toggleDone(selectedView)}
+          onPrev={selIndex > 0 ? () => selectIndex(selIndex - 1) : undefined}
+          onNext={selIndex >= 0 && selIndex < flat.length - 1 ? () => selectIndex(selIndex + 1) : undefined}
+        />
+      )}
       {capture && (
         <Capture
           onCancel={() => setCapture(false)}
@@ -554,11 +741,12 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
             setCapture(false);
             void repo.create({ title, note }).then((o) => {
               notify(o, "Erfasst im Eingang");
-              if (o.status === "ok" && o.ref && edit) setSelected(o.ref);
+              if (o.status === "ok" && o.ref && edit) openTask(o.ref);
             });
           }}
         />
       )}
+      {help && <Help onClose={() => setHelp(false)} />}
       {toast && (
         <div className={`toast${toast.error ? " error" : ""}`} role="status" data-testid="toast">
           <span>{toast.text}</span>
@@ -573,12 +761,57 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   );
 }
 
+const SHORTCUTS: [string, string][] = [
+  ["N / Ctrl+N", "Aufgabe erfassen"],
+  ["/ oder Ctrl+F", "Suchen"],
+  ["↑ ↓ oder J K", "Aufgabe wählen"],
+  ["Enter", "Details öffnen"],
+  ["Escape", "Details schließen"],
+  ["Leertaste", "Erledigen / wiederöffnen"],
+  ["E", "Einsortieren"],
+  ["D", "Frist setzen"],
+  ["S", "Einplanen"],
+  ["P", "Priorität setzen"],
+  ["Entf", "Löschen"],
+  ["Ctrl+Z", "Rückgängig"],
+  ["Ctrl+1 … 4", "Eingang, Heute, Alle offenen, Erledigt"],
+  ["F5", "Neu einlesen"],
+];
+
+function Help({ onClose }: { onClose(): void }) {
+  const ref = useDialog<HTMLDivElement>(onClose);
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div ref={ref} className="modal" role="dialog" aria-modal="true" aria-label="Tastenkürzel" onClick={(e) => e.stopPropagation()} data-testid="help-dialog">
+        <div className="modal-head">
+          <h2>Tastenkürzel</h2>
+          <button className="icon-btn" onClick={onClose} aria-label="Schließen">
+            <IconClose size={24} />
+          </button>
+        </div>
+        <table className="shortcuts">
+          <tbody>
+            {SHORTCUTS.map(([k, d]) => (
+              <tr key={k}>
+                <td>{d}</td>
+                <td>
+                  <kbd>{k}</kbd>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function RangeInputs({ value, onChange }: { value: { from: string; to: string }; onChange(r: { from: string; to: string }): void }) {
   return (
-    <>
+    <div className="display-range">
       <input type="date" value={value.from} onChange={(e) => e.target.value && onChange({ ...value, from: e.target.value })} aria-label="von" />
       <input type="date" value={value.to} onChange={(e) => e.target.value && onChange({ ...value, to: e.target.value })} aria-label="bis" />
-    </>
+    </div>
   );
 }
 

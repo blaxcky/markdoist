@@ -15,7 +15,26 @@ import {
 } from "@markdoist/core";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { RecurrenceEditor } from "./RecurrenceEditor";
-import { splitDateValue } from "../format";
+import { Menu, MenuItem } from "./Menu";
+import {
+  IconCalendar,
+  IconChevronDown,
+  IconChevronUp,
+  IconClose,
+  IconDescription,
+  IconDone,
+  IconDots,
+  IconFlag,
+  IconFolder,
+  IconHistory,
+  IconInbox,
+  IconPencil,
+  IconRepeat,
+  IconStatus,
+  IconTime,
+  IconTrash,
+} from "./Icons";
+import { dateLabel, splitDateValue } from "../format";
 import { clock } from "../repo";
 
 type SaveState = "idle" | "pending" | "draft" | "saved" | "failed" | "conflict";
@@ -27,11 +46,16 @@ interface Props {
   draftText: string | null;
   /** Entwurf mit bereits festgestelltem Textkonflikt (7.3) */
   draftConflict?: boolean;
-  focusField: { field: "due" | "scheduled" | "priority" | "title"; nonce: number } | null;
+  focusField: { field: "due" | "scheduled" | "priority" | "title" | "note"; nonce: number } | null;
   onOutcome(o: Outcome, label?: string): void;
+  onClose(): void;
+  /** Erledigen/Wiederöffnen einer Aufgabe ohne Serie */
+  onToggle(): void;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
-export function Detail({ repo, view, today, draftText, draftConflict, focusField, onOutcome }: Props) {
+export function Detail({ repo, view, today, draftText, draftConflict, focusField, onOutcome, onClose, onToggle, onPrev, onNext }: Props) {
   const t = view.task;
   const f = t.fields;
   const ref = t.ref;
@@ -42,6 +66,8 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
   const [save, setSave] = useState<SaveState>(draftConflict ? "conflict" : draftText !== null ? "draft" : "idle");
   const [editRule, setEditRule] = useState<false | "edit" | "continue">(false);
   const [extraException, setExtraException] = useState("");
+  const [menu, setMenu] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef(false);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -51,7 +77,15 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
 
   useEffect(() => setTitle(f.title), [f.title, ref]);
   useEffect(() => {
-    if (!focusField) return;
+    if (!focusField) {
+      // Tastaturkürzel wirken im Dialog weiter, solange kein Eingabefeld den Fokus hat.
+      if (!dialogRef.current?.contains(document.activeElement)) dialogRef.current?.focus();
+      return;
+    }
+    if (focusField.field === "note") {
+      dialogRef.current?.querySelector<HTMLElement>(".cm-content")?.focus();
+      return;
+    }
     const el = { title: titleRef, due: dueRef, scheduled: schRef, priority: prioRef }[focusField.field].current;
     el?.focus();
   }, [focusField]);
@@ -105,27 +139,38 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
     const raw = t.data[field];
     const { date, time } = splitDateValue(raw, clock().timeZone);
     const invalid = raw !== undefined && raw !== null && raw !== "" && !f[field];
+    const tone = field === "due" && view.overdue ? " overdue" : date === today.toString() ? " today" : "";
     return (
-      <div className="dateedit">
-        <input
-          ref={field === "due" ? dueRef : schRef}
-          type="date"
-          value={date}
-          disabled={ro}
-          onChange={(e) => setDate(field, e.target.value, time)}
-          data-testid={`field-${field}`}
-          aria-label={T.fields[field]}
-        />
-        {date && (time ? (
-          <input type="time" value={time} disabled={ro} onChange={(e) => setDate(field, date, e.target.value)} aria-label="Uhrzeit" />
-        ) : (
-          <button className="btn" disabled={ro} onClick={() => setDate(field, date, "09:00")}>Uhrzeit hinzufügen</button>
-        ))}
+      <div className={`side-value dateedit${date ? "" : " unset"}${tone}`}>
+        {field === "due" ? <IconCalendar size={16} /> : <IconTime size={16} />}
+        <span className="date-pick">
+          <span className="date-text" aria-hidden="true">
+            {date ? dateLabel({ kind: "date", date: Temporal.PlainDate.from(date), raw: date }, today, clock().timeZone).text : "Kein Datum"}
+          </span>
+          <input
+            ref={field === "due" ? dueRef : schRef}
+            type="date"
+            value={date}
+            disabled={ro}
+            onChange={(e) => setDate(field, e.target.value, time)}
+            onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
+            data-testid={`field-${field}`}
+            aria-label={T.fields[field]}
+          />
+        </span>
         {date && (
-          <button className="btn" disabled={ro} onClick={() => setDate(field, "", "")} aria-label={`${T.fields[field]} entfernen`}>
-            ✕
+          <button className="icon-btn small" disabled={ro} onClick={() => setDate(field, "", "")} aria-label={`${T.fields[field]} entfernen`} title={`${T.fields[field]} entfernen`}>
+            <IconClose size={16} />
           </button>
         )}
+        {date &&
+          (time ? (
+            <input type="time" value={time} disabled={ro} onChange={(e) => setDate(field, date, e.target.value)} aria-label="Uhrzeit" />
+          ) : (
+            <button className="link-btn" disabled={ro} onClick={() => setDate(field, date, "09:00")}>
+              Uhrzeit hinzufügen
+            </button>
+          ))}
         {invalid && <span className="badge warn">ungültig: {String(raw)}</span>}
       </div>
     );
@@ -178,336 +223,415 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
     return sections;
   }, [s, t.data.recurrence_archive]);
 
+  const checkDisabled = ro || (!!s && !seriesActive);
+  const onCheck = () => {
+    if (s) {
+      if (seriesActive) void act({ type: "completeOccurrence", revision: s.revisionKey, instance: K }, "Vorkommen erledigt");
+    } else onToggle();
+  };
+  const folderName = repo.folder.split("/").filter(Boolean).pop() ?? repo.folder;
+
   return (
-    <div className="detail" data-testid="detail">
-      <div className="head">
-        <input
-          ref={titleRef}
-          className="titleinput"
-          value={title}
-          disabled={ro}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => title !== f.title && void act({ type: "setTitle", title }, "Titel geändert")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-            if (e.key === "Escape") {
-              setTitle(f.title);
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          aria-label={T.fields.title}
-          data-testid="field-title"
-        />
-      </div>
-      {view.diagnostics.map((d, i) => (
-        <div key={i} className={`diag ${d.severity === "error" ? "error" : d.severity === "info" ? "info" : "warn"}`}>
-          {d.message}
-        </div>
-      ))}
-      <div className="fields">
-        <label>{T.fields.status}</label>
-        <select
-          value={f.status}
-          disabled={ro}
-          onChange={(e) => void act({ type: "setStatus", status: e.target.value as Status }, "Status geändert")}
-          data-testid="field-status"
-        >
-          {/* Bei Serien kein „Erledigt“: Erledigen und Beenden nur über die Serienknöpfe (Entscheidung 18.10.2026). */}
-          {(["open", "in-progress", "done"] as Status[]).filter((x) => !(s && x === "done" && f.status !== "done")).map((x) => (
-            <option key={x} value={x} disabled={!!s && x === "done"}>
-              {T.status[x]}
-            </option>
-          ))}
-        </select>
-        <label>{T.fields.priority}</label>
-        <select
-          ref={prioRef}
-          value={f.priority}
-          disabled={ro}
-          onChange={(e) => void act({ type: "setPriority", priority: e.target.value as Priority }, "Priorität geändert")}
-          data-testid="field-priority"
-        >
-          {(["none", "low", "normal", "high"] as Priority[]).map((x) => (
-            <option key={x} value={x}>
-              {T.priority[x]}
-            </option>
-          ))}
-        </select>
-        <label>{T.fields.inbox}</label>
-        <label style={{ color: "var(--fg)" }}>
-          <input
-            type="checkbox"
-            checked={f.inbox}
-            disabled={ro}
-            onChange={(e) => void act({ type: "setInbox", inbox: e.target.checked }, e.target.checked ? "Zurück in den Eingang" : "Einsortiert")}
-            data-testid="field-inbox"
-          />{" "}
-          im Eingang
-        </label>
-        <label>{T.fields.due}</label>
-        {dateEditor("due")}
-        <label>{T.fields.scheduled}</label>
-        {dateEditor("scheduled")}
-        <label>Wiederholung</label>
-        <div className="dateedit">
-          <span data-testid="series-desc">
-            {s ? (s.rule ? describeRule(s.rule, s.anchor) ?? s.raw : s.raw) : "keine"}
-            {s && s.anchor === "completion" && s.rule ? "" : ""}
-          </span>
-          <button className="btn" disabled={ro} onClick={() => setEditRule("edit")} data-testid="edit-recurrence">
-            {s ? "Regel bearbeiten" : "Wiederholung …"}
-          </button>
-          {s && (
-            <button
-              className="btn"
-              disabled={ro}
-              onClick={() => void act({ type: "removeRecurrence", revision: s.revisionKey }, "Wiederholung entfernt")}
-            >
-              Wiederholung entfernen
-            </button>
-          )}
-        </div>
-      </div>
-      {s && (
-        <div className="diag" data-testid="series-panel">
-          {s.instance && (
-            <div>
-              Aktuelles Vorkommen: <b>{describeOccurrence(s.instance)}</b>
-              {s.phase === "clarify" && s.proposal && <> – Vorschlag: {describeOccurrence(s.proposal)}</>}
-            </div>
-          )}
-          <div className="actions" style={{ padding: "6px 0 0" }}>
-            {seriesActive && (
-              <>
-                <button className="btn primary" disabled={ro} onClick={() => void act({ type: "completeOccurrence", revision: s.revisionKey, instance: K }, "Vorkommen erledigt")} data-testid="series-complete">
-                  Vorkommen erledigen
-                </button>
-                <button className="btn" disabled={ro} onClick={() => void act({ type: "skipOccurrence", revision: s.revisionKey, instance: K }, "Übersprungen")} data-testid="series-skip">
-                  {T.actions.skip}
-                </button>
-                <button className="btn" disabled={ro} onClick={() => void act({ type: "endSeries", revision: s.revisionKey, instance: K, completeCurrent: true }, "Serie beendet")}>
-                  Erledigen und Serie beenden
-                </button>
-                <button className="btn" disabled={ro} onClick={() => void act({ type: "endSeries", revision: s.revisionKey, instance: K, completeCurrent: false }, "Serie beendet")}>
-                  Serie ohne Erledigung beenden
-                </button>
-              </>
-            )}
-            {s.phase === "ended" && reopenPreview?.preview.result === "change" && (
-              <button className="btn" disabled={ro} onClick={() => void act({ type: "reopenSeries", revision: s.revisionKey }, "Serie wiederöffnet")} data-testid="series-reopen">
-                Serie wiederöffnen
-              </button>
-            )}
-            {s.phase === "ended" && reopenPreview?.preview.result === "blocked" && (
-              <button className="btn" disabled={ro} onClick={() => setEditRule("continue")} data-testid="series-continue">
-                Serie mit neuer Regel fortsetzen
-              </button>
-            )}
+    <div
+      className="modal-back detail-back"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div ref={dialogRef} className="detail" role="dialog" aria-modal="true" data-detail aria-label={f.title || T.fields.title} data-testid="detail" tabIndex={-1}>
+        <header className="detail-head">
+          <div className="crumb">
+            {f.inbox ? <IconInbox size={16} /> : <IconFolder size={16} />}
+            <span>{f.inbox ? T.views.inbox : folderName}</span>
           </div>
-          {seriesActive && completePreview.length > 0 && (
-            <ul className="preview-lines" data-testid="complete-preview" aria-label="Beim Erledigen">
-              <li className="preview-head">Beim Erledigen:</li>
-              {completePreview.map((l) => (
-                <li key={l}>{l}</li>
-              ))}
-            </ul>
-          )}
-          {reopenPreview && (
-            <ul className="preview-lines" data-testid="reopen-preview" aria-label="Beim Wiederöffnen">
-              <li className="preview-head">Beim Wiederöffnen:</li>
-              {reopenPreview.lines.map((l) => (
-                <li key={l}>{l}</li>
-              ))}
-            </ul>
-          )}
-          {seriesActive && s.anchor === "calendar" && (
-            <details style={{ marginTop: 6 }} data-testid="exceptions">
-              <summary>Ausnahmen (künftige Termine überspringen)</summary>
-              {upcoming.map((u) => (
-                <label key={u.date.toString()} style={{ display: "block", color: "var(--fg)" }}>
-                  <input
-                    type="checkbox"
-                    checked={u.skipped}
-                    disabled={ro}
-                    data-testid={`exception-${u.date}`}
-                    onChange={(e) =>
-                      void act(
-                        { type: "setException", revision: s.revisionKey, date: u.date.toString(), skipped: e.target.checked },
-                        e.target.checked ? "Termin wird übersprungen" : "Ausnahme entfernt",
-                      )
-                    }
-                  />{" "}
-                  {describeOccurrence(u.date)} überspringen
-                </label>
-              ))}
-              {extraSkipped.map((d) => (
-                <label key={d} style={{ display: "block", color: "var(--fg)" }}>
-                  <input
-                    type="checkbox"
-                    checked
-                    disabled={ro}
-                    data-testid={`exception-${d}`}
-                    onChange={() => void act({ type: "setException", revision: s.revisionKey, date: d, skipped: false }, "Ausnahme entfernt")}
-                  />{" "}
-                  {parseKey(d) ? describeOccurrence(parseKey(d)!) : d} überspringen
-                </label>
-              ))}
-              <div className="dateedit" style={{ marginTop: 4 }}>
-                <input type="date" value={extraException} disabled={ro} onChange={(e) => setExtraException(e.target.value)} aria-label="Weiteren Termin überspringen" data-testid="exception-date" />
-                <button
-                  className="btn"
-                  disabled={ro || !extraException}
-                  onClick={() =>
-                    void act({ type: "setException", revision: s.revisionKey, date: extraException, skipped: true }, "Termin wird übersprungen").then(
-                      (o) => o.status === "ok" && setExtraException(""),
-                    )
+          <div className="detail-tools">
+            <button className="icon-btn" onClick={onPrev} disabled={!onPrev} title="Vorherige Aufgabe (↑)" aria-label="Vorherige Aufgabe">
+              <IconChevronUp size={24} />
+            </button>
+            <button className="icon-btn" onClick={onNext} disabled={!onNext} title="Nächste Aufgabe (↓)" aria-label="Nächste Aufgabe">
+              <IconChevronDown size={24} />
+            </button>
+            <span className="menu-anchor">
+              <button className="icon-btn" onClick={() => setMenu((m) => !m)} data-menu-anchor title="Weitere Aktionen" aria-label="Weitere Aktionen" data-testid="detail-more">
+                <IconDots size={24} />
+              </button>
+              {menu && (
+                <Menu label="Aufgabenaktionen" onClose={() => setMenu(false)}>
+                  {!s && (
+                    <MenuItem icon={<IconDone size={20} />} disabled={ro} onClick={() => (setMenu(false), onToggle())}>
+                      {f.status === "done" ? T.actions.reopen : T.actions.complete}
+                    </MenuItem>
+                  )}
+                  <MenuItem icon={<IconPencil size={20} />} disabled={ro} onClick={() => (setMenu(false), void repo.renameToTitle(ref).then((o) => onOutcome(o, "Umbenannt")))}>
+                    {T.actions.renameToTitle}
+                  </MenuItem>
+                  <div className="menu-sep" />
+                  <MenuItem icon={<IconTrash size={20} />} danger disabled={ro} testId="delete" onClick={() => (setMenu(false), void repo.moveToTrash(ref).then((o) => onOutcome(o, "Gelöscht")))}>
+                    {T.actions.delete}
+                  </MenuItem>
+                </Menu>
+              )}
+            </span>
+            <button className="icon-btn" onClick={onClose} title="Schließen (Escape)" aria-label="Schließen">
+              <IconClose size={24} />
+            </button>
+          </div>
+        </header>
+        <div className="detail-body">
+          <div className="detail-main">
+            <div className="detail-title">
+              <button
+                className={`check big prio-${f.priority}${f.status === "done" ? " checked" : ""}`}
+                role="checkbox"
+                aria-checked={f.status === "done"}
+                aria-label={s ? "Vorkommen erledigen" : f.status === "done" ? T.actions.reopen : T.actions.complete}
+                disabled={checkDisabled}
+                onClick={onCheck}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M7.5 12.3l3 3 6-6.3" />
+                </svg>
+              </button>
+              <input
+                ref={titleRef}
+                className={`titleinput${f.status === "done" ? " done" : ""}`}
+                value={title}
+                disabled={ro}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={() => title !== f.title && void act({ type: "setTitle", title }, "Titel geändert")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  if (e.key === "Escape") {
+                    setTitle(f.title);
+                    (e.target as HTMLInputElement).blur();
                   }
-                  data-testid="exception-add"
+                }}
+                aria-label={T.fields.title}
+                data-testid="field-title"
+              />
+            </div>
+            {view.diagnostics.map((d, i) => (
+              <div key={i} className={`diag ${d.severity === "error" ? "error" : d.severity === "info" ? "info" : "warn"}`}>
+                {d.message}
+              </div>
+            ))}
+            <div className="desc-head">
+              <IconDescription size={16} />
+              <span className="desc-label">Beschreibung</span>
+              <div className="seg" role="tablist" aria-label="Notiz">
+                <button role="tab" aria-selected={tab === "edit"} className={tab === "edit" ? "on" : ""} onClick={() => setTab("edit")}>
+                  Bearbeiten
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={tab === "preview"}
+                  className={tab === "preview" ? "on" : ""}
+                  onClick={() => {
+                    void flush();
+                    setTab("preview");
+                  }}
+                  data-testid="tab-preview"
                 >
-                  Diesen Termin überspringen
+                  Vorschau
                 </button>
               </div>
-            </details>
-          )}
-        </div>
-      )}
-      {!s && (
-        <div className="actions">
-          <button className="btn" disabled={ro} onClick={() => void act(f.status === "done" ? { type: "reopen" } : { type: "complete" }, f.status === "done" ? "Wiederöffnet" : "Erledigt")}>
-            {f.status === "done" ? T.actions.reopen : T.actions.complete}
-          </button>
-          <button className="btn" disabled={ro} onClick={() => void repo.renameToTitle(ref).then((o) => onOutcome(o, "Umbenannt"))}>
-            {T.actions.renameToTitle}
-          </button>
-          <button className="btn danger" disabled={ro} onClick={() => void repo.moveToTrash(ref).then((o) => onOutcome(o, "Gelöscht"))} data-testid="delete">
-            {T.actions.delete}
-          </button>
-        </div>
-      )}
-      {s && (
-        <div className="actions">
-          <button className="btn" disabled={ro} onClick={() => void repo.renameToTitle(ref).then((o) => onOutcome(o, "Umbenannt"))}>
-            {T.actions.renameToTitle}
-          </button>
-          <button className="btn danger" disabled={ro} onClick={() => void repo.moveToTrash(ref).then((o) => onOutcome(o, "Gelöscht"))}>
-            {T.actions.delete}
-          </button>
-        </div>
-      )}
-      {history && history.some((h) => h.done.length || h.skipped.length) && (
-        <details className="history" data-testid="history">
-          <summary>Historie</summary>
-          {history.map((h, i) => (
-            <div key={i}>
-              <div>{h.label}</div>
-              <ul>
-                {h.done.map((d) => (
-                  <li key={`c${d}`}>Vorkommen {parseKey(d) ? describeOccurrence(parseKey(d)!) : d} – erledigt</li>
-                ))}
-                {h.skipped.map((d) => (
-                  <li key={`s${d}`}>Vorkommen {parseKey(d) ? describeOccurrence(parseKey(d)!) : d} – übersprungen</li>
-                ))}
-              </ul>
+              <span className={`state ${save}`} data-testid="save-state">
+                {save === "pending" && T.save.pending}
+                {save === "draft" && T.save.draft}
+                {save === "saved" && T.save.saved}
+                {save === "failed" && T.save.failed}
+                {save === "conflict" && T.save.conflict}
+              </span>
             </div>
-          ))}
-        </details>
-      )}
-      <div className="editor-tabs">
-        <button className={`btn${tab === "edit" ? " primary" : ""}`} onClick={() => setTab("edit")}>
-          Bearbeiten
-        </button>
-        <button
-          className={`btn${tab === "preview" ? " primary" : ""}`}
-          onClick={() => {
-            void flush();
-            setTab("preview");
-          }}
-          data-testid="tab-preview"
-        >
-          Vorschau
-        </button>
-        <span className={`state ${save}`} data-testid="save-state">
-          {save === "pending" && T.save.pending}
-          {save === "draft" && T.save.draft}
-          {save === "saved" && T.save.saved}
-          {save === "failed" && T.save.failed}
-          {save === "conflict" && T.save.conflict}
-        </span>
-      </div>
-      {save === "failed" && (
-        <div className="diag error" data-testid="save-failed">
-          Speichern fehlgeschlagen. Dein Entwurf ist lokal gesichert.
-          <div className="actions" style={{ padding: "6px 0 0" }}>
-            <button
-              className="btn"
-              data-testid="retry-save"
-              onClick={() =>
-                void repo.retryDraft(ref).then((o) => {
-                  onOutcome(o, "Notiz");
-                  setSave(o.status === "ok" || o.status === "noop" ? "saved" : o.status === "conflict" ? "conflict" : "failed");
-                })
-              }
-            >
-              Erneut speichern
-            </button>
-            <button className="btn" data-testid="save-as-new" onClick={() => void repo.saveDraftAsNew(ref).then((o) => onOutcome(o, "Als neue Datei gespeichert"))}>
-              Als neue Datei speichern
-            </button>
+            {save === "failed" && (
+              <div className="diag error" data-testid="save-failed">
+                Speichern fehlgeschlagen. Dein Entwurf ist lokal gesichert.
+                <div className="actions">
+                  <button
+                    className="btn"
+                    data-testid="retry-save"
+                    onClick={() =>
+                      void repo.retryDraft(ref).then((o) => {
+                        onOutcome(o, "Notiz");
+                        setSave(o.status === "ok" || o.status === "noop" ? "saved" : o.status === "conflict" ? "conflict" : "failed");
+                      })
+                    }
+                  >
+                    Erneut speichern
+                  </button>
+                  <button className="btn" data-testid="save-as-new" onClick={() => void repo.saveDraftAsNew(ref).then((o) => onOutcome(o, "Als neue Datei gespeichert"))}>
+                    Als neue Datei speichern
+                  </button>
+                </div>
+              </div>
+            )}
+            {save === "conflict" && (
+              <div className="diag warn" data-testid="draft-conflict">
+                Die Datei wurde extern geändert, während du geschrieben hast. Dein Entwurf ist lokal gesichert.
+                {/* Datei-Version und eigener Entwurf bleiben sichtbar (7.3) */}
+                <details>
+                  <summary>Unterschied Datei-Version → mein Entwurf</summary>
+                  <div className="diff" data-testid="draft-conflict-diff">
+                    {diffLines(t.body, body).map((p, i) => (
+                      <span key={i} className={p.added ? "add" : p.removed ? "del" : ""}>
+                        {p.value}
+                      </span>
+                    ))}
+                  </div>
+                </details>
+                <div className="actions">
+                  {(["mine", "file", "both"] as const).map((ch) => (
+                    <button
+                      key={ch}
+                      className="btn"
+                      data-testid={`resolve-${ch}`}
+                      onClick={() =>
+                        void repo.resolveDraftConflict(ref, ch).then((o) => {
+                          onOutcome(o, "Konflikt gelöst");
+                          setSave(o.status === "ok" || o.status === "noop" ? "saved" : o.status === "conflict" ? "conflict" : "failed");
+                        })
+                      }
+                    >
+                      {{ mine: "Meine Version", file: "Datei-Version", both: "Beide behalten" }[ch]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {tab === "edit" ? (
+              <MarkdownEditor value={body} docKey={ref} readOnly={ro} onChange={onBodyChange} onBlur={() => void flush()} />
+            ) : (
+              <div className="preview" data-testid="preview" onClick={onPreviewClick} dangerouslySetInnerHTML={{ __html: html }} />
+            )}
+            {s && (
+              <div className="series" data-testid="series-panel">
+                <div className="series-head">
+                  <IconRepeat size={16} />
+                  <span>Serie</span>
+                  {s.instance && (
+                    <span className="series-instance">
+                      Aktuelles Vorkommen: <b>{describeOccurrence(s.instance)}</b>
+                      {s.phase === "clarify" && s.proposal && <> – Vorschlag: {describeOccurrence(s.proposal)}</>}
+                    </span>
+                  )}
+                </div>
+                <div className="actions">
+                  {seriesActive && (
+                    <>
+                      <button className="btn primary" disabled={ro} onClick={() => void act({ type: "completeOccurrence", revision: s.revisionKey, instance: K }, "Vorkommen erledigt")} data-testid="series-complete">
+                        Vorkommen erledigen
+                      </button>
+                      <button className="btn" disabled={ro} onClick={() => void act({ type: "skipOccurrence", revision: s.revisionKey, instance: K }, "Übersprungen")} data-testid="series-skip">
+                        {T.actions.skip}
+                      </button>
+                      <button className="btn" disabled={ro} onClick={() => void act({ type: "endSeries", revision: s.revisionKey, instance: K, completeCurrent: true }, "Serie beendet")}>
+                        Erledigen und Serie beenden
+                      </button>
+                      <button className="btn" disabled={ro} onClick={() => void act({ type: "endSeries", revision: s.revisionKey, instance: K, completeCurrent: false }, "Serie beendet")}>
+                        Serie ohne Erledigung beenden
+                      </button>
+                    </>
+                  )}
+                  {s.phase === "ended" && reopenPreview?.preview.result === "change" && (
+                    <button className="btn" disabled={ro} onClick={() => void act({ type: "reopenSeries", revision: s.revisionKey }, "Serie wiederöffnet")} data-testid="series-reopen">
+                      Serie wiederöffnen
+                    </button>
+                  )}
+                  {s.phase === "ended" && reopenPreview?.preview.result === "blocked" && (
+                    <button className="btn" disabled={ro} onClick={() => setEditRule("continue")} data-testid="series-continue">
+                      Serie mit neuer Regel fortsetzen
+                    </button>
+                  )}
+                </div>
+                {seriesActive && completePreview.length > 0 && (
+                  <ul className="preview-lines" data-testid="complete-preview" aria-label="Beim Erledigen">
+                    <li className="preview-head">Beim Erledigen:</li>
+                    {completePreview.map((l) => (
+                      <li key={l}>{l}</li>
+                    ))}
+                  </ul>
+                )}
+                {reopenPreview && (
+                  <ul className="preview-lines" data-testid="reopen-preview" aria-label="Beim Wiederöffnen">
+                    <li className="preview-head">Beim Wiederöffnen:</li>
+                    {reopenPreview.lines.map((l) => (
+                      <li key={l}>{l}</li>
+                    ))}
+                  </ul>
+                )}
+                {seriesActive && s.anchor === "calendar" && (
+                  <details className="exceptions" data-testid="exceptions">
+                    <summary>Ausnahmen (künftige Termine überspringen)</summary>
+                    {upcoming.map((u) => (
+                      <label key={u.date.toString()} className="exception">
+                        <input
+                          type="checkbox"
+                          checked={u.skipped}
+                          disabled={ro}
+                          data-testid={`exception-${u.date}`}
+                          onChange={(e) =>
+                            void act(
+                              { type: "setException", revision: s.revisionKey, date: u.date.toString(), skipped: e.target.checked },
+                              e.target.checked ? "Termin wird übersprungen" : "Ausnahme entfernt",
+                            )
+                          }
+                        />{" "}
+                        {describeOccurrence(u.date)} überspringen
+                      </label>
+                    ))}
+                    {extraSkipped.map((d) => (
+                      <label key={d} className="exception">
+                        <input
+                          type="checkbox"
+                          checked
+                          disabled={ro}
+                          data-testid={`exception-${d}`}
+                          onChange={() => void act({ type: "setException", revision: s.revisionKey, date: d, skipped: false }, "Ausnahme entfernt")}
+                        />{" "}
+                        {parseKey(d) ? describeOccurrence(parseKey(d)!) : d} überspringen
+                      </label>
+                    ))}
+                    <div className="dateedit">
+                      <input type="date" value={extraException} disabled={ro} onChange={(e) => setExtraException(e.target.value)} aria-label="Weiteren Termin überspringen" data-testid="exception-date" />
+                      <button
+                        className="btn"
+                        disabled={ro || !extraException}
+                        onClick={() =>
+                          void act({ type: "setException", revision: s.revisionKey, date: extraException, skipped: true }, "Termin wird übersprungen").then(
+                            (o) => o.status === "ok" && setExtraException(""),
+                          )
+                        }
+                        data-testid="exception-add"
+                      >
+                        Diesen Termin überspringen
+                      </button>
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+            {history && history.some((h) => h.done.length || h.skipped.length) && (
+              <details className="history" data-testid="history">
+                <summary>
+                  <IconHistory size={16} /> Historie
+                </summary>
+                {history.map((h, i) => (
+                  <div key={i}>
+                    <div>{h.label}</div>
+                    <ul>
+                      {h.done.map((d) => (
+                        <li key={`c${d}`}>Vorkommen {parseKey(d) ? describeOccurrence(parseKey(d)!) : d} – erledigt</li>
+                      ))}
+                      {h.skipped.map((d) => (
+                        <li key={`s${d}`}>Vorkommen {parseKey(d) ? describeOccurrence(parseKey(d)!) : d} – übersprungen</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </details>
+            )}
           </div>
-        </div>
-      )}
-      {save === "conflict" && (
-        <div className="diag warn" data-testid="draft-conflict">
-          Die Datei wurde extern geändert, während du geschrieben hast. Dein Entwurf ist lokal gesichert.
-          {/* Datei-Version und eigener Entwurf bleiben sichtbar (7.3) */}
-          <details>
-            <summary>Unterschied Datei-Version → mein Entwurf</summary>
-            <div className="diff" data-testid="draft-conflict-diff">
-              {diffLines(t.body, body).map((p, i) => (
-                <span key={i} className={p.added ? "add" : p.removed ? "del" : ""}>
-                  {p.value}
+          <aside className="detail-side" aria-label="Eigenschaften">
+            <div className="side-field">
+              <div className="side-label">{T.fields.inbox}</div>
+              <label className="side-value toggle">
+                <IconInbox size={16} />
+                <span>{f.inbox ? "Im Eingang" : "Einsortiert"}</span>
+                <input
+                  type="checkbox"
+                  checked={f.inbox}
+                  disabled={ro}
+                  onChange={(e) => void act({ type: "setInbox", inbox: e.target.checked }, e.target.checked ? "Zurück in den Eingang" : "Einsortiert")}
+                  data-testid="field-inbox"
+                  aria-label="im Eingang"
+                />
+              </label>
+            </div>
+            <div className="side-field">
+              <div className="side-label">{T.fields.status}</div>
+              <div className="side-value">
+                <IconStatus size={16} />
+                <select
+                  value={f.status}
+                  disabled={ro}
+                  onChange={(e) => void act({ type: "setStatus", status: e.target.value as Status }, "Status geändert")}
+                  data-testid="field-status"
+                  aria-label={T.fields.status}
+                >
+                  {/* Bei Serien kein „Erledigt“: Erledigen und Beenden nur über die Serienknöpfe (Entscheidung 18.10.2026). */}
+                  {(["open", "in-progress", "done"] as Status[]).filter((x) => !(s && x === "done" && f.status !== "done")).map((x) => (
+                    <option key={x} value={x} disabled={!!s && x === "done"}>
+                      {T.status[x]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="side-field">
+              <div className="side-label">{T.fields.due}</div>
+              {dateEditor("due")}
+            </div>
+            <div className="side-field">
+              <div className="side-label">{T.fields.scheduled}</div>
+              {dateEditor("scheduled")}
+            </div>
+            <div className="side-field">
+              <div className="side-label">{T.fields.priority}</div>
+              <div className={`side-value prio-${f.priority}`}>
+                <IconFlag size={16} filled={f.priority !== "none"} />
+                <select
+                  ref={prioRef}
+                  value={f.priority}
+                  disabled={ro}
+                  onChange={(e) => void act({ type: "setPriority", priority: e.target.value as Priority }, "Priorität geändert")}
+                  data-testid="field-priority"
+                  aria-label={T.fields.priority}
+                >
+                  {(["none", "low", "normal", "high"] as Priority[]).map((x) => (
+                    <option key={x} value={x}>
+                      {T.priority[x]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="side-field">
+              <div className="side-label">Wiederholung</div>
+              <div className="side-value column">
+                <span className="side-text" data-testid="series-desc">
+                  <IconRepeat size={16} />
+                  {s ? (s.rule ? describeRule(s.rule, s.anchor) ?? s.raw : s.raw) : "keine"}
                 </span>
-              ))}
+                <div className="side-links">
+                  <button className="link-btn" disabled={ro} onClick={() => setEditRule("edit")} data-testid="edit-recurrence">
+                    {s ? "Regel bearbeiten" : "Wiederholung …"}
+                  </button>
+                  {s && (
+                    <button className="link-btn" disabled={ro} onClick={() => void act({ type: "removeRecurrence", revision: s.revisionKey }, "Wiederholung entfernt")}>
+                      Entfernen
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-          </details>
-          <div className="actions" style={{ padding: "6px 0 0" }}>
-            {(["mine", "file", "both"] as const).map((ch) => (
-              <button
-                key={ch}
-                className="btn"
-                data-testid={`resolve-${ch}`}
-                onClick={() =>
-                  void repo.resolveDraftConflict(ref, ch).then((o) => {
-                    onOutcome(o, "Konflikt gelöst");
-                    setSave(o.status === "ok" || o.status === "noop" ? "saved" : o.status === "conflict" ? "conflict" : "failed");
-                  })
-                }
-              >
-                {{ mine: "Meine Version", file: "Datei-Version", both: "Beide behalten" }[ch]}
-              </button>
-            ))}
-          </div>
+          </aside>
         </div>
-      )}
-      {tab === "edit" ? (
-        <MarkdownEditor value={body} docKey={ref} readOnly={ro} onChange={onBodyChange} onBlur={() => void flush()} />
-      ) : (
-        <div className="preview" data-testid="preview" onClick={onPreviewClick} dangerouslySetInnerHTML={{ __html: html }} />
-      )}
-      {editRule && (
-        <RecurrenceEditor
-          task={t}
-          series={s}
-          continueSeries={editRule === "continue"}
-          today={today}
-          defaultField={f.due ? "due" : f.scheduled ? "scheduled" : "due"}
-          onCancel={() => setEditRule(false)}
-          onSave={(action) => {
-            setEditRule(false);
-            void act(action, s ? "Regel geändert" : "Wiederholung angelegt");
-          }}
-        />
-      )}
+        {editRule && (
+          <RecurrenceEditor
+            task={t}
+            series={s}
+            continueSeries={editRule === "continue"}
+            today={today}
+            defaultField={f.due ? "due" : f.scheduled ? "scheduled" : "due"}
+            onCancel={() => setEditRule(false)}
+            onSave={(action) => {
+              setEditRule(false);
+              void act(action, s ? "Regel geändert" : "Wiederholung angelegt");
+            }}
+          />
+        )}
+      </div>
     </div>
   );
+
 }

@@ -1,6 +1,7 @@
 // Schnellerfassung (4.1): nur Titel nötig, Notiz optional; landet immer im Eingang ohne Termin.
 import { useEffect, useRef, useState } from "react";
 import { T } from "@markdoist/app";
+import { IconInbox } from "./Icons";
 
 interface Props {
   onCancel(): void;
@@ -18,7 +19,7 @@ export function Capture({ onCancel, onCapture }: Props) {
   return (
     <div className="modal-back" onClick={onCancel}>
       <div
-        className="modal"
+        className="modal quick-add"
         role="dialog"
         aria-label={T.actions.capture}
         onClick={(e) => e.stopPropagation()}
@@ -31,19 +32,25 @@ export function Capture({ onCancel, onCapture }: Props) {
         }}
         data-testid="capture"
       >
-        <h2>{T.actions.capture}</h2>
-        <input ref={input} placeholder="Titel" value={title} onChange={(e) => setTitle(e.target.value)} data-testid="capture-title" aria-label="Titel" />
-        <textarea placeholder="Notiz (optional)" rows={4} value={note} onChange={(e) => setNote(e.target.value)} data-testid="capture-note" aria-label="Notiz" />
-        <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+        <div className="qa-body">
+          <input ref={input} className="qa-title" placeholder="Aufgabenname" value={title} onChange={(e) => setTitle(e.target.value)} data-testid="capture-title" aria-label="Titel" />
+          <textarea className="qa-desc" placeholder="Beschreibung" rows={3} value={note} onChange={(e) => setNote(e.target.value)} data-testid="capture-note" aria-label="Notiz" />
+        </div>
+        <div className="qa-hint">
           Neue Aufgaben landen im Eingang, ohne Termin. <kbd>Enter</kbd> erfassen, <kbd>Shift</kbd>+<kbd>Enter</kbd> erfassen &amp; bearbeiten.
         </div>
-        <div className="buttons">
-          <button className="btn" onClick={onCancel}>Abbrechen</button>
+        <div className="qa-foot">
+          <span className="qa-chip">
+            <IconInbox size={16} /> {T.views.inbox}
+          </span>
+          <button className="btn" onClick={onCancel}>
+            Abbrechen
+          </button>
           <button className="btn" disabled={!title.trim()} onClick={() => submit(true)} data-testid="capture-edit">
             Erfassen &amp; bearbeiten
           </button>
           <button className="btn primary" disabled={!title.trim()} onClick={() => submit(false)} data-testid="capture-submit">
-            Erfassen
+            Aufgabe hinzufügen
           </button>
         </div>
       </div>
