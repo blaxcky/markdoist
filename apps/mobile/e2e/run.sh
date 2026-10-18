@@ -59,8 +59,9 @@ if [ $fail = 0 ]; then
   check "Kaputt.md" "title: ["
   check "Zahnarzt.md" "COUNT=5"
   check "Zahnarzt.md" "recurrence_anchor: calendar"
+  # AK-12: Serienaktionen legen keine Dateien an – 3 Seed-Dateien + 2 Erfassungen.
   n=$(adb shell ls "$DIR" | grep -c '\.md' || true)
-  echo "Dateien im Ordner: $n"
+  if [ "$n" = 5 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 5)"; fail=1; fi
   adb shell ls -a "$DIR" | grep -q 'todo-tmp' && { echo "FEHL Temp-Datei übrig"; fail=1; } || true
 fi
 exit $fail

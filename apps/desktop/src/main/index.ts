@@ -109,8 +109,13 @@ function registerIpc() {
   });
 
   // Ordnerbezogene Speicheroperationen; Referenzen werden im Adapter gegen den Ordner geprüft.
+  // Jeder Aufruf nennt seinen Ordner: Aufträge eines alten Repositorys schreiben nach einem
+  // Ordnerwechsel nie in den neuen Ordner (7.1, AK-36).
   const s = (name: string, fn: (...args: never[]) => Promise<unknown>) =>
-    ipcMain.handle(`storage:${name}`, (_e, ...args) => (fn as (...a: unknown[]) => Promise<unknown>)(...args));
+    ipcMain.handle(`storage:${name}`, (_e, folder: unknown, ...args) => {
+      if (folder !== settings.folder) throw new Error("Der Aufgabenordner wurde gewechselt – Vorgang verworfen");
+      return (fn as (...a: unknown[]) => Promise<unknown>)(...args);
+    });
   s("list", (scope: "tasks" | "trash") => requireAdapter().list(scope));
   s("read", (ref: string) => requireAdapter().read(ref));
   s("write", (ref: string, text: string, h: string) => requireAdapter().write(ref, text, h));

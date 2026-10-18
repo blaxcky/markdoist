@@ -22,7 +22,7 @@ function makeClock(): () => Clock {
 export const clock = makeClock();
 
 export function createRepository(folder: string): Repository {
-  return new Repository({ adapter: ipcAdapter(), kv: bridge().kv, folder, clock });
+  return new Repository({ adapter: ipcAdapter(folder), kv: bridge().kv, folder, clock });
 }
 
 export function useRepoState(repo: Repository): RepoState {
