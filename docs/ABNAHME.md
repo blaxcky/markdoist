@@ -107,6 +107,7 @@ Optimierungen: schneller Lesepfad für einfache Frontmatter (Auswerten 2 000 Dat
 ## M8 – Version 1.0
 
 - Version 1.0 über den Release-Workflow: **v1.0.8** und **v1.0.9** (Commit `24a25fa`) mit genau einer APK und einem RPM, v1.0.9 ist Latest.
+- **v1.0.10** (Commit `2aa6cc1`, 18.10.2026) mit den Nachträgen unten: genau eine APK und ein RPM, Latest. **Release-APK im Emulator:** v1.0.9 aus GitHub installiert, v1.0.10 per `adb install -r` als Update (versionCode 9 → 10), beide mit dem Zertifikat aus `MARKDOIST_CERT_SHA256`; danach **alle 11 Maestro-Flows und 13 Dateiprüfungen grün** gegen die Release-APK (`MAESTRO_DEV=false`). RPM v1.0.10 im Container `fedora:43`: `dnf install`/`dnf remove` erfolgreich, `UNLICENSED`, Desktop-Eintrag vorhanden.
 - **RPM v1.0.9 im Container `fedora:43` (18.10.2026, zweiter Rechner):** `dnf install` aus der Release-Datei erfolgreich, Version 1.0.9, Lizenz `UNLICENSED`, Desktop-Eintrag `markdoist.desktop`, `/usr/bin/markdoist`; `dnf remove` erfolgreich.
 
 ## Nachträge nach Abgleich mit der Spezifikation (18.10.2026)
