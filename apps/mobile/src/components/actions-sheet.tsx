@@ -1,11 +1,12 @@
 // Aktionen zu einer Aufgabe (Wischen nach links / langes Drücken): Einsortieren, Termin, Löschen.
-import { Modal, Pressable, Text, View } from "react-native";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { T, withDate } from "@markdoist/app";
 import { Temporal, type TaskView } from "@markdoist/core";
 import { systemClock, useRepo } from "../repo";
 import { useNotify } from "../notify";
 import { useTheme } from "../theme";
+import { Menu } from "./menu";
+import { CalendarIcon, ClockIcon, Glyph, InboxIcon } from "./icons";
 
 export function pickDate(initial: string | null, onPick: (date: string) => void) {
   const base = initial ? new Date(`${initial.slice(0, 10)}T12:00:00`) : new Date();
@@ -32,39 +33,37 @@ export function ActionsSheet({ view, today, onClose }: { view: TaskView | null; 
   const tz = systemClock().timeZone;
   const dueValue = (d: string) => withDate(view.task.data.due, d, tz);
   const schValue = (d: string) => withDate(view.task.data.scheduled, d, tz);
-  const item = (label: string, onPress: () => void, testID: string, danger = false) => (
-    <Pressable onPress={onPress} testID={testID} android_ripple={{ color: c.surfaceHigh }} style={{ paddingVertical: 14, paddingHorizontal: 20 }}>
-      <Text style={{ color: danger ? c.danger : c.fg, fontSize: 16 }}>{label}</Text>
-    </Pressable>
-  );
-  const run = (p: Promise<import("@markdoist/app").Outcome>, label: string) => {
-    onClose();
-    void p.then((o) => notify(o, label));
-  };
+  const run = (p: Promise<import("@markdoist/app").Outcome>, label: string) => void p.then((o) => notify(o, label));
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }} onPress={onClose}>
-        <View style={{ backgroundColor: c.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingVertical: 8, paddingBottom: 24 }}>
-          <Text numberOfLines={1} style={{ color: c.muted, paddingHorizontal: 20, paddingVertical: 8 }}>{f.title}</Text>
-          {f.inbox
-            ? item(T.actions.file, () => run(repo.perform(ref, { type: "setInbox", inbox: false }, "Einsortiert"), "Einsortiert"), "act-file")
-            : item(T.actions.toInbox, () => run(repo.perform(ref, { type: "setInbox", inbox: true }, "Zurück in den Eingang"), "Zurück in den Eingang"), "act-inbox")}
-          {item("Frist heute", () => run(repo.perform(ref, { type: "setDate", field: "due", value: dueValue(today.toString()) }, "Frist gesetzt"), "Frist gesetzt"), "act-due-today")}
-          {item("Frist wählen …", () => {
-            onClose();
+    <Menu
+      open
+      onClose={onClose}
+      title={f.title}
+      items={[
+        f.inbox
+          ? { label: T.actions.file, icon: <InboxIcon color={c.muted} size={17} />, testID: "act-file", onPress: () => run(repo.perform(ref, { type: "setInbox", inbox: false }, "Einsortiert"), "Einsortiert") }
+          : { label: T.actions.toInbox, icon: <InboxIcon color={c.muted} size={17} />, testID: "act-inbox", onPress: () => run(repo.perform(ref, { type: "setInbox", inbox: true }, "Zurück in den Eingang"), "Zurück in den Eingang") },
+        { label: "Frist heute", icon: <CalendarIcon color={c.toneToday} size={16} day={today.day} />, testID: "act-due-today", onPress: () => run(repo.perform(ref, { type: "setDate", field: "due", value: dueValue(today.toString()) }, "Frist gesetzt"), "Frist gesetzt") },
+        {
+          label: "Frist wählen …",
+          icon: <CalendarIcon color={c.muted} size={16} />,
+          testID: "act-due",
+          onPress: () =>
             pickDate(typeof view.task.data.due === "string" ? view.task.data.due : null, (d) =>
-              void repo.perform(ref, { type: "setDate", field: "due", value: dueValue(d) }, "Frist gesetzt").then((o) => notify(o, "Frist gesetzt")),
-            );
-          }, "act-due")}
-          {item("Einplanen …", () => {
-            onClose();
+              run(repo.perform(ref, { type: "setDate", field: "due", value: dueValue(d) }, "Frist gesetzt"), "Frist gesetzt"),
+            ),
+        },
+        {
+          label: "Einplanen …",
+          icon: <ClockIcon color={c.muted} size={16} />,
+          testID: "act-scheduled",
+          onPress: () =>
             pickDate(typeof view.task.data.scheduled === "string" ? view.task.data.scheduled : null, (d) =>
-              void repo.perform(ref, { type: "setDate", field: "scheduled", value: schValue(d) }, "Eingeplant").then((o) => notify(o, "Eingeplant")),
-            );
-          }, "act-scheduled")}
-          {item(T.actions.delete, () => run(repo.moveToTrash(ref), "Gelöscht"), "act-delete", true)}
-        </View>
-      </Pressable>
-    </Modal>
+              run(repo.perform(ref, { type: "setDate", field: "scheduled", value: schValue(d) }, "Eingeplant"), "Eingeplant"),
+            ),
+        },
+        { label: T.actions.delete, icon: <Glyph color={c.danger} size={17}>🗑</Glyph>, testID: "act-delete", danger: true, onPress: () => run(repo.moveToTrash(ref), "Gelöscht") },
+      ]}
+    />
   );
 }

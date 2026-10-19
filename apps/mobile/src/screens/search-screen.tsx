@@ -32,8 +32,8 @@ export function SearchScreen() {
   }, [state.index, q, includeDone, filter, sort, tz]);
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <View style={{ padding: 12, gap: 8 }}>
-        <TextInput autoFocus value={q} onChangeText={setQ} placeholder="Suchen" placeholderTextColor={c.muted} testID="search-input" style={{ borderWidth: 1, borderColor: c.outline, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, color: c.fg, fontSize: 16, backgroundColor: c.surface }} />
+      <View style={{ paddingHorizontal: 8, paddingVertical: 12, gap: 8 }}>
+        <TextInput autoFocus value={q} onChangeText={setQ} placeholder="Suchen" placeholderTextColor={c.muted} testID="search-input" cursorColor={c.primary} style={{ borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, color: c.fg, fontSize: 16, backgroundColor: c.surface }} />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Switch value={includeDone} onValueChange={setIncludeDone} trackColor={{ true: c.primary }} />
           <Text style={{ color: c.fg }}>inkl. erledigt</Text>
@@ -45,9 +45,12 @@ export function SearchScreen() {
         keyExtractor={(v) => v.task.ref}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={q.trim() ? <Text style={{ color: c.muted, textAlign: "center", padding: 30 }}>Keine Treffer.</Text> : null}
-        renderItem={({ item }) => (
+        contentContainerStyle={{ paddingBottom: 40 }}
+        renderItem={({ item, index }) => (
           <TaskRow
             view={item}
+            first={index === 0}
+            last={index === results.length - 1}
             today={state.index.today}
             tz={tz}
             onOpen={() => nav.navigate("Detail", { ref: item.task.ref })}

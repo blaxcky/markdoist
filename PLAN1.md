@@ -494,6 +494,8 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen sin
   - Keine systemweite Schnellerfassung [F, F008]. Erfasst wird im App-Fenster (`N`/Ctrl+N).
 - **Android:**
   - Untere Navigation (Eingang, Heute, Alle, Erledigt), Suche in der Kopfzeile, Plus-Button zum Erfassen, Ziehen nach unten zum Neueinlesen.
+  - Gestaltung nach den Vorlage-Screenshots vom 19.10.2026 (Todoist-ähnlich, wie der Desktop): warmer Grund, Aufgaben als weiße Karten, runde Haken in Prioritätsfarbe, Datum mit Kalendersymbol in Farbstufe, „Eingang“ rechts in der Zeile; Kopfzeile mit großer Überschrift und Aufgabenzahl, Suche, Anzeige (Filter/Sortierung) und ⋮-Menü (Neu einlesen, Probleme, Papierkorb, Einstellungen); aktive Ansicht in der unteren Leiste mit hinterlegter Pille; roter Plus-Button.
+  - Details und Erfassung als Blatt von unten über der Liste: Detail mit Eingang/Einsortiert und ⋮-Menü (Status, Wiederholung, Dateiname, Löschen), Titelkarte mit Haken, Terminzeilen, fehlende Eigenschaften als Chips (Beschreibung, Priorität, Frist, Geplant, Wiederholung), „Checklistenpunkt hinzufügen“; Erfassung mit Titelzeile, Chips und rotem Senden-Knopf über der Tastatur.
   - Wischgesten: nach rechts erledigt, nach links öffnet Aktionen (Einsortieren, Termin, Löschen).
   - Native Datums- und Zeitwahl. Die Uhrzeit bleibt hinter „Uhrzeit hinzufügen“ verborgen, bis man sie braucht (F005).
   - **App-Verknüpfung [F, F009]:** Langes Drücken auf das App-Symbol zeigt „Neue Aufgabe“. Das öffnet direkt den Erfassungsdialog; die Aufgabe landet wie jede Erfassung im Eingang. „Teilen an Markdoist“ kommt erst später, wenn gewünscht.

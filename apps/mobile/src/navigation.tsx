@@ -1,12 +1,12 @@
 // Navigation (Plan 4.5): untere Leiste Eingang/Heute/Alle/Erledigt, Stack für Detail und Dialoge.
-import { useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
+// Kopfzeilen der Listen zeichnet die Liste selbst (components/list-header).
+import type { ReactNode } from "react";
+import { View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { useNavigation, type LinkingOptions, type NavigatorScreenParams } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { LinkingOptions, NavigatorScreenParams } from "@react-navigation/native";
 import { T } from "@markdoist/app";
-import { inboxView, problemsView, todayView } from "@markdoist/core";
 import { ListScreen } from "./screens/list-screen";
 import { DetailScreen } from "./screens/detail-screen";
 import { CaptureScreen } from "./screens/capture-screen";
@@ -15,9 +15,10 @@ import { ProblemsScreen } from "./screens/problems-screen";
 import { TrashScreen } from "./screens/trash-screen";
 import { SettingsScreen } from "./screens/settings-screen";
 import { RecurrenceScreen } from "./screens/recurrence-screen";
-import { useRepo, useRepoState, systemClock } from "./repo";
+import { useRepoState } from "./repo";
 import { useTheme } from "./theme";
-import { filterActive, FilterProvider, FilterSheet, useFilter } from "./filter";
+import { FilterProvider, FilterSheet } from "./filter";
+import { CalendarIcon, CheckCircleIcon, GridIcon, InboxIcon } from "./components/icons";
 
 export type Tabs = { Inbox: undefined; Today: undefined; All: undefined; Done: undefined };
 export type RootStack = {
@@ -39,29 +40,12 @@ export const linking: LinkingOptions<RootStack> = {
   config: { screens: { Capture: "capture" } },
 };
 
-function HeaderButtons() {
-  const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
-  const state = useRepoState();
-  const repo = useRepo();
+/** Symbol der unteren Leiste; aktiv mit hinterlegter Pille wie in der Vorlage. */
+function TabIcon({ focused, children }: { focused: boolean; children: ReactNode }) {
   const c = useTheme();
-  const problems = useMemo(
-    () => problemsView(state.index).length + state.recovery.length + repo.pendingDrafts(5000).length,
-    [state.index, state.recovery, state.drafts, state.files, repo],
-  );
-  const f = useFilter();
-  const btn = (label: string, to: keyof RootStack, testID: string, color = c.fg) => (
-    <Pressable onPress={() => nav.navigate(to as never)} hitSlop={8} testID={testID} accessibilityLabel={testID} style={{ paddingHorizontal: 10 }}>
-      <Text style={{ fontSize: 20, color }}>{label}</Text>
-    </Pressable>
-  );
   return (
-    <View style={{ flexDirection: "row", alignItems: "center" }}>
-      {problems > 0 && btn(`⚠ ${problems}`, "Problems", "nav-problems", c.warn)}
-      <Pressable onPress={() => f.setOpen(true)} hitSlop={8} testID="nav-filter" accessibilityLabel="Filter und Sortierung" style={{ paddingHorizontal: 10 }}>
-        <Text style={{ fontSize: 20, color: filterActive(f.filter, f.sort, f.inboxNewest) ? c.primary : c.fg }}>▾</Text>
-      </Pressable>
-      {btn("⌕", "Search", "nav-search")}
-      {btn("⋮", "Settings", "nav-settings")}
+    <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={{ width: 56, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: focused ? c.primaryContainer : "transparent" }}>
+      {children}
     </View>
   );
 }
@@ -69,34 +53,43 @@ function HeaderButtons() {
 function TabsNav() {
   const c = useTheme();
   const state = useRepoState();
-  const tz = systemClock().timeZone;
-  const counts = useMemo(() => {
-    const t = todayView(state.index, tz);
-    return { inbox: inboxView(state.index, tz).length, today: t.due.length + t.plannedToday.length + t.plannedEarlier.length };
-  }, [state.index, tz]);
-  const icon = (s: string) => ({ color }: { color: string }) => <Text style={{ color, fontSize: 18 }}>{s}</Text>;
+  const day = state.index.today.day;
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       initialRouteName="Today"
       screenOptions={{
-        headerRight: () => <HeaderButtons />,
-        headerStyle: { backgroundColor: c.surface },
-        headerTintColor: c.fg,
-        tabBarStyle: { backgroundColor: c.surface, borderTopColor: c.outline },
+        headerShown: false,
+        sceneStyle: { backgroundColor: c.bg },
+        tabBarStyle: { backgroundColor: c.tabBar, borderTopWidth: 0, elevation: 0, height: 66 + insets.bottom, paddingTop: 8 },
         tabBarActiveTintColor: c.primary,
-        tabBarInactiveTintColor: c.muted,
+        tabBarInactiveTintColor: c.fg,
+        tabBarLabelStyle: { fontSize: 12, marginTop: 2, fontWeight: "400" },
+        tabBarIconStyle: { width: 56 },
       }}
     >
-      <Tab.Screen name="Inbox" options={{ title: T.views.inbox, tabBarIcon: icon("📥"), tabBarBadge: counts.inbox || undefined, tabBarButtonTestID: "tab-inbox" }}>
+      <Tab.Screen
+        name="Inbox"
+        options={{ title: T.views.inbox, tabBarIcon: ({ color, focused }) => <TabIcon focused={focused}><InboxIcon color={color} size={20} filled={focused} /></TabIcon>, tabBarButtonTestID: "tab-inbox" }}
+      >
         {() => <ListScreen kind="inbox" />}
       </Tab.Screen>
-      <Tab.Screen name="Today" options={{ title: T.views.today, tabBarIcon: icon("☀"), tabBarBadge: counts.today || undefined, tabBarButtonTestID: "tab-today" }}>
+      <Tab.Screen
+        name="Today"
+        options={{ title: T.views.today, tabBarIcon: ({ color, focused }) => <TabIcon focused={focused}><CalendarIcon color={color} size={20} day={day} filled={focused} /></TabIcon>, tabBarButtonTestID: "tab-today" }}
+      >
         {() => <ListScreen kind="today" />}
       </Tab.Screen>
-      <Tab.Screen name="All" options={{ title: "Alle", tabBarIcon: icon("☰"), tabBarButtonTestID: "tab-all" }}>
+      <Tab.Screen
+        name="All"
+        options={{ title: "Alle", tabBarIcon: ({ color, focused }) => <TabIcon focused={focused}><GridIcon color={color} size={20} /></TabIcon>, tabBarButtonTestID: "tab-all" }}
+      >
         {() => <ListScreen kind="all" />}
       </Tab.Screen>
-      <Tab.Screen name="Done" options={{ title: T.views.done, tabBarIcon: icon("✓"), tabBarButtonTestID: "tab-done" }}>
+      <Tab.Screen
+        name="Done"
+        options={{ title: T.views.done, tabBarIcon: ({ color, focused }) => <TabIcon focused={focused}><CheckCircleIcon color={color} size={20} /></TabIcon>, tabBarButtonTestID: "tab-done" }}
+      >
         {() => <ListScreen kind="done" />}
       </Tab.Screen>
     </Tab.Navigator>
@@ -119,12 +112,14 @@ function FilterSheetHost() {
 
 function RootStackNavigator() {
   const c = useTheme();
-  const opts = { headerStyle: { backgroundColor: c.surface }, headerTintColor: c.fg, contentStyle: { backgroundColor: c.bg } };
+  const opts = { headerStyle: { backgroundColor: c.bg }, headerShadowVisible: false, headerTintColor: c.fg, contentStyle: { backgroundColor: c.bg } };
+  const sheet = { headerShown: false, presentation: "transparentModal", animation: "fade", animationDuration: 180, contentStyle: { backgroundColor: "transparent" } } as const;
   return (
     <Stack.Navigator screenOptions={opts}>
       <Stack.Screen name="Main" component={TabsNav} options={{ headerShown: false }} />
-      <Stack.Screen name="Detail" component={DetailScreen} options={{ title: "Aufgabe" }} />
-      <Stack.Screen name="Capture" component={CaptureScreen} options={{ title: T.actions.capture, presentation: "modal" }} />
+      {/* Detail und Erfassung als Blatt über der Liste (Vorlage) */}
+      <Stack.Screen name="Detail" component={DetailScreen} options={sheet} />
+      <Stack.Screen name="Capture" component={CaptureScreen} options={sheet} />
       <Stack.Screen name="Search" component={SearchScreen} options={{ title: T.views.search }} />
       <Stack.Screen name="Problems" component={ProblemsScreen} options={{ title: T.views.problems }} />
       <Stack.Screen name="Trash" component={TrashScreen} options={{ title: T.views.trash }} />

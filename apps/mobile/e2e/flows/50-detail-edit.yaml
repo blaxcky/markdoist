@@ -6,6 +6,9 @@ appId: de.markdoist.aufgaben
 - tapOn:
     id: tab-inbox
 - tapOn: "Zahnarzttermin vereinbaren"
+# Priorität liegt hinter dem Chip „Priorität“ (Auswahlblatt).
+- tapOn:
+    id: field-priority
 - tapOn:
     id: priority-high
 # Die Snackbar „Priorität geändert“ liegt unten über dem Editor; erst danach ins Textfeld tippen.

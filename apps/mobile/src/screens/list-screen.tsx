@@ -1,6 +1,8 @@
 // Listenansichten (4.1–4.3): Eingang, Heute, Alle, Erledigt. Ziehen nach unten liest neu ein.
 import { useMemo, useState } from "react";
 import { Pressable, RefreshControl, Text, View } from "react-native";
+import { ListHeader } from "../components/list-header";
+import { PlusIcon } from "../components/icons";
 import { FlashList } from "@shopify/flash-list";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -18,8 +20,20 @@ export type ListKind = "inbox" | "today" | "all" | "done";
 
 type Item =
   | { type: "header"; key: string; title: string; count: number }
-  | { type: "task"; key: string; view: TaskView; scheduledHint?: boolean }
-  | { type: "occurrence"; key: string; view: TaskView; text: string };
+  | { type: "task"; key: string; view: TaskView; scheduledHint?: boolean; first?: boolean; last?: boolean }
+  | { type: "occurrence"; key: string; view: TaskView; text: string; first?: boolean; last?: boolean };
+
+/** Erste und letzte Zeile je Gruppe markieren (abgerundete Kartenecken). */
+function group(items: Item[]): Item[] {
+  return items.map((it, i) => {
+    if (it.type === "header") return it;
+    const prev = items[i - 1];
+    const next = items[i + 1];
+    return { ...it, first: !prev || prev.type === "header" || prev.type !== it.type, last: !next || next.type === "header" || next.type !== it.type };
+  });
+}
+
+const TITLES: Record<ListKind, string> = { inbox: T.views.inbox, today: T.views.today, all: T.views.all, done: T.views.done };
 
 export function ListScreen({ kind }: { kind: ListKind }) {
   const repo = useRepo();
@@ -32,7 +46,10 @@ export function ListScreen({ kind }: { kind: ListKind }) {
   const idx = state.index;
   const tz = systemClock().timeZone;
 
-  const items: Item[] = useMemo(() => {
+  const items: Item[] = useMemo(() => group(build()), [idx, kind, tz, filter, sort, inboxNewest]);
+  const count = items.filter((i) => i.type === "task").length;
+
+  function build(): Item[] {
     const tasks = (list: TaskView[], hint = false): Item[] =>
       sortViews(list.filter((v) => matchesFilter(v, filter, idx.today)), sort, tz).map((v) => ({
         type: "task",
@@ -70,7 +87,7 @@ export function ListScreen({ kind }: { kind: ListKind }) {
         return out;
       }
     }
-  }, [idx, kind, tz, filter, sort]);
+  }
 
   const toggle = (v: TaskView) => {
     const done = v.task.fields.status === "done";
@@ -79,26 +96,28 @@ export function ListScreen({ kind }: { kind: ListKind }) {
     );
   };
 
+  const banner = { marginHorizontal: 8, marginBottom: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: c.badge } as const;
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      {state.unverified && !state.scanProgress && <Text style={{ padding: 8, backgroundColor: c.badge, color: c.muted, fontSize: 12 }}>{T.unverified}</Text>}
+      <ListHeader title={TITLES[kind]} subtitle={count ? `${count} ${count === 1 ? "Aufgabe" : "Aufgaben"}` : undefined} />
+      {state.unverified && !state.scanProgress && <Text style={[banner, { color: c.muted, fontSize: 12 }]}>{T.unverified}</Text>}
       {state.scanProgress && state.scanProgress.total > 0 && (
-        <View style={{ flexDirection: "row", alignItems: "center", padding: 8, backgroundColor: c.badge, gap: 12 }} testID="scan-progress">
+        <View style={[banner, { flexDirection: "row", alignItems: "center", gap: 12 }]} testID="scan-progress">
           <Text style={{ color: c.muted, fontSize: 12, flex: 1, fontVariant: ["tabular-nums"] }}>
             Prüfe Dateien {state.scanProgress.done}/{state.scanProgress.total}
           </Text>
           <Pressable onPress={() => repo.cancelScan()} hitSlop={8}>
-            <Text style={{ color: c.primary, fontSize: 12 }}>Abbrechen</Text>
+            <Text style={{ color: c.primary, fontSize: 12, fontWeight: "600" }}>Abbrechen</Text>
           </Pressable>
         </View>
       )}
-      {state.readError && <Text selectable style={{ padding: 8, backgroundColor: c.badge, color: c.danger, fontSize: 12 }}>{state.readError}{state.stale ? " – letzter bekannter Stand, schreibgeschützt" : ""}</Text>}
+      {state.readError && <Text selectable style={[banner, { color: c.danger, fontSize: 12 }]}>{state.readError}{state.stale ? " – letzter bekannter Stand, schreibgeschützt" : ""}</Text>}
       <FlashList
         data={items}
         keyExtractor={(i) => i.key}
         getItemType={(i) => i.type}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        refreshControl={<RefreshControl refreshing={state.scanning} onRefresh={() => void repo.scan({ full: true })} />}
+        contentContainerStyle={{ paddingTop: 4, paddingBottom: 120 }}
+        refreshControl={<RefreshControl refreshing={state.scanning} onRefresh={() => void repo.scan({ full: true })} colors={[c.primary]} progressBackgroundColor={c.surface} />}
         ListEmptyComponent={
           <Text style={{ color: c.muted, textAlign: "center", padding: 40 }} testID="empty">
             {T.empty[kind]}
@@ -107,15 +126,19 @@ export function ListScreen({ kind }: { kind: ListKind }) {
         renderItem={({ item }) => {
           if (item.type === "header")
             return (
-              <Text style={{ color: c.muted, fontWeight: "600", fontSize: 13, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 6 }}>
-                {item.title.toUpperCase()} <Text style={{ fontWeight: "400", fontVariant: ["tabular-nums"] }}>{item.count}</Text>
+              <Text style={{ color: c.fg, fontWeight: "600", fontSize: 15, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10 }} accessibilityRole="header">
+                {item.title} <Text style={{ color: c.muted, fontWeight: "400", fontVariant: ["tabular-nums"] }}>{item.count}</Text>
               </Text>
             );
           if (item.type === "occurrence")
             return (
-              <Pressable onPress={() => nav.navigate("Detail", { ref: item.view.task.ref })} style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
-                <Text style={{ color: c.fg }}>{item.view.task.fields.title}</Text>
-                <Text style={{ color: c.muted, fontSize: 13 }}>{item.text}</Text>
+              <Pressable
+                onPress={() => nav.navigate("Detail", { ref: item.view.task.ref })}
+                android_ripple={{ color: c.surfaceHigh }}
+                style={{ marginHorizontal: 8, marginBottom: item.last ? 0 : 2, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: c.surface, borderTopLeftRadius: item.first ? 12 : 0, borderTopRightRadius: item.first ? 12 : 0, borderBottomLeftRadius: item.last ? 12 : 0, borderBottomRightRadius: item.last ? 12 : 0 }}
+              >
+                <Text style={{ color: c.fg, fontSize: 16 }}>{item.view.task.fields.title}</Text>
+                <Text style={{ color: c.muted, fontSize: 13, marginTop: 2 }}>{item.text}</Text>
               </Pressable>
             );
           return (
@@ -124,6 +147,9 @@ export function ListScreen({ kind }: { kind: ListKind }) {
               today={idx.today}
               tz={tz}
               scheduledHint={item.scheduledHint}
+              first={item.first}
+              last={item.last}
+              showInbox={kind !== "inbox"}
               onOpen={() => nav.navigate("Detail", { ref: item.view.task.ref })}
               onToggle={() => toggle(item.view)}
               onActions={() => setActions(item.view)}
@@ -135,9 +161,10 @@ export function ListScreen({ kind }: { kind: ListKind }) {
         onPress={() => nav.navigate("Capture")}
         testID="fab-capture"
         accessibilityLabel={T.actions.capture}
-        style={{ position: "absolute", right: 20, bottom: 24, width: 58, height: 58, borderRadius: 16, backgroundColor: c.primaryContainer, alignItems: "center", justifyContent: "center", boxShadow: "0 3px 8px rgba(0,0,0,0.25)" }}
+        android_ripple={{ color: "rgba(255,255,255,0.25)", borderless: false }}
+        style={{ position: "absolute", right: 16, bottom: 20, width: 56, height: 56, borderRadius: 16, backgroundColor: c.primary, alignItems: "center", justifyContent: "center", boxShadow: "0 3px 10px rgba(0,0,0,0.28)", overflow: "hidden" }}
       >
-        <Text style={{ fontSize: 30, color: c.fg, marginTop: -2 }}>+</Text>
+        <PlusIcon color={c.onPrimary} size={20} weight={2.4} />
       </Pressable>
       <ActionsSheet view={actions} today={idx.today} onClose={() => setActions(null)} />
     </View>
