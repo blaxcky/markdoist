@@ -25,7 +25,18 @@ export function Menu({ onClose, align = "right", className, label, children, tes
         e.stopPropagation();
         e.preventDefault();
         close.current();
+        return;
       }
+      // Eigene Tastaturbedienung (R9): Pfeile, Pos1 und Ende wandern zwischen den Einträgen.
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+      const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? [])];
+      if (!items.length) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const i = items.indexOf(document.activeElement as HTMLElement);
+      const n = items.length;
+      const next = e.key === "ArrowDown" ? items[(i + 1) % n] : e.key === "ArrowUp" ? items[(i - 1 + n) % n] : e.key === "Home" ? items[0] : items[n - 1];
+      next?.focus();
     };
     document.addEventListener("pointerdown", onDown, true);
     window.addEventListener("keydown", onKey, true);

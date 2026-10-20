@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { T, type Outcome, type Repository } from "@markdoist/app";
+import { T, toggleDoneAction, type Outcome, type Repository } from "@markdoist/app";
 import {
   allOpenView,
   doneView,
@@ -213,12 +213,11 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   };
   const selIndex = selectedView ? flat.findIndex((v) => v.task.ref === selectedView.task.ref) : -1;
 
+  // Aktion und Ziel beim Bedienereignis festhalten: bei Serien das angezeigte Vorkommen (R6).
   const toggleDone = useCallback(
     (v: TaskView) => {
-      const done = v.task.fields.status === "done";
-      void repo
-        .perform(v.task.ref, done ? { type: "reopen" } : { type: "complete" }, done ? "Wiederöffnet" : "Erledigt")
-        .then((o) => notify(o, done ? "Wiederöffnet" : "Erledigt"));
+      const { action, label } = toggleDoneAction(v);
+      void repo.perform(v.task.ref, action, label).then((o) => notify(o, label));
     },
     [repo, notify],
   );
@@ -236,6 +235,10 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
       const el = e.target as HTMLElement;
       const inField = el.closest("input, textarea, select, .cm-editor, [contenteditable]") !== null;
       const ctrl = e.ctrlKey || e.metaKey;
+      // Offene Menüs bedienen sich selbst; Aufgabenkürzel dürfen dort nicht die ausgewählte Aufgabe treffen (R9).
+      if (el.closest('[role="menu"]')) return;
+      // Leertaste und Enter auf einer fokussierten Schaltfläche lösen diese aus, nicht die Auswahl.
+      if ((e.key === " " || e.key === "Enter") && el.closest("button, a, summary")) return;
       // Offene Dialoge haben eigene Tastaturbedienung; im Detaildialog gelten die Aufgabenkürzel weiter.
       if (capture || help || document.querySelector('[aria-modal="true"]:not([data-detail])')) return;
       const detailOpen = open && !!selectedView;

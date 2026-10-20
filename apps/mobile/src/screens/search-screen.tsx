@@ -5,6 +5,7 @@ import { FlashList } from "@shopify/flash-list";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { matchesFilter, search, sortViews, type TaskView } from "@markdoist/core";
+import { toggleDoneAction } from "@markdoist/app";
 import { useFilter } from "../filter";
 import { TaskRow } from "../components/task-row";
 import { ActionsSheet } from "../components/actions-sheet";
@@ -55,8 +56,8 @@ export function SearchScreen() {
             tz={tz}
             onOpen={() => nav.navigate("Detail", { ref: item.task.ref })}
             onToggle={() => {
-              const done = item.task.fields.status === "done";
-              void repo.perform(item.task.ref, done ? { type: "reopen" } : { type: "complete" }).then((o) => notify(o, done ? "Wiederöffnet" : "Erledigt"));
+              const { action, label } = toggleDoneAction(item);
+              void repo.perform(item.task.ref, action, label).then((o) => notify(o, label));
             }}
             onActions={() => setActions(item)}
           />

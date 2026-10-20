@@ -403,3 +403,22 @@ test("Papierkorb leeren ist endgültig: kein „Rückgängig“ (4.4)", async ()
   await expect.poll(async () => (await readdir(join(folder, ".todo-trash"))).length).toBe(0);
   await expect(page.getByTestId("toast-undo")).toHaveCount(0);
 });
+
+test("Menü einer anderen Aufgabe: Leertaste trifft die Menüaufgabe, nicht die Auswahl (R9)", async () => {
+  await row("Zahnarzttermin vereinbaren").click();
+  await page.keyboard.press("Escape"); // Detail schließen, Auswahl bleibt auf A
+  await expect(row("Zahnarzttermin vereinbaren")).toHaveAttribute("aria-selected", "true");
+  const other = row("Bettwäsche wechseln");
+  await other.hover();
+  await other.getByRole("button", { name: "Weitere Aktionen" }).click();
+  const menu = page.getByRole("menu", { name: "Aufgabenaktionen" });
+  await expect(menu).toBeVisible();
+  // Der erste Eintrag („Erledigen“) hat den Fokus; Pfeil runter und wieder hoch prüfen die Menünavigation.
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowUp");
+  expect(await page.evaluate(() => document.activeElement?.textContent)).toContain("Erledigen");
+  await page.keyboard.press(" ");
+  await expect.poll(() => file("Bettwäsche.md")).toContain("status: done");
+  await expect(menu).toHaveCount(0);
+  expect(await file("Zahnarzt.md")).toContain("status: open");
+});

@@ -6,7 +6,7 @@ import { PlusIcon } from "../components/icons";
 import { FlashList } from "@shopify/flash-list";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { T } from "@markdoist/app";
+import { T, toggleDoneAction } from "@markdoist/app";
 import { allOpenView, describeOccurrence, doneView, inboxView, matchesFilter, sortViews, todayView, type TaskView } from "@markdoist/core";
 import { useFilter } from "../filter";
 import { TaskRow } from "../components/task-row";
@@ -89,11 +89,10 @@ export function ListScreen({ kind }: { kind: ListKind }) {
     }
   }
 
+  // Bei Serien das angezeigte Vorkommen mitgeben, damit ein zweites Tippen nicht das nächste trifft (R6).
   const toggle = (v: TaskView) => {
-    const done = v.task.fields.status === "done";
-    void repo.perform(v.task.ref, done ? { type: "reopen" } : { type: "complete" }, done ? "Wiederöffnet" : "Erledigt").then((o) =>
-      notify(o, done ? "Wiederöffnet" : "Erledigt"),
-    );
+    const { action, label } = toggleDoneAction(v);
+    void repo.perform(v.task.ref, action, label).then((o) => notify(o, label));
   };
 
   const banner = { marginHorizontal: 8, marginBottom: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: c.badge } as const;
