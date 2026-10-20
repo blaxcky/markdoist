@@ -57,6 +57,8 @@ export interface Draft {
   baseText: string;
   text: string;
   updatedAt: number;
+  /** steigt mit jedem saveDraft; ältere gespeicherte Entwürfe haben noch keine (R1) */
+  rev?: number;
   /** Hash der Dateifassung, mit der zuletzt ein Konflikt festgestellt wurde (7.3) */
   conflictHash?: string;
 }
@@ -927,8 +929,9 @@ export class Repository {
     if (existing) {
       existing.text = text;
       existing.updatedAt = Date.now();
+      existing.rev = (existing.rev ?? 0) + 1;
     } else {
-      this.drafts.push({ folder: this.folder, ref, id: f.fields.id, baseHash: f.hash, baseText: f.body, text, updatedAt: Date.now() });
+      this.drafts.push({ folder: this.folder, ref, id: f.fields.id, baseHash: f.hash, baseText: f.body, text, updatedAt: Date.now(), rev: 0 });
     }
     await this.saveDrafts();
     this.emit();
@@ -936,6 +939,23 @@ export class Repository {
 
   async discardDraft(ref: string): Promise<void> {
     this.drafts = this.drafts.filter((d) => d.ref !== ref);
+    await this.saveDrafts();
+    this.emit();
+  }
+
+  /**
+   * Nach erfolgreichem Schreiben der Entwurfsrevision `rev`: Entwurf nur entfernen, wenn inzwischen nicht
+   * weitergetippt wurde. Sonst bleibt der jüngere Entwurf erhalten; wurde in seine eigene Datei geschrieben
+   * (`wroteFile`), gilt der geschriebene Stand als neue Grundlage, damit kein falscher Konflikt entsteht (R1).
+   */
+  private async settleDraft(d: Draft, rev: number | undefined, wroteFile: boolean) {
+    if (!this.drafts.includes(d)) return;
+    if (d.rev === rev) return this.discardDraft(d.ref);
+    const f = this.files.get(d.ref);
+    if (!wroteFile || !f || f.kind !== "task") return;
+    d.baseHash = f.hash;
+    d.baseText = f.body;
+    delete d.conflictHash;
     await this.saveDrafts();
     this.emit();
   }
@@ -959,8 +979,9 @@ export class Repository {
       await this.markConflict(d, f.hash);
       return { status: "conflict", ref, message: "Datei wurde extern geändert", mine: d.text, theirs: f.body };
     }
+    const rev = d.rev;
     const r = await this.perform(ref, { type: "setBody", body: d.text }, "Notiz geändert");
-    if (r.status === "ok" || r.status === "noop") await this.discardDraft(ref);
+    if (r.status === "ok" || r.status === "noop") await this.settleDraft(d, rev, true);
     else if (r.status === "conflict") {
       await this.markConflict(d, this.files.get(ref)?.hash);
       return { ...r, mine: d.text };
@@ -989,8 +1010,9 @@ export class Repository {
     const f = this.files.get(ref);
     if (choice === "both" || !f || f.kind !== "task") return this.saveDraftAsNew(ref);
     if (!d.conflictHash) return this.commitDraft(ref);
+    const rev = d.rev;
     const r = await this.performWith(ref, { type: "setBody", body: d.text }, "Notiz geändert", d.conflictHash);
-    if (r.status === "ok" || r.status === "noop") await this.discardDraft(ref);
+    if (r.status === "ok" || r.status === "noop") await this.settleDraft(d, rev, true);
     else if (r.status === "conflict") {
       await this.markConflict(d, this.files.get(ref)?.hash);
       return { ...r, mine: d.text };
@@ -1072,8 +1094,9 @@ export class Repository {
     if (!d) return { status: "noop" };
     const f = this.files.get(ref);
     const t = title ?? (f && f.kind === "task" ? `${f.fields.title} (Entwurf)` : "Wiederhergestellter Entwurf");
+    const rev = d.rev;
     const r = await this.create({ title: t, note: d.text });
-    if (r.status === "ok") await this.discardDraft(ref);
+    if (r.status === "ok") await this.settleDraft(d, rev, false);
     return r;
   }
 }

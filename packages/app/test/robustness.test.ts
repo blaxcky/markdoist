@@ -1,7 +1,7 @@
 // Schreibschutz, Wiederherstellung, Konfliktentscheidungen und Entwürfe (Plan 4.4, 7.1, 7.3, 7.6).
 import { describe, expect, it } from "vitest";
 import { clockAtLocal, type Clock } from "@markdoist/core";
-import { MemoryAdapter, MemoryKeyValueStore, Repository, type ReadResult } from "../src";
+import { MemoryAdapter, MemoryKeyValueStore, Repository, type ReadResult, type WriteResult } from "../src";
 
 const TZ = "Europe/Berlin";
 const ID = "01K7C9V3QH2T8M4N6P0R5S1W9X";
@@ -23,12 +23,16 @@ function setup(adapter = new MemoryAdapter(), kv = new MemoryKeyValueStore()) {
   return { repo, adapter, kv, time };
 }
 
-/** Adapter, dessen nächster Lesezugriff erst nach Freigabe antwortet (deterministische Warteschlange). */
+/** Adapter, dessen nächster Lese- bzw. Schreibzugriff erst nach Freigabe antwortet (deterministische Warteschlange). */
 class GatedAdapter extends MemoryAdapter {
   private gate: Promise<void> | null = null;
+  private writeGate: Promise<void> | null = null;
   private open: () => void = () => {};
   holdNextRead() {
     this.gate = new Promise((r) => (this.open = r));
+  }
+  holdNextWrite() {
+    this.writeGate = new Promise((r) => (this.open = r));
   }
   release() {
     this.open();
@@ -38,6 +42,12 @@ class GatedAdapter extends MemoryAdapter {
     this.gate = null;
     if (g) await g;
     return super.read(ref);
+  }
+  override async write(ref: string, text: string, expectedHash: string): Promise<WriteResult> {
+    const g = this.writeGate;
+    this.writeGate = null;
+    if (g) await g;
+    return super.write(ref, text, expectedHash);
   }
 }
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -402,6 +412,51 @@ describe("7.6: fehlgeschlagenes Speichern", () => {
     expect(created).toContain("title: A (Entwurf)");
     expect(created).toContain("Kopie des Entwurfs");
     expect(created).toContain("inbox: true");
+    expect(repo.getState().drafts).toHaveLength(0);
+  });
+});
+
+describe("7.6: Weitertippen während des Speicherns (R1)", () => {
+  const body = (text: string) => text.slice(text.indexOf("\n---\n") + 5);
+  it("jüngerer Entwurf bleibt erhalten und wird beim nächsten commitDraft geschrieben", async () => {
+    const adapter = new GatedAdapter();
+    const { repo } = setup(adapter);
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    await repo.saveDraft("tasks/A.md", "First edit\n");
+    adapter.holdNextWrite();
+    const first = repo.commitDraft("tasks/A.md");
+    await tick();
+    await repo.saveDraft("tasks/A.md", "Second edit\n");
+    adapter.release();
+    expect((await first).status).toBe("ok");
+    expect(body(adapter.tasks.get("A.md")!.text)).toBe("First edit\n");
+    expect(repo.getState().drafts.map((d) => d.text)).toEqual(["Second edit\n"]);
+    expect(repo.pendingDrafts().map((d) => d.ref)).toEqual(["tasks/A.md"]);
+    // Grundlage fortgeschrieben: kein falscher Konflikt beim nächsten Schreiben.
+    expect((await repo.commitDraft("tasks/A.md")).status).toBe("ok");
+    expect(body(adapter.tasks.get("A.md")!.text)).toBe("Second edit\n");
+    expect(repo.getState().drafts).toHaveLength(0);
+  });
+  it("gilt auch für die Konfliktentscheidung „mine“", async () => {
+    const adapter = new GatedAdapter();
+    const { repo } = setup(adapter);
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    await repo.saveDraft("tasks/A.md", "First edit\n");
+    adapter.external("A.md", task("A").replace("Notiz", "Fremder Text"));
+    await repo.scan();
+    expect((await repo.commitDraft("tasks/A.md")).status).toBe("conflict");
+    adapter.holdNextWrite();
+    const first = repo.resolveDraftConflict("tasks/A.md", "mine");
+    await tick();
+    await repo.saveDraft("tasks/A.md", "Second edit\n");
+    adapter.release();
+    expect((await first).status).toBe("ok");
+    expect(body(adapter.tasks.get("A.md")!.text)).toBe("First edit\n");
+    expect(repo.getState().drafts.map((d) => d.text)).toEqual(["Second edit\n"]);
+    expect((await repo.commitDraft("tasks/A.md")).status).toBe("ok");
+    expect(body(adapter.tasks.get("A.md")!.text)).toBe("Second edit\n");
     expect(repo.getState().drafts).toHaveLength(0);
   });
 });

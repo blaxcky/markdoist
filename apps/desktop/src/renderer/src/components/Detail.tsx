@@ -103,7 +103,8 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
     if (!pending.current) return;
     pending.current = false;
     const o = await repo.commitDraft(ref);
-    if (o.status === "ok" || o.status === "noop") setSave("saved");
+    // Während des Schreibens weitergetippt: Der jüngere Text ist erst Entwurf, nicht gespeichert (R1).
+    if (o.status === "ok" || o.status === "noop") setSave((x) => (pending.current ? x : "saved"));
     else if (o.status === "conflict") {
       setSave("conflict");
       onOutcome(o, "Notiz");
