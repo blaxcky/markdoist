@@ -134,7 +134,8 @@ export function DetailScreen() {
     if (!pending.current) return;
     pending.current = false;
     const o = await repo.commitDraft(ref);
-    if (o.status === "ok" || o.status === "noop") setSave("saved");
+    // Während des Schreibens weitergetippt: Der jüngere Text ist erst Entwurf, nicht gespeichert (R1).
+    if (o.status === "ok" || o.status === "noop") setSave((x) => (pending.current ? x : "saved"));
     else {
       setSave(o.status === "conflict" ? "conflict" : "failed");
       notify(o, "Notiz");
