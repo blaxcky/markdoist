@@ -34,7 +34,7 @@ Du willst eine persönliche, lokal arbeitende Todo-App mit einer Markdown-Datei 
 | F007 Manuelle Reihenfolge | nein | 3.1, 4.3 |
 | F008 Globale Schnellerfassung (Desktop) | nein | 4.5 |
 | F009 Android-Schnellerfassung | ja, App-Verknüpfung „Neue Aufgabe“ am App-Symbol | 2.2, 4.5, 9 |
-| F010 Fedora-Paket | RPM, Installation per `dnf`; kein AppImage oder Flatpak | 10.1 |
+| F010 Fedora-Paket | RPM per `dnf` über das GitHub-Release; zusätzlich AppImage für die lokale Installation (Entscheidung vom 21.10.2026); kein Flatpak | 10.1 |
 | F011 Android-Auslieferung | GitHub baut die APK und stellt sie bereit; Installation am Handy über Obtainium; React Native mit Expo. Details siehe F015–F018. | 2, 8, 9, 10.2 |
 | F012 Sync | Ordner liegt am Handy unter `Documents/…`, Obsidian liest ihn mit; um die Synchronisation kümmert sich die App nicht | 1, 7.4, 7.5, 8 |
 | F013 Bestehende Dateien | kein automatischer Import; manuell hinzugefügte Dateien werden tolerant gelesen | 3.2, 7.1 |
@@ -818,9 +818,10 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 
 ## 10. Build-Plan
 
-### 10.1 Fedora (Electron, RPM) [F, F010]
+### 10.1 Fedora (Electron, RPM und AppImage) [F, F010]
 
-- **Format:** nur RPM, Installation per `dnf`. Kein AppImage und kein Flatpak; die App nutzt nur eine Person.
+- **Format:** RPM, Installation per `dnf`, dazu AppImage für die lokale Installation. Kein Flatpak; die App nutzt nur eine Person. Die ursprüngliche Antwort zu F010 lautete „nur RPM“; am 21.10.2026 hat der Nutzer das AppImage ausdrücklich bestätigt.
+- **AppImage lokal:** `pnpm desktop:install` baut `Markdoist.AppImage`, legt es unter `~/Applications` ab und schreibt Menüeintrag und Icon nach `~/.local/share` (`scripts/install-desktop-local.sh`). Das GitHub-Release baut weiterhin nur das RPM.
 - **Lokaler Build:**
   - Voraussetzungen: Node 22 und `rpm-build` sind vorhanden; pnpm kommt über `corepack enable`. Für das fpm-Werkzeug von electron-builder ist eventuell `libxcrypt-compat` nötig, was in M0 geprüft wird. Installationen sind erlaubt (F014).
   - Befehle: `pnpm install` → `pnpm --filter desktop build` → `pnpm --filter desktop dist`
