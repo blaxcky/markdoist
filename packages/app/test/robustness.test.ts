@@ -37,11 +37,29 @@ class GatedAdapter extends MemoryAdapter {
   release() {
     this.open();
   }
+  private staleGate: Promise<void> | null = null;
+  /** Referenzen, deren Bytes beim Lesen als ungültiges UTF-8 gemeldet werden (wie FsAdapter/SAF) */
+  readonly invalid = new Set<string>();
+  /** Nächsten Lesezugriff sofort ausführen, das Ergebnis aber erst nach Freigabe liefern (veraltetes Leseergebnis). */
+  holdNextReadStale() {
+    this.staleGate = new Promise((r) => (this.open = r));
+  }
   override async read(ref: string): Promise<ReadResult> {
+    const stale = this.staleGate;
+    this.staleGate = null;
+    if (stale) {
+      const r = await this.readNow(ref);
+      await stale;
+      return r;
+    }
     const g = this.gate;
     this.gate = null;
     if (g) await g;
-    return super.read(ref);
+    return this.readNow(ref);
+  }
+  private async readNow(ref: string): Promise<ReadResult> {
+    const r = await super.read(ref);
+    return this.invalid.has(ref) ? { ...r, invalidUtf8: true } : r;
   }
   override async write(ref: string, text: string, expectedHash: string): Promise<WriteResult> {
     const g = this.writeGate;
@@ -522,6 +540,150 @@ describe("AK-15: alte wartende Serienaktion nach Undo", () => {
     expect((await running).status).toBe("conflict");
     expect(adapter.writes).toBe(writes);
     expect(adapter.tasks.get("S.md")!.text).toBe(serie);
+  });
+});
+
+describe("7.3: Schreibvorprüfung erkennt ungültiges UTF-8 (R4)", () => {
+  // Der Adapter dekodiert ungültige Bytes verlustbehaftet und meldet invalidUtf8 (wie FsAdapter/SAF).
+  const lossy = `${task("A")}\uFFFD`;
+  it("unabhängige Metadatenänderung ohne vorherigen Abgleich schreibt nichts", async () => {
+    const adapter = new GatedAdapter();
+    const { repo } = setup(adapter);
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    adapter.external("A.md", lossy);
+    adapter.invalid.add("tasks/A.md");
+    const writes = adapter.writes;
+    const r = await repo.perform("tasks/A.md", { type: "setPriority", priority: "high" });
+    expect(r.status).not.toBe("ok");
+    expect(r).toMatchObject({ status: "conflict", message: expect.stringMatching(/ungültig/) });
+    expect(adapter.writes).toBe(writes);
+    expect(adapter.tasks.get("A.md")!.text).toBe(lossy);
+    expect(repo.getState().files.get("tasks/A.md")!.kind).toBe("invalid");
+    expect(repo.getState().undo).toHaveLength(0);
+  });
+  it("auch die Konfliktentscheidung „mine“ (strictHash) erkennt die ungültige Kodierung", async () => {
+    const adapter = new GatedAdapter();
+    const { repo } = setup(adapter);
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    await repo.saveDraft("tasks/A.md", "Mein Text\n");
+    adapter.external("A.md", task("A").replace("Notiz", "Fremder Text"));
+    await repo.scan();
+    expect((await repo.commitDraft("tasks/A.md")).status).toBe("conflict");
+    adapter.external("A.md", lossy);
+    adapter.invalid.add("tasks/A.md");
+    const writes = adapter.writes;
+    expect((await repo.resolveDraftConflict("tasks/A.md", "mine")).status).toBe("conflict");
+    expect(adapter.writes).toBe(writes);
+    expect(adapter.tasks.get("A.md")!.text).toBe(lossy);
+    expect(repo.getState().files.get("tasks/A.md")!.kind).toBe("invalid");
+    expect(repo.getState().drafts).toHaveLength(1);
+  });
+  it("aus dem Papierkorb wiederhergestellte Datei bleibt als ungültig geschützt", async () => {
+    const adapter = new GatedAdapter();
+    const { repo } = setup(adapter);
+    adapter.trash.set("T.md", { text: lossy, mtime: 1 });
+    adapter.invalid.add("trash/T.md");
+    adapter.invalid.add("tasks/T.md");
+    await repo.open();
+    expect((await repo.restoreFromTrash("trash/T.md")).status).toBe("ok");
+    expect(repo.getState().files.get("tasks/T.md")!.kind).toBe("invalid");
+    const writes = adapter.writes;
+    expect((await repo.perform("tasks/T.md", { type: "setPriority", priority: "high" })).status).not.toBe("ok");
+    expect(adapter.writes).toBe(writes);
+    expect(adapter.tasks.get("T.md")!.text).toBe(lossy);
+  });
+});
+
+describe("4.4: Undo bei gleichzeitiger Aktion (R5)", () => {
+  const ID_B = "01K7C9V3QH2T8M4N6P0R5S1W9Y";
+  it("entfernt genau den zurückgenommenen Eintrag, nicht den einer zwischenzeitlichen Aktion", async () => {
+    const adapter = new GatedAdapter();
+    const kv = new MemoryKeyValueStore();
+    const { repo } = setup(adapter, kv);
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    adapter.tasks.set("B.md", { text: task("B", "", ID_B), mtime: 1 });
+    await repo.open();
+    expect((await repo.perform("tasks/A.md", { type: "setPriority", priority: "high" })).status).toBe("ok");
+    adapter.holdNextRead();
+    const undoA = repo.undo();
+    await tick();
+    expect((await repo.perform("tasks/B.md", { type: "setPriority", priority: "low" })).status).toBe("ok");
+    adapter.release();
+    expect(await undoA).toMatchObject({ status: "ok" });
+    expect(adapter.tasks.get("A.md")!.text).toBe(task("A"));
+    expect(repo.getState().undo.map((e) => e.ref)).toEqual(["tasks/B.md"]);
+    expect((JSON.parse(kv.data.get("test:undo")!) as { ref: string }[]).map((e) => e.ref)).toEqual(["tasks/B.md"]);
+    expect(await repo.undo()).toMatchObject({ status: "ok" });
+    expect(adapter.tasks.get("B.md")!.text).toBe(task("B", "", ID_B));
+    expect(repo.getState().undo).toHaveLength(0);
+  });
+  it("Aktion auf derselben Datei wartet auf das laufende Undo und wird danach ausgeführt", async () => {
+    const adapter = new GatedAdapter();
+    const { repo } = setup(adapter);
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    expect((await repo.perform("tasks/A.md", { type: "setPriority", priority: "high" })).status).toBe("ok");
+    adapter.holdNextRead();
+    const undoA = repo.undo();
+    await tick();
+    const later = repo.perform("tasks/A.md", { type: "complete" });
+    await tick();
+    adapter.release();
+    expect(await undoA).toMatchObject({ status: "ok" });
+    expect((await later).status).toBe("ok");
+    const text = adapter.tasks.get("A.md")!.text;
+    expect(text).toContain("priority: none");
+    expect(text).toContain("status: done");
+    expect(repo.getState().undo).toHaveLength(1);
+  });
+});
+
+describe("7.1: Abgleich und gleichzeitige lokale Änderungen (R2)", () => {
+  it("Neuanlage während des Abgleichs bleibt im Index", async () => {
+    const adapter = new GatedAdapter();
+    const { repo } = setup(adapter);
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    adapter.holdNextRead();
+    const scan = repo.scan();
+    await tick();
+    expect(await repo.create({ title: "B" })).toMatchObject({ status: "ok", ref: "tasks/B.md" });
+    adapter.release();
+    await scan;
+    const s = repo.getState();
+    expect([...s.files.keys()].sort()).toEqual(["tasks/A.md", "tasks/B.md"]);
+    expect(s.index.tasks.map((t) => t.task.fields.title).sort()).toEqual(["A", "B"]);
+    expect(s.readError).toBeNull();
+  });
+  it("älteres Leseergebnis überschreibt keinen jüngeren lokal geschriebenen Stand", async () => {
+    const adapter = new GatedAdapter();
+    const { repo } = setup(adapter);
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    adapter.holdNextReadStale();
+    const scan = repo.scan();
+    await tick();
+    expect((await repo.perform("tasks/A.md", { type: "setPriority", priority: "high" })).status).toBe("ok");
+    adapter.release();
+    await scan;
+    const f = repo.getState().files.get("tasks/A.md")!;
+    expect(f.text).toBe(adapter.tasks.get("A.md")!.text);
+    expect(f.text).toContain("priority: high");
+  });
+  it("Umbenennung während des Abgleichs: neuer Ort bleibt, alter kehrt nicht zurück", async () => {
+    const adapter = new GatedAdapter();
+    const { repo } = setup(adapter);
+    adapter.tasks.set("alt.md", { text: task("Neu"), mtime: 1 });
+    await repo.open();
+    adapter.holdNextReadStale();
+    const scan = repo.scan();
+    await tick();
+    expect(await repo.renameToTitle("tasks/alt.md")).toMatchObject({ status: "ok", ref: "tasks/Neu.md" });
+    adapter.release();
+    await scan;
+    expect([...repo.getState().files.keys()]).toEqual(["tasks/Neu.md"]);
   });
 });
 

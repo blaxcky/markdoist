@@ -144,10 +144,18 @@ export class Repository {
   private scanProgress: RepoState["scanProgress"] = null;
   private cacheLoadMs: number | null = null;
   private scanCancelled = false;
+  /** während eines Abgleichdurchgangs lokal geänderte Referenzen (R2) */
+  private touchedDuringScan: Set<string> | null = null;
   private listeners = new Set<() => void>();
   private queues = new Map<string, Promise<unknown>>();
-  /** Generation je Datei: Undo/Ordnerwechsel machen wartende Aufträge ungültig */
-  private generations = new Map<string, number>();
+  /** laufende Nummer jedes eingereihten Auftrags */
+  private seq = 0;
+  /** Grenze je Datei: Aufträge bis zu dieser Nummer verwirft Undo, Verschieben oder Ordnerwechsel */
+  private cutoffs = new Map<string, number>();
+  /** laufende Rücknahme je Datei; später eingereihte Aufträge derselben Datei warten darauf (R5) */
+  private undoing = new Map<string, Promise<void>>();
+  /** Rücknahmen laufen nacheinander: Auswahl und Ausführung eines Eintrags bilden eine Einheit (R5) */
+  private undoChain: Promise<unknown> = Promise.resolve();
   private closed = false;
   private state: RepoState;
 
@@ -256,7 +264,7 @@ export class Repository {
 
   close() {
     this.closed = true;
-    for (const k of this.generations.keys()) this.bump(k);
+    for (const k of this.queues.keys()) this.bump(k);
   }
 
   private async loadCache() {
@@ -268,12 +276,21 @@ export class Repository {
         text: string;
         hash: string;
         parsed?: { data: Record<string, YamlValue>; hasAnchors: boolean };
+        invalidUtf8?: boolean;
       }[];
       for (const e of entries) {
         this.metas.set(e.meta.ref, e.meta);
         this.files.set(
           e.meta.ref,
-          readTaskFile({ ref: e.meta.ref, name: e.meta.name, text: e.text, hash: e.hash, mtime: e.meta.mtime, preParsed: e.parsed }),
+          readTaskFile({
+            ref: e.meta.ref,
+            name: e.meta.name,
+            text: e.text,
+            hash: e.hash,
+            mtime: e.meta.mtime,
+            preParsed: e.parsed,
+            invalidUtf8: e.invalidUtf8,
+          }),
         );
       }
       this.unverified = true;
@@ -290,6 +307,8 @@ export class Repository {
       text: f.text,
       hash: f.hash,
       ...(f.kind === "task" ? { parsed: { data: f.data, hasAnchors: f.hasAnchors } } : {}),
+      // Ungültige Kodierung auch aus dem Cache als solche zeigen (R4).
+      ...(f.kind === "invalid" && f.diagnostics.some((d) => d.code === "invalid-utf8") ? { invalidUtf8: true } : {}),
     }));
     try {
       await this.kv.set(this.key("cache"), JSON.stringify(entries));
@@ -341,89 +360,131 @@ export class Repository {
 
   private async doScan(full: boolean) {
     const t0 = Date.now();
-    let metas: FileMeta[];
-    try {
-      metas = (await this.adapter.list("tasks")).filter(isTaskFileName);
-    } catch (e) {
-      // Fehler sind keine Löschungen: letzter Stand bleibt sichtbar, aber schreibgeschützt.
-      this.readError = `Ordner konnte nicht gelesen werden: ${errMessage(e)}`;
-      this.stale = true;
-      return;
+    const first = await this.scanOnce(full);
+    if (!first) return;
+    let failures = first.readFailures;
+    // Dateien, die während des Abgleichs lokal angelegt, umbenannt oder geschrieben wurden, gezielt
+    // nachlesen: Ihr lokaler Stand war jünger als das Abgleichergebnis (R2).
+    for (let i = 0, pending = first.pending; pending && i < MAX_ATTEMPTS; i++) {
+      const next = await this.scanOnce(false);
+      if (!next) return;
+      failures += next.readFailures;
+      pending = next.pending;
     }
-    this.stale = false;
-    try {
-      this.trash = (await this.adapter.list("trash")).filter((m) => m.name.toLowerCase().endsWith(".md"));
-    } catch {
-      /* Papierkorb fehlt oder ist nicht lesbar */
-    }
-    const known = new Set(this.files.keys());
-    const seen = new Set<string>();
-    const toRead: FileMeta[] = [];
-    for (const m of metas) {
-      seen.add(m.ref);
-      const old = this.metas.get(m.ref);
-      const knownFile = this.files.get(m.ref);
-      const changed =
-        !old || !knownFile || m.mtime === null || m.size === null || old.mtime !== m.mtime || old.size !== m.size;
-      if (full || changed) toRead.push(m);
-      else this.metas.set(m.ref, m);
-    }
-    let readFailures = 0;
-    let readMs = 0;
-    let lastProgress = 0;
-    let parseMs = 0;
-    this.scanProgress = { done: 0, total: toRead.length };
-    for (let i = 0; i < toRead.length; i += this.batchSize) {
-      if (this.closed) return;
-      if (this.scanCancelled) {
-        // Abgebrochen: nichts entfernen, Anzeige bleibt als ungeprüft markiert.
-        this.readError = "Abgleich abgebrochen – Anzeige ist nicht vollständig geprüft";
-        return;
-      }
-      const batch = toRead.slice(i, i + this.batchSize);
-      const tRead = Date.now();
-      // Stapelweise lesen, wenn der Adapter das kann (SAF: ein Native-Aufruf je Stapel).
-      const results: (ReadResult | null)[] = this.adapter.readMany
-        ? await this.adapter.readMany(batch.map((m) => m.ref))
-        : await Promise.all(batch.map((m) => this.adapter.read(m.ref).catch(() => null)));
-      readMs += Date.now() - tRead;
-      const tParse = Date.now();
-      batch.forEach((m, j) => {
-        const r = results[j];
-        if (!r) {
-          readFailures++;
-          return;
-        }
-        const mtime = r.mtime ?? m.mtime;
-        this.metas.set(m.ref, { ...m, mtime });
-        this.files.set(
-          m.ref,
-          readTaskFile({ ref: m.ref, name: m.name, text: r.text, hash: r.hash, mtime, invalidUtf8: r.invalidUtf8 }),
-        );
-      });
-      parseMs += Date.now() - tParse;
-      this.scanProgress = { done: Math.min(i + this.batchSize, toRead.length), total: toRead.length };
-      // Fortschritt höchstens alle 300 ms melden; jede Meldung lässt die Oberfläche rendern.
-      if (toRead.length > this.batchSize && Date.now() - lastProgress >= 300) {
-        lastProgress = Date.now();
-        this.progressOnly = true;
-        try {
-          this.emit();
-        } finally {
-          this.progressOnly = false;
-        }
-      }
-    }
-    const gone = [...this.files.keys()].filter((ref) => !seen.has(ref));
-    if (gone.length) await this.followRenames(gone, known);
-    for (const ref of gone) {
-      this.files.delete(ref);
-      this.metas.delete(ref);
-    }
-    this.readError = readFailures ? `${readFailures} Datei(en) konnten nicht gelesen werden` : null;
-    if (full && !readFailures) this.unverified = false;
-    this.lastScan = { files: metas.length, read: toRead.length, ms: Date.now() - t0, full, readMs, parseMs };
+    this.readError = failures ? `${failures} Datei(en) konnten nicht gelesen werden` : null;
+    if (full && !first.readFailures) this.unverified = false;
+    this.lastScan = { ...first.stats, ms: Date.now() - t0, full };
     await this.saveCache();
+  }
+
+  /**
+   * Ein Abgleichdurchgang. null bei Abbruch oder nicht lesbarem Ordner (readError ist dann gesetzt).
+   * `pending`: Dateien wurden während des Durchgangs lokal geändert; ihr Stand blieb unangetastet,
+   * ihre Metadaten gelten als unbekannt, damit ein Teilabgleich sie erneut liest (R2).
+   */
+  private async scanOnce(full: boolean): Promise<{
+    pending: boolean;
+    readFailures: number;
+    stats: { files: number; read: number; readMs: number; parseMs: number };
+  } | null> {
+    const touched = new Set<string>();
+    this.touchedDuringScan = touched;
+    try {
+      let metas: FileMeta[];
+      try {
+        metas = (await this.adapter.list("tasks")).filter(isTaskFileName);
+      } catch (e) {
+        // Fehler sind keine Löschungen: letzter Stand bleibt sichtbar, aber schreibgeschützt.
+        this.readError = `Ordner konnte nicht gelesen werden: ${errMessage(e)}`;
+        this.stale = true;
+        return null;
+      }
+      this.stale = false;
+      try {
+        this.trash = (await this.adapter.list("trash")).filter((m) => m.name.toLowerCase().endsWith(".md"));
+      } catch {
+        /* Papierkorb fehlt oder ist nicht lesbar */
+      }
+      const known = new Set(this.files.keys());
+      const seen = new Set<string>();
+      const toRead: FileMeta[] = [];
+      for (const m of metas) {
+        seen.add(m.ref);
+        if (touched.has(m.ref)) continue;
+        const old = this.metas.get(m.ref);
+        const knownFile = this.files.get(m.ref);
+        const changed =
+          !old || !knownFile || m.mtime === null || m.size === null || old.mtime !== m.mtime || old.size !== m.size;
+        if (full || changed) toRead.push(m);
+        else this.metas.set(m.ref, m);
+      }
+      let readFailures = 0;
+      let readMs = 0;
+      let lastProgress = 0;
+      let parseMs = 0;
+      this.scanProgress = { done: 0, total: toRead.length };
+      for (let i = 0; i < toRead.length; i += this.batchSize) {
+        if (this.closed) return null;
+        if (this.scanCancelled) {
+          // Abgebrochen: nichts entfernen, Anzeige bleibt als ungeprüft markiert.
+          this.readError = "Abgleich abgebrochen – Anzeige ist nicht vollständig geprüft";
+          return null;
+        }
+        const batch = toRead.slice(i, i + this.batchSize);
+        const tRead = Date.now();
+        // Stapelweise lesen, wenn der Adapter das kann (SAF: ein Native-Aufruf je Stapel).
+        const results: (ReadResult | null)[] = this.adapter.readMany
+          ? await this.adapter.readMany(batch.map((m) => m.ref))
+          : await Promise.all(batch.map((m) => this.adapter.read(m.ref).catch(() => null)));
+        readMs += Date.now() - tRead;
+        const tParse = Date.now();
+        batch.forEach((m, j) => {
+          // Inzwischen lokal geändert: Das Leseergebnis kann älter sein und überschreibt nichts (R2).
+          if (touched.has(m.ref)) return;
+          const r = results[j];
+          if (!r) {
+            readFailures++;
+            return;
+          }
+          const mtime = r.mtime ?? m.mtime;
+          this.metas.set(m.ref, { ...m, mtime });
+          this.files.set(m.ref, fileFromRead(m.ref, m.name, r, mtime));
+        });
+        parseMs += Date.now() - tParse;
+        this.scanProgress = { done: Math.min(i + this.batchSize, toRead.length), total: toRead.length };
+        // Fortschritt höchstens alle 300 ms melden; jede Meldung lässt die Oberfläche rendern.
+        if (toRead.length > this.batchSize && Date.now() - lastProgress >= 300) {
+          lastProgress = Date.now();
+          this.progressOnly = true;
+          try {
+            this.emit();
+          } finally {
+            this.progressOnly = false;
+          }
+        }
+      }
+      // Die Verzeichnisliste stammt vom Beginn des Durchgangs: Lokal seither angelegte oder
+      // umbenannte Dateien fehlen darin und sind nicht verschwunden (R2).
+      const gone = [...this.files.keys()].filter((ref) => !seen.has(ref) && !touched.has(ref));
+      if (gone.length) await this.followRenames(gone, new Set([...known, ...touched]));
+      for (const ref of gone) {
+        if (touched.has(ref)) continue;
+        this.files.delete(ref);
+        this.metas.delete(ref);
+      }
+      for (const ref of touched) {
+        const f = this.files.get(ref);
+        if (f) this.metas.set(ref, { ref, name: f.name, mtime: null, size: null });
+        else this.metas.delete(ref);
+      }
+      return {
+        pending: touched.size > 0,
+        readFailures,
+        stats: { files: metas.length, read: toRead.length, readMs, parseMs },
+      };
+    } finally {
+      if (this.touchedDuringScan === touched) this.touchedDuringScan = null;
+    }
   }
 
   /**
@@ -497,18 +558,21 @@ export class Repository {
   // -------------------------------------------------------------------------
   // Serialisierung je Datei
 
-  private bump(ref: string) {
-    this.generations.set(ref, (this.generations.get(ref) ?? 0) + 1);
+  /** Alle bis `upTo` eingereihten, noch wartenden Aufträge dieser Datei verwerfen. */
+  private bump(ref: string, upTo = this.seq) {
+    this.cutoffs.set(ref, Math.max(this.cutoffs.get(ref) ?? 0, upTo));
   }
 
   private enqueue<T>(ref: string, job: () => Promise<T>): Promise<T | Outcome> {
-    const gen = this.generations.get(ref) ?? 0;
+    const seq = ++this.seq;
     const prev = this.queues.get(ref) ?? Promise.resolve();
     const next = prev
       .catch(() => undefined)
       .then(async () => {
+        // Eine laufende Rücknahme auf derselben Datei zuerst abschließen lassen (R5).
+        for (let u = this.undoing.get(ref); u; u = this.undoing.get(ref)) await u;
         if (this.closed) return { status: "blocked", message: "Ordner wurde gewechselt" } as Outcome;
-        if ((this.generations.get(ref) ?? 0) !== gen) {
+        if (seq <= (this.cutoffs.get(ref) ?? 0)) {
           return { status: "blocked", message: "Auftrag verworfen (Undo oder Ordnerwechsel)" } as Outcome;
         }
         return job();
@@ -578,14 +642,16 @@ export class Repository {
       }
       if (strictHash !== undefined && (fresh.hash !== strictHash || base.hash !== strictHash)) {
         // Inzwischen eine weitere Änderung: erneut entscheiden lassen, nichts übergehen.
-        this.files.set(ref, readTaskFile({ ref, name: base.name, text: fresh.text, hash: fresh.hash, mtime: fresh.mtime }));
+        this.putFile(ref, fileFromRead(ref, base.name, fresh));
         this.emit();
         return { status: "conflict", ref, message: "Die Datei wurde seit dem Vergleich erneut geändert", theirs: fresh.text };
       }
-      if (fresh.hash !== base.hash) {
-        const ft = readTaskFile({ ref, name: base.name, text: fresh.text, hash: fresh.hash, mtime: fresh.mtime });
+      // Ungültige Kodierung löst auch bei gleichem Hash den Schreibschutz aus: Der dekodierte Text
+      // enthält Ersatzzeichen und darf nie zurückgeschrieben werden (R4).
+      if (fresh.hash !== base.hash || fresh.invalidUtf8) {
+        const ft = fileFromRead(ref, base.name, fresh);
         if (ft.kind !== "task") {
-          this.files.set(ref, ft);
+          this.putFile(ref, ft);
           this.emit();
           return { status: "conflict", ref, message: "Datei wurde extern ungültig geändert" };
         }
@@ -593,7 +659,7 @@ export class Repository {
         const deps = actionDependencies(action, plan);
         const independent =
           deps.fields.every((k) => deepEqual(base.data[k], ft.data[k])) && (!deps.body || base.body === ft.body);
-        this.files.set(ref, ft);
+        this.putFile(ref, ft);
         if (plan2.kind === "noop") {
           this.emit();
           return { status: "noop" };
@@ -625,10 +691,27 @@ export class Repository {
     return { status: "conflict", ref, message: "Datei ändert sich laufend – bitte erneut versuchen" };
   }
 
-  private setFile(ref: string, name: string, text: string, hash: string) {
-    const mtime = Date.now();
-    this.files.set(ref, readTaskFile({ ref, name, text, hash, mtime }));
+  private setFile(ref: string, name: string, text: string, hash: string, invalidUtf8?: boolean) {
+    this.putFile(ref, fileFromRead(ref, name, { text, hash, mtime: Date.now(), invalidUtf8 }));
     this.metas.set(ref, { ref, name, mtime: null, size: null }); // unbekannt → nächster Abgleich liest
+  }
+
+  /** Lokal festgestellter Stand einer Datei; ein gleichzeitig laufender Abgleich überschreibt ihn nicht (R2). */
+  private putFile(ref: string, f: IndexedFile) {
+    this.files.set(ref, f);
+    this.touch(ref);
+  }
+
+  /** Datei lokal aus dem Index nehmen (verschoben oder umbenannt); ebenfalls vor laufendem Abgleich geschützt (R2). */
+  private dropFile(ref: string) {
+    this.files.delete(ref);
+    this.metas.delete(ref);
+    this.touch(ref);
+  }
+
+  /** Lokale Änderung an einer Datei während eines laufenden Abgleichs vormerken (R2). */
+  private touch(ref: string) {
+    this.touchedDuringScan?.add(ref);
   }
 
   /** Neue Eingangsaufgabe (4.1). Übernimmt keinen Termin aus der Ansicht. */
@@ -708,8 +791,7 @@ export class Repository {
       if (res.status !== "ok") {
         return this.failed(res);
       }
-      this.files.delete(ref);
-      this.metas.delete(ref);
+      this.dropFile(ref);
       this.bump(ref);
       await this.pushUndo({ id: this.newId(), kind: "trash", label: "Gelöscht", ref: res.ref, afterHash: res.hash });
       await this.refreshTrash();
@@ -729,7 +811,7 @@ export class Repository {
     }
     const res = await this.adapter.restoreFromTrash(trashRef, read.hash);
     if (res.status !== "ok") return this.failed(res);
-    this.setFile(res.ref, res.name, read.text, res.hash);
+    this.setFile(res.ref, res.name, read.text, res.hash, read.invalidUtf8);
     await this.pushUndo({ id: this.newId(), kind: "restore", label: "Wiederhergestellt", ref: res.ref, afterHash: res.hash });
     await this.refreshTrash();
     this.emit();
@@ -793,8 +875,7 @@ export class Repository {
       if (res.status !== "ok") {
         return this.failed(res);
       }
-      this.files.delete(ref);
-      this.metas.delete(ref);
+      this.dropFile(ref);
       this.bump(ref);
       this.setFile(res.ref, res.name, f.text, res.hash);
       // Eigene Umbenennung: Undo-Einträge behalten ihren Ort, das Rückgängigmachen stellt ihn wieder her.
@@ -836,8 +917,7 @@ export class Repository {
       if (!f) continue;
       const res = await this.adapter.moveToTrash(ref, f.hash);
       if (res.status === "ok") {
-        this.files.delete(ref);
-        this.metas.delete(ref);
+        this.dropFile(ref);
       } else {
         failed++;
         this.noteFailure(res);
@@ -864,46 +944,72 @@ export class Repository {
     await this.kv.set(this.key("undo"), JSON.stringify(this.undoStack));
   }
 
-  async undo(): Promise<Outcome> {
+  undo(): Promise<Outcome> {
+    const run = this.undoChain.catch(() => undefined).then(() => this.doUndo());
+    this.undoChain = run;
+    return run;
+  }
+
+  /**
+   * Nimmt den zuletzt angelegten Eintrag zurück und entfernt genau diesen Eintrag (R5), auch wenn
+   * währenddessen weitere Aktionen Einträge angelegt haben. Aufträge derselben Datei, die vor der
+   * Rücknahme eingereiht wurden und noch warten, werden verworfen (AK-15); später eingereihte warten
+   * auf die Rücknahme und laufen danach auf dem zurückgenommenen Stand.
+   */
+  private async doUndo(): Promise<Outcome> {
     const e = this.undoStack[this.undoStack.length - 1];
     if (!e) return { status: "noop" };
-    const block = this.writeBlock(e.ref);
+    const ref = e.ref;
+    const block = this.writeBlock(ref);
     if (block) return block;
-    let current;
+    const startSeq = this.seq;
+    let done = () => {};
+    const lock = new Promise<void>((r) => (done = r));
+    this.undoing.set(ref, lock);
     try {
-      current = await this.adapter.read(e.ref);
-    } catch {
-      return { status: "blocked", message: "Rückgängig nicht möglich: Datei fehlt" };
+      let current;
+      try {
+        current = await this.adapter.read(ref);
+      } catch {
+        return { status: "blocked", message: "Rückgängig nicht möglich: Datei fehlt" };
+      }
+      if (current.hash !== e.afterHash) {
+        return { status: "blocked", message: "Rückgängig nicht möglich: Datei wurde seitdem geändert" };
+      }
+      this.bump(ref, startSeq); // vor der Rücknahme wartende Aufträge auf dieser Datei verwerfen
+      let res: WriteResult;
+      switch (e.kind) {
+        case "edit":
+          res = await this.adapter.write(ref, e.beforeText ?? "", e.afterHash);
+          break;
+        case "create":
+          res = await this.adapter.moveToTrash(ref, e.afterHash);
+          break;
+        case "trash":
+          res = await this.adapter.restoreFromTrash(ref, e.afterHash);
+          break;
+        case "restore":
+          res = await this.adapter.moveToTrash(ref, e.afterHash);
+          break;
+        case "rename":
+          res = await this.adapter.rename(ref, e.beforeName ?? "", e.afterHash);
+          break;
+      }
+      if (res.status !== "ok") {
+        return this.failed(res);
+      }
+      // Ein laufender Abgleich darf keinen vor der Rücknahme gelesenen Stand übernehmen (R2).
+      this.touch(ref);
+      this.touch(res.ref);
+      const i = this.undoStack.indexOf(e);
+      if (i >= 0) this.undoStack.splice(i, 1);
+      await this.kv.set(this.key("undo"), JSON.stringify(this.undoStack));
+      await this.scan({ full: false });
+      return { status: "ok", message: `Rückgängig: ${e.label}` };
+    } finally {
+      if (this.undoing.get(ref) === lock) this.undoing.delete(ref);
+      done();
     }
-    if (current.hash !== e.afterHash) {
-      return { status: "blocked", message: "Rückgängig nicht möglich: Datei wurde seitdem geändert" };
-    }
-    this.bump(e.ref); // wartende Aufträge auf dieser Datei verwerfen
-    let res: WriteResult;
-    switch (e.kind) {
-      case "edit":
-        res = await this.adapter.write(e.ref, e.beforeText ?? "", e.afterHash);
-        break;
-      case "create":
-        res = await this.adapter.moveToTrash(e.ref, e.afterHash);
-        break;
-      case "trash":
-        res = await this.adapter.restoreFromTrash(e.ref, e.afterHash);
-        break;
-      case "restore":
-        res = await this.adapter.moveToTrash(e.ref, e.afterHash);
-        break;
-      case "rename":
-        res = await this.adapter.rename(e.ref, e.beforeName ?? "", e.afterHash);
-        break;
-    }
-    if (res.status !== "ok") {
-      return this.failed(res);
-    }
-    this.undoStack.pop();
-    await this.kv.set(this.key("undo"), JSON.stringify(this.undoStack));
-    await this.scan({ full: false });
-    return { status: "ok", message: `Rückgängig: ${e.label}` };
   }
 
   // -------------------------------------------------------------------------
@@ -1099,6 +1205,11 @@ export class Repository {
     if (r.status === "ok") await this.settleDraft(d, rev, false);
     return r;
   }
+}
+
+/** Einheitliche Umwandlung eines Adapter-Leseergebnisses in das Dateimodell, einschließlich ungültiger Kodierung (R4). */
+function fileFromRead(ref: string, name: string, r: ReadResult, mtime = r.mtime): IndexedFile {
+  return readTaskFile({ ref, name, text: r.text, hash: r.hash, mtime, invalidUtf8: r.invalidUtf8 });
 }
 
 /** Selbstprüfung erzeugter Frontmatter vor dem Schreiben (7.2): Text erneut lesen und Felder vergleichen. */
