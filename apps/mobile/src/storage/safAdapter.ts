@@ -419,6 +419,19 @@ export class SafAdapter implements StorageAdapter {
     }
   }
 
+  /** Ort einer Referenz für Meldungen, z. B. „Papierkorb (A.md)“. */
+  private place(ref: string): string {
+    const { scope, name } = this.split(ref);
+    return `${scope === "trash" ? "Papierkorb" : "Aufgabenordner"} (${name})`;
+  }
+
+  /** Ziel enthält höchstens einen Anfang der zu kopierenden Fassung (abgebrochenes eigenes Schreiben). */
+  private async isPartialCopy(j: Journal): Promise<boolean> {
+    if (!j.dstUri || j.beforeText === null) return false;
+    const cur = await this.textOf(j.dstUri);
+    return cur !== null && j.beforeText.startsWith(cur);
+  }
+
   private async caseOf(j: Journal, uri: string | null, message: string): Promise<RecoveryCase> {
     return {
       opId: j.opId,
@@ -470,11 +483,23 @@ export class SafAdapter implements StorageAdapter {
         await this.native.deleteDocument(j.srcUri!);
         return done();
       }
+      // Kopie vollständig, Quelle bereits entfernt: abgeschlossen.
       if (dst === j.beforeHash && src === null) return done();
       if (src === j.beforeHash) {
-        // Kopie unvollständig: eigene, journalverknüpfte Teilkopie entfernen.
-        if (j.dstUri && dst !== null) await this.native.deleteDocument(j.dstUri).catch(() => {});
-        return done();
+        // Quelle unverändert, Ziel fehlt: nichts verschoben, nichts zu entfernen.
+        if (dst === null) return done();
+        // Abweichendes Ziel nur löschen, wenn es nachweislich die eigene Teilkopie ist: Das Journal hat
+        // es noch nicht als vollständig geschrieben protokolliert und es enthält einen Anfang der Kopie.
+        // Alles andere ist eine dritte Fassung (R7) und bleibt als Fall erhalten.
+        if (j.phase !== "written" && (await this.isPartialCopy(j))) {
+          await this.native.deleteDocument(j.dstUri!).catch(() => {});
+          return done();
+        }
+        return this.caseOf(
+          j,
+          j.dstUri,
+          `${this.place(j.dst)} hat einen unerwarteten Inhalt; die Ausgangsfassung liegt unverändert in ${this.place(j.src)} – beide Fassungen behalten, bitte prüfen`,
+        );
       }
       return this.caseOf(j, j.dstUri ?? j.srcUri, "Verschieben unklar – beide Orte prüfen");
     }

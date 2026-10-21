@@ -152,6 +152,97 @@ describe("Abbruch an jeder Phase (AK-22, Emulatorlogik im Fake)", () => {
   });
 });
 
+describe("Recovery: externe Änderung zwischen Abbruch und Neustart (R7)", () => {
+  /** Legt A.md an; bei "restore" liegt sie danach vollständig im Papierkorb. */
+  const setup = async (kind: "trash" | "restore", hook: (k: string, p: string) => void) => {
+    const n = new FakeSaf();
+    n.put("A.md", T("A"));
+    const a = adapter(n, hook);
+    await a.list("tasks");
+    if (kind === "restore") {
+      expect((await a.moveToTrash("tasks/A.md", hashText(T("A")))).status).toBe("ok");
+      await a.list("trash");
+    }
+    const run = () => (kind === "trash" ? a.moveToTrash("tasks/A.md", hashText(T("A"))) : a.restoreFromTrash("trash/A.md", hashText(T("A"))));
+    return { n, run };
+  };
+  // Quelle und Ziel im Fake: Wurzel = Aufgabenordner, sonst Papierkorb.
+  const places = (n: FakeSaf, kind: "trash" | "restore") => {
+    const trash = () => n.dir(TRASH_DIR)!;
+    return kind === "trash"
+      ? { src: () => n.text("A.md"), dst: () => n.text("A.md", trash()), putDst: (t: string) => n.put("A.md", t, trash()) }
+      : { src: () => n.text("A.md", trash()), dst: () => n.text("A.md"), putDst: (t: string) => n.put("A.md", t) };
+  };
+
+  for (const kind of ["restore", "trash"] as const) {
+    it(`${kind}: nach "written" abgebrochen, Ziel extern geändert → Ziel bleibt, genau ein Fall, Quelle bleibt`, async () => {
+      const { n, run } = await setup(kind, crashAt(kind, "after-copy"));
+      const p = places(n, kind);
+      await expect(run()).rejects.toThrow(CrashSimulation);
+      p.putDst(T("extern"));
+      const cases = await adapter(n).recover();
+      expect(cases).toHaveLength(1);
+      const ref = kind === "trash" ? "trash/A.md" : "tasks/A.md";
+      const source = kind === "trash" ? "tasks/A.md" : "trash/A.md";
+      expect(cases[0]).toMatchObject({ kind, ref, source, before: T("A"), current: T("extern") });
+      expect(cases[0]!.message).toMatch(/Papierkorb/);
+      expect(cases[0]!.message).toMatch(/Aufgabenordner/);
+      expect(p.dst()).toBe(T("extern"));
+      expect(p.src()).toBe(T("A"));
+      // Fall bleibt offen, bis er aufgelöst wird; ein zweiter Neustart löscht ebenfalls nichts.
+      expect((await adapter(n).recover()).map((c) => c.opId)).toEqual([cases[0]!.opId]);
+      expect(p.dst()).toBe(T("extern"));
+      expect(p.src()).toBe(T("A"));
+    });
+
+    it(`${kind}: Abbruch mitten in der Kopie (vor "written") → Teilkopie wird entfernt, kein Fall`, async () => {
+      const { n, run } = await setup(kind, () => {});
+      const p = places(n, kind);
+      const write = n.writeFile.bind(n);
+      n.writeFile = async (uri: string, text: string) => {
+        await write(uri, text.slice(0, 12));
+        throw new CrashSimulation("Abbruch mitten im Schreiben");
+      };
+      await expect(run()).rejects.toThrow(CrashSimulation);
+      n.writeFile = write;
+      expect(p.dst()).toBe(T("A").slice(0, 12));
+      expect(await adapter(n).recover()).toEqual([]);
+      expect(p.dst()).toBeNull();
+      expect(p.src()).toBe(T("A"));
+    });
+
+    it(`${kind}: Abbruch nach Anlegen (vor "written"), Ziel extern beschrieben → keine Löschung, Fall`, async () => {
+      const { n, run } = await setup(kind, crashAt(kind, "after-create"));
+      const p = places(n, kind);
+      await expect(run()).rejects.toThrow(CrashSimulation);
+      p.putDst(T("extern"));
+      const cases = await adapter(n).recover();
+      expect(cases).toHaveLength(1);
+      expect(cases[0]!.current).toBe(T("extern"));
+      expect(p.dst()).toBe(T("extern"));
+      expect(p.src()).toBe(T("A"));
+    });
+
+    it(`${kind}: nach "written" abgebrochen, Ziel unverändert → Quelle wird gelöscht, kein Fall`, async () => {
+      const { n, run } = await setup(kind, crashAt(kind, "after-copy"));
+      const p = places(n, kind);
+      await expect(run()).rejects.toThrow(CrashSimulation);
+      expect(await adapter(n).recover()).toEqual([]);
+      expect(p.dst()).toBe(T("A"));
+      expect(p.src()).toBeNull();
+    });
+
+    it(`${kind}: nach dem Löschen der Quelle abgebrochen → abgeschlossen, kein Fall`, async () => {
+      const { n, run } = await setup(kind, crashAt(kind, "after-delete"));
+      const p = places(n, kind);
+      await expect(run()).rejects.toThrow(CrashSimulation);
+      expect(await adapter(n).recover()).toEqual([]);
+      expect(p.dst()).toBe(T("A"));
+      expect(p.src()).toBeNull();
+    });
+  }
+});
+
 describe("Repository über SafAdapter", () => {
   it("Einlesen schreibt nichts, Aktion schreibt, Undo stellt wieder her", async () => {
     const n = new FakeSaf();
