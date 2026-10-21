@@ -89,7 +89,8 @@ jobs:
           MARKDOIST_KEYSTORE_PASSWORD: ${{ secrets.MARKDOIST_KEYSTORE_PASSWORD }}
           MARKDOIST_KEY_ALIAS: ${{ secrets.MARKDOIST_KEY_ALIAS }}
           MARKDOIST_KEY_PASSWORD: ${{ secrets.MARKDOIST_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --no-daemon
+        # Nur arm64-v8a: deckt aktuelle Handys ab und spart drei der vier nativen Builds.
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
       - name: APK prüfen und benennen
         env:
           CERT: ${{ vars.MARKDOIST_CERT_SHA256 }}
