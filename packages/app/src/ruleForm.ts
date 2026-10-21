@@ -99,13 +99,38 @@ export function formFromSeries(s: Series, today: Temporal.PlainDate): RuleForm {
     f.until = r.until.date.toString();
   }
   f.interval = r.interval;
-  const simple = simpleOf(r, f);
+  const simple = untilKept(r, f) && simpleOf(r, f, Temporal.PlainDate.from(f.startDate));
   if (!simple) f.mode = "advanced";
   return f;
 }
 
-function simpleOf(r: Rule, f: RuleForm): boolean {
+/**
+ * Schreibt `buildRuleText()` das Regelende ohne Bedeutungsänderung zurück? Der Builder speichert
+ * UNTIL als lokales Datum bzw. bei Serienuhrzeit mit 23:59:59. Eine UTC-Grenze oder eine frühere
+ * Uhrzeit, die den Termin am letzten Tag ausschließt, ginge dabei verloren (R8).
+ */
+function untilKept(r: Rule, f: RuleForm): boolean {
+  const u = r.until;
+  if (!u) return true;
+  if (u.utc) return false;
+  if (!u.time || !f.startTime) return true;
+  return u.time.equals(Temporal.PlainTime.from("23:59:59"));
+}
+
+const COMPLETION_FREQ: Record<Rule["freq"], SimpleFreq> = { DAILY: "daily", WEEKLY: "weekly", MONTHLY: "monthly", YEARLY: "yearly" };
+
+/**
+ * Übernimmt die Regel ins einfache Formular, wenn `buildRuleText()` daraus fachlich dieselbe Regel
+ * erzeugt (R8). Alles andere bleibt im erweiterten Modus unverändert erhalten.
+ */
+function simpleOf(r: Rule, f: RuleForm, start: Temporal.PlainDate): boolean {
   if (r.byyearday.length || r.byweekno.length || r.wkst !== "MO") return false;
+  if (f.anchor === "completion") {
+    // Ab Erledigung schreibt der Builder nur FREQ, INTERVAL und Ende.
+    if (r.byday.length || r.bymonthday.length || r.bymonth.length || r.bysetpos.length) return false;
+    f.freq = COMPLETION_FREQ[r.freq];
+    return true;
+  }
   const plainDays = r.byday.every((d) => d.n === null);
   switch (r.freq) {
     case "DAILY":
@@ -120,7 +145,8 @@ function simpleOf(r: Rule, f: RuleForm): boolean {
         return true;
       }
       f.freq = "weekly";
-      if (days.length) f.weekdays = days;
+      // Ohne BYDAY gilt der Wochentag des Starts; der Builder schreibt ihn ausdrücklich.
+      f.weekdays = days.length ? days : [weekdayOf(start)];
       return true;
     }
     case "MONTHLY":
@@ -148,16 +174,32 @@ function simpleOf(r: Rule, f: RuleForm): boolean {
       }
       if (r.byday.length === 1 && r.byday[0]!.n !== null && !r.bymonthday.length && !r.bysetpos.length) {
         const n = r.byday[0]!.n!;
-        if (n < -1 || n > 4) return false;
+        if (n === 0 || n < -1 || n > 4) return false;
         f.monthlyMode = "nth-weekday";
         f.nth = n;
         f.nthWeekday = r.byday[0]!.wd;
         return true;
       }
       return false;
-    case "YEARLY":
+    case "YEARLY": {
       f.freq = "yearly";
-      return !r.byday.length && !r.bysetpos.length && r.bymonth.length <= 1 && r.bymonthday.length <= 1;
+      // Der Builder schreibt BYMONTH/BYMONTHDAY immer aus dem Startdatum; nur 29.02. kennt „letzter Tag“.
+      if (r.byday.length || r.bysetpos.length) return false;
+      const month = r.bymonth.join();
+      const day = r.bymonthday.join();
+      if (month === "2" && day === "-1" && start.month === 2 && start.day === 29) {
+        f.monthEnd = "last";
+        return true;
+      }
+      // Ohne BYMONTH/BYMONTHDAY gelten Monat und Tag des Starts (RFC 5545), wie beim Builder.
+      // BYMONTHDAY allein würde dagegen jeden Monat treffen.
+      const sameMonth = month === "" ? day === "" : month === String(start.month);
+      if (sameMonth && (day === "" || day === String(start.day))) {
+        f.monthEnd = "skip";
+        return true;
+      }
+      return false;
+    }
   }
 }
 
