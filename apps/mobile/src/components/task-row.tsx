@@ -1,6 +1,6 @@
 // Listenzeile mit Wischgesten (4.5): nach rechts erledigt, nach links Aktionen.
 // Gestaltung nach Vorlage: weiße Karte, runder Haken in Prioritätsfarbe, Datum mit Kalendersymbol in Farbstufe.
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Pressable as GesturePressable } from "react-native-gesture-handler";
 import { useRef } from "react";
 import ReanimatedSwipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -62,46 +62,51 @@ export function TaskRow({ view, today, tz, scheduledHint, first = true, last = t
           else onActions();
         }}
       >
-        <GesturePressable
-          onPress={onOpen}
-          onLongPress={onActions}
-          delayLongPress={600}
-          android_ripple={{ color: c.surfaceHigh }}
-          style={{ flexDirection: "row", gap: 14, paddingLeft: 16, paddingRight: 14, paddingVertical: 12, backgroundColor: c.surface }}
-          testID={`row-${f.title}`}
-          accessibilityLabel={`${f.title}${view.overdue ? `, ${T.badges.overdue}` : ""}`}
-          accessibilityActions={[
-            { name: "toggle", label: done ? T.actions.reopen : T.actions.complete },
-            { name: "actions", label: "Aktionen" },
-          ]}
-          onAccessibilityAction={(e) => {
-            if (view.readOnly) return;
-            if (e.nativeEvent.actionName === "toggle") onToggle();
-            else if (e.nativeEvent.actionName === "actions") onActions();
-          }}
-        >
-          <Pressable
+        {/* Haken und Zeile liegen nebeneinander statt ineinander: verschachtelt lösten
+            beide aus, ein Tipp auf den Haken öffnete zusätzlich das Detail. */}
+        <View style={{ flexDirection: "row", backgroundColor: c.surface }}>
+          <GesturePressable
             onPress={view.readOnly ? undefined : onToggle}
-            hitSlop={10}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: done }}
             accessibilityLabel={done ? T.actions.reopen : T.actions.complete}
             testID={`check-${f.title}`}
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 11,
-              borderWidth: f.priority === "none" ? 1.2 : 2,
-              borderColor: done ? c.p4 : ring,
-              backgroundColor: done ? c.p4 : f.priority === "none" ? "transparent" : `${ring}1A`,
-              alignItems: "center",
-              justifyContent: "center",
-              marginTop: 1,
+            style={{ paddingLeft: 16, paddingRight: 14, paddingVertical: 12 }}
+          >
+            <View
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 11,
+                borderWidth: f.priority === "none" ? 1.2 : 2,
+                borderColor: done ? c.p4 : ring,
+                backgroundColor: done ? c.p4 : f.priority === "none" ? "transparent" : `${ring}1A`,
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: 1,
+              }}
+            >
+              {done && <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>✓</Text>}
+            </View>
+          </GesturePressable>
+          <GesturePressable
+            onPress={onOpen}
+            onLongPress={onActions}
+            delayLongPress={600}
+            android_ripple={{ color: c.surfaceHigh }}
+            style={{ flex: 1, gap: 4, paddingRight: 14, paddingVertical: 12 }}
+            testID={`row-${f.title}`}
+            accessibilityLabel={`${f.title}${view.overdue ? `, ${T.badges.overdue}` : ""}`}
+            accessibilityActions={[
+              { name: "toggle", label: done ? T.actions.reopen : T.actions.complete },
+              { name: "actions", label: "Aktionen" },
+            ]}
+            onAccessibilityAction={(e) => {
+              if (view.readOnly) return;
+              if (e.nativeEvent.actionName === "toggle") onToggle();
+              else if (e.nativeEvent.actionName === "actions") onActions();
             }}
           >
-            {done && <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>✓</Text>}
-          </Pressable>
-          <View style={{ flex: 1, gap: 4 }}>
             <Text numberOfLines={4} style={{ color: done ? c.muted : c.fg, fontSize: 16, lineHeight: 22, textDecorationLine: done ? "line-through" : "none" }}>
               {f.title}
             </Text>
@@ -137,8 +142,8 @@ export function TaskRow({ view, today, tz, scheduledHint, first = true, last = t
                 )}
               </View>
             )}
-          </View>
-        </GesturePressable>
+          </GesturePressable>
+        </View>
       </ReanimatedSwipeable>
     </View>
   );

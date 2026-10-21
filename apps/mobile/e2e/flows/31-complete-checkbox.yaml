@@ -1,0 +1,15 @@
+# Erledigen per Tipp auf den Haken: nur erledigen, nicht zusätzlich das Detail öffnen.
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-inbox
+- tapOn:
+    id: "check-Zahnarzttermin vereinbaren"
+- assertVisible:
+    id: snackbar
+- assertNotVisible:
+    id: field-due
+- tapOn:
+    id: snackbar-undo
+- assertVisible: "Zahnarzttermin vereinbaren"
