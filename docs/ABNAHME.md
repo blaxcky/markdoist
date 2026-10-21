@@ -129,6 +129,11 @@ Ein vollständiger Abgleich von PLAN1.md (Abschnitte 1, 3–7, 9) mit dem Code h
 - Gefunden und behoben: Filterblatt-Knöpfe rutschten aus dem Bild (jetzt feste Fußzeile); Filtersymbol `⏷` fehlte in der Android-Schrift (jetzt `▾`); technische Expo-Fehlerkette in Meldungen (jetzt nur die Ursache); Entwurf mit Konflikt bot nach Neustart keine Entscheidung an. Maestro: `hideKeyboard` drückt unter Android 16 „Zurück“ und verließ das Detail; die Snackbar verdeckte den Editor – Flows entsprechend angepasst.
 - Lokaler Build auf diesem Rechner: Temurin JDK 21 in `~/.local/opt/jdk-21` (nur JDK 25 vorhanden), Maestro 2.11.0 in `~/.maestro`; der erste Gradle-Build dauert rund 20 Minuten. Mit 15 GB RAM laufen Emulator, Metro und ein Gradle-Daemon nicht zuverlässig gleichzeitig – den Gradle-Daemon nach dem Build beenden.
 
+**Android (Emulator, 21.10.2026, Stand `df583f4`):** Development-Build mit Metro, AVD `Markdoist_API_36`, nach den Korrekturen R1–R9 aus `docs/REVIEW-2026-10-19.md`.
+- **11 Maestro-Flows und 13 Dateiprüfungen grün** (`MAESTRO_DEV=true apps/mobile/e2e/run.sh`). Betroffen von den Korrekturen: Listen und Suche senden `completeOccurrence` mit angezeigtem Vorkommen (R6), SAF-Recovery behält dritte Fassungen (R7), Regelformular (R8), Entwurfsrevision beim Autosave (R1).
+- Erster Durchlauf scheiterte in Flow 00 am kalten Metro-Bundle (27 s); der Wiederholungslauf mit warmem Bundle war vollständig grün. Für einen frischen Metro-Start die App einmal vorab laden.
+- Nicht im Emulator geprüft: die neuen Recovery-Fälle aus R7 (nur über die simulierte SAF-Schicht) und R2/R4/R5 (nur Unit-Tests).
+
 **[V]-Abweichungen:**
 - Ausnahmen werden nur bei Kalenderserien angeboten. Eine Serie „ab Erledigung“ hat kein festes künftiges Raster; ihr aktuelles Vorkommen wird mit „Überspringen“ bearbeitet.
 - Texte: Die gemeinsamen Begriffe (Ansichten, Felder, Aktionen, Speicherzustände, Vorschau) stehen in `packages/app/src/texts.ts`; einzelne bildschirmspezifische Beschriftungen stehen weiter im jeweiligen Oberflächencode.
