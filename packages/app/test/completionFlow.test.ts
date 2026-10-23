@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { TaskView } from "@markdoist/core";
 import { createCompletionFlow, type Outcome } from "../src";
 
-const view = (ref: string, status = "open") => ({ task: { ref, fields: { status } } }) as unknown as TaskView;
+const view = (ref: string, status = "open") =>
+  ({ task: { ref, fields: { status } } }) as unknown as TaskView;
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 function setup(outcome: Outcome = { status: "ok", undoable: true }) {
@@ -66,6 +67,42 @@ describe("createCompletionFlow", () => {
     expect(flow.getState().frozen).toBe(true);
     flow.left("B.md");
     expect(flow.getState().frozen).toBe(false);
+  });
+
+  it("gesperrte Serie: kein Schreiben, Grund wird gemeldet, Haken bleibt zurück", async () => {
+    const { flow, notify, perform } = setup();
+    const blocked = {
+      task: { ref: "C.md", fields: { status: "open" } },
+      series: {
+        phase: "clarify",
+        instance: null,
+        revisionKey: "R",
+        diagnostics: [
+          {
+            code: "series-needs-clarification",
+            message: "Fortschreibung klären: Vorkommen 2026-10-12 ist bereits aufgelöst",
+            severity: "warning",
+          },
+        ],
+      },
+    } as unknown as TaskView;
+    expect(flow.start(blocked)).toBe(false);
+    expect(perform).not.toHaveBeenCalled();
+    expect(flow.getState().pending.size).toBe(0);
+    expect(notify).toHaveBeenCalledWith(
+      {
+        status: "blocked",
+        message: "Fortschreibung klären: Vorkommen 2026-10-12 ist bereits aufgelöst",
+      },
+      "Erledigt",
+    );
+    // beendete Serie wird dagegen normal wiederöffnet
+    const ended = {
+      task: { ref: "E.md", fields: { status: "done" } },
+      series: { phase: "ended", revisionKey: "R", diagnostics: [] },
+    } as unknown as TaskView;
+    expect(flow.start(ended)).toBe(true);
+    expect(perform).toHaveBeenCalledTimes(1);
   });
 
   it("wiederöffnet erledigte Aufgaben auf demselben Weg", async () => {

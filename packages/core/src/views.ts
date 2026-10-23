@@ -1,13 +1,6 @@
 // Index, Ansichten, Filter, Sortierung und Suche (4.1–4.3, 7.4).
 import { Temporal } from "temporal-polyfill";
-import {
-  datePart,
-  isOverdue,
-  sortKey,
-  todayOf,
-  type Clock,
-  type DateValue,
-} from "./dates";
+import { datePart, isOverdue, sortKey, todayOf, type Clock, type DateValue } from "./dates";
 import { readSeries, parseKey, type Series } from "./recurrence/series";
 import {
   PRIORITY_RANK,
@@ -76,7 +69,11 @@ export function normalizeSearch(s: string): string {
     .replace(/\s+/g, " ");
 }
 
-function effectiveDates(t: Task, s: Series | null): { due: DateValue | null; scheduled: DateValue | null } {
+function effectiveDates(
+  t: Task,
+  s: Series | null,
+  timeZone: string,
+): { due: DateValue | null; scheduled: DateValue | null } {
   if (!s || t.fields.status === "done") return { due: t.fields.due, scheduled: t.fields.scheduled };
   if (s.phase === "clarify" && s.proposal) {
     const other = s.field === "due" ? "scheduled" : "due";
@@ -87,12 +84,16 @@ function effectiveDates(t: Task, s: Series | null): { due: DateValue | null; sch
     let otherVal = t.fields[other];
     const curRef = t.fields[s.field];
     if (otherVal && curRef) {
+      // Abstand wie beim Fortschreiben (actions.ts, 5.3): Kalendertage in der Gerätezone.
       const off =
         s.offsetDays ??
-        datePart(curRef, "UTC").until(datePart(otherVal, "UTC"), { largestUnit: "days" }).days;
+        datePart(curRef, timeZone).until(datePart(otherVal, timeZone), { largestUnit: "days" })
+          .days;
       otherVal = { kind: "date", date: s.proposal.add({ days: off }), raw: "" };
     }
-    return s.field === "due" ? { due: ref, scheduled: otherVal } : { due: otherVal, scheduled: ref };
+    return s.field === "due"
+      ? { due: ref, scheduled: otherVal }
+      : { due: otherVal, scheduled: ref };
   }
   if (s.phase === "clarify" || s.phase === "end-pending") return { due: null, scheduled: null };
   return { due: t.fields.due, scheduled: t.fields.scheduled };
@@ -107,14 +108,15 @@ interface StaticPart {
   searchBody: string;
 }
 
-// Je Datei-Objekt zwischengespeichert: ändert sich nur, wenn die Datei neu gelesen wird.
-const staticCache = new WeakMap<Task, StaticPart>();
+// Je Datei-Objekt zwischengespeichert: ändert sich nur, wenn die Datei neu gelesen wird (oder die Gerätezone wechselt).
+const staticCache = new WeakMap<Task, { timeZone: string; part: StaticPart }>();
 
-function staticPart(t: Task): StaticPart {
-  let st = staticCache.get(t);
+function staticPart(t: Task, timeZone: string): StaticPart {
+  const cached = staticCache.get(t);
+  let st = cached?.timeZone === timeZone ? cached.part : undefined;
   if (!st) {
     const series = readSeries(t);
-    const { due, scheduled } = effectiveDates(t, series);
+    const { due, scheduled } = effectiveDates(t, series, timeZone);
     st = {
       series,
       due,
@@ -123,7 +125,7 @@ function staticPart(t: Task): StaticPart {
       searchTitle: normalizeSearch(t.fields.title),
       searchBody: normalizeSearch(t.body),
     };
-    staticCache.set(t, st);
+    staticCache.set(t, { timeZone, part: st });
   }
   return st;
 }
@@ -147,9 +149,15 @@ export function buildIndex(files: IndexedFile[], clock: Clock): Index {
   for (const [id, list] of byId) {
     if (list.length < 2) continue;
     const named = list.filter((t) => conflictBaseName(t.name) === null);
-    const primary = (named.length ? named : list).slice().sort((a, b) => a.name.localeCompare(b.name))[0]!;
+    const primary = (named.length ? named : list)
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))[0]!;
     for (const t of list) if (t !== primary) variantOf.set(t, primary);
-    conflicts.push({ id, files: [primary, ...list.filter((t) => t !== primary)], reason: "duplicate-id" });
+    conflicts.push({
+      id,
+      files: [primary, ...list.filter((t) => t !== primary)],
+      reason: "duplicate-id",
+    });
   }
   for (const t of tasks) {
     if (variantOf.has(t)) continue;
@@ -166,7 +174,7 @@ export function buildIndex(files: IndexedFile[], clock: Clock): Index {
   const views: TaskView[] = [];
   for (const t of tasks) {
     if (variantOf.has(t)) continue;
-    const st = staticPart(t);
+    const st = staticPart(t, clock.timeZone);
     const { series, due, scheduled } = st;
     const diagnostics = [...st.diagnostics];
     const variants = [...variantOf.entries()].filter(([, p]) => p === t).map(([v]) => v);
@@ -223,7 +231,11 @@ function createdKey(v: TaskView): number | null {
   return v.task.mtime;
 }
 
-export function compareBy(keys: SortKey[], tz: string, desc: Partial<Record<SortKey, boolean>> = {}) {
+export function compareBy(
+  keys: SortKey[],
+  tz: string,
+  desc: Partial<Record<SortKey, boolean>> = {},
+) {
   return (a: TaskView, b: TaskView): number => {
     for (const k of keys) {
       let c = 0;
@@ -328,7 +340,8 @@ export function doneView(idx: Index): { tasks: TaskView[]; occurrences: DoneOccu
     if (s) {
       for (const k of s.C) {
         const d = parseKey(k);
-        if (d && inRange(d)) occurrences.push({ view: v, date: d, revision: s.revision, archived: false });
+        if (d && inRange(d))
+          occurrences.push({ view: v, date: d, revision: s.revision, archived: false });
       }
     }
     const archive = v.task.data.recurrence_archive;
@@ -341,7 +354,12 @@ export function doneView(idx: Index): { tasks: TaskView[]; occurrences: DoneOccu
         for (const k of new Set(list)) {
           const d = parseKey(k);
           if (d && inRange(d)) {
-            occurrences.push({ view: v, date: d, revision: typeof rev === "string" ? rev : null, archived: true });
+            occurrences.push({
+              view: v,
+              date: d,
+              revision: typeof rev === "string" ? rev : null,
+              archived: true,
+            });
           }
         }
       }
@@ -390,7 +408,9 @@ export function problemsView(idx: Index): ProblemEntry[] {
     });
   }
   for (const v of idx.tasks) {
-    const relevant = v.diagnostics.filter((d) => d.severity !== "info" && d.code !== "conflict-variant");
+    const relevant = v.diagnostics.filter(
+      (d) => d.severity !== "info" && d.code !== "conflict-variant",
+    );
     if (relevant.length) out.push({ kind: "task", view: v, diagnostics: relevant });
   }
   for (const f of idx.unrecognized) out.push({ kind: "file", file: f, diagnostics: f.diagnostics });
@@ -400,8 +420,10 @@ export function problemsView(idx: Index): ProblemEntry[] {
 // ---------------------------------------------------------------------------
 // Filter (serialisierbar)
 
-export type DueFilter = "any" | "none" | "overdue" | "today" | "next7" | { from: string; to: string };
-export type ScheduledFilter = "any" | "none" | "earlier" | "today" | "next7" | { from: string; to: string };
+export type DueFilter =
+  "any" | "none" | "overdue" | "today" | "next7" | { from: string; to: string };
+export type ScheduledFilter =
+  "any" | "none" | "earlier" | "today" | "next7" | { from: string; to: string };
 
 export interface Filter {
   status?: Status[];
@@ -457,7 +479,11 @@ export function matchesFilter(v: TaskView, f: Filter, today: Temporal.PlainDate)
 // ---------------------------------------------------------------------------
 // Suche (4.3)
 
-export function search(idx: Index, query: string, opts: { includeDone?: boolean } = {}): TaskView[] {
+export function search(
+  idx: Index,
+  query: string,
+  opts: { includeDone?: boolean } = {},
+): TaskView[] {
   const words = normalizeSearch(query).split(" ").filter(Boolean);
   if (!words.length) return [];
   const title: TaskView[] = [];
@@ -469,7 +495,8 @@ export function search(idx: Index, query: string, opts: { includeDone?: boolean 
     if (words.some((w) => v.searchTitle.includes(w))) title.push(v);
     else content.push(v);
   }
-  const byTitle = (a: TaskView, b: TaskView) => collator.compare(a.task.fields.title, b.task.fields.title);
+  const byTitle = (a: TaskView, b: TaskView) =>
+    collator.compare(a.task.fields.title, b.task.fields.title);
   return [...title.sort(byTitle), ...content.sort(byTitle)];
 }
 
@@ -490,6 +517,10 @@ export const SORT_LABELS: Record<SortChoice, string> = {
 /** Sortiert eine Liste nach der gewählten Reihenfolge; „Standard“ lässt die Ansichtsreihenfolge. */
 export function sortViews(list: TaskView[], choice: SortChoice, tz: string): TaskView[] {
   if (choice === "default") return list;
-  const tail: SortKey[] = ["due", "scheduled", "priority", "title"].filter((k) => k !== choice) as SortKey[];
-  return [...list].sort(compareBy([choice, ...tail], tz, choice === "created" ? { created: true } : {}));
+  const tail: SortKey[] = ["due", "scheduled", "priority", "title"].filter(
+    (k) => k !== choice,
+  ) as SortKey[];
+  return [...list].sort(
+    compareBy([choice, ...tail], tz, choice === "created" ? { created: true } : {}),
+  );
 }

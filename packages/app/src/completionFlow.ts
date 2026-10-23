@@ -19,7 +19,11 @@ export interface CompletionState {
 }
 
 export interface CompletionFlowOptions {
-  perform(ref: string, action: ReturnType<typeof toggleDoneAction>["action"], label: string): Promise<Outcome>;
+  perform(
+    ref: string,
+    action: ReturnType<typeof toggleDoneAction>["action"],
+    label: string,
+  ): Promise<Outcome>;
   /** Steht die Aufgabe nach dem Schreiben noch in der Live-Liste (Serie, Suche mit Erledigten)? */
   isPresent(ref: string): boolean;
   notify(o: Outcome, label: string): void;
@@ -68,6 +72,17 @@ export function createCompletionFlow(opts: CompletionFlowOptions): CompletionFlo
       const ref = view.task.ref;
       if (state.pending.has(ref)) return false;
       const { action, label } = toggleDoneAction(view);
+      // Gesperrte Serie (Fortschreibung klären, Regel ungültig, Widerspruch): Der Kern schriebe ohnehin
+      // nichts, meldete aber bei bereits aufgelöstem K nur ein stummes No-op. Hier wird der Grund genannt,
+      // damit der Haken nicht kommentarlos zurückspringt (PLAN1 5.2, 5.4).
+      const s = view.series;
+      if (s && s.phase !== "active" && s.phase !== "ended") {
+        const why =
+          s.diagnostics.find((d) => d.severity !== "info")?.message ??
+          "Fortschreibung klären – Aufgabe öffnen";
+        opts.notify({ status: "blocked", message: why }, label);
+        return false;
+      }
       set(ref, "checked");
       // Schreiben sofort starten; die Meldung erscheint nach der Haltezeit zusammen mit dem Ausblenden.
       // Die Extrarunde wait(0) lässt die Oberfläche den Stand nach emit() erst übernehmen, bevor isPresent fragt.

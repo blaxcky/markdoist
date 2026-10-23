@@ -53,6 +53,11 @@ Du willst eine persönliche, lokal arbeitende Todo-App mit einer Markdown-Datei 
 
 **Zusätzliche Entscheidung (Chat, 12.10.2026) [F]:** Wird eine Wiederholung auf „noch fünfmal“ geändert, gelten **ab der Änderung fünf weitere Vorkommen**. Frühere Erledigungen werden nicht angerechnet; die alte Historie bleibt in derselben Datei erhalten (3.2, 5.1, 5.4).
 
+**Entscheidungen aus `.fragen/2026-10-23-2320-wiederholungen.md` (23.10.2026, Testrunde Wiederholungen, Bericht `docs/TEST-WIEDERHOLUNGEN.md`):**
+- „Ab Erledigung“ mit Regel ohne BY-Teile rechnet als fester Abstand ab dem Erledigungstag mit Klemmen ans Monatsende (31.10. + 1 Monat = 30.11.); rrule-Verhalten gilt nur noch für Completion-Regeln mit BY-Teilen (5.2).
+- Kalenderserien mit COUNT bleiben wie in 5.2: versäumte Termine verlängern die Serie nicht.
+- Außerdem festgelegt: Fehlen in einer Fremddatei `recurrence_revision` oder `recurrence_start`, ergänzt die erste Serienaktion beide Felder mit den beim Lesen abgeleiteten Werten (3.2, 5.4).
+
 Das Projektverzeichnis `/home/markus/GitHub/local-first-todo` enthält bislang nur die Planungsdokumente. Festgestellte Umgebung (in M0 erneut prüfen):
 - Node 22.22
 - Android SDK in `~/Android/Sdk` (Plattformen 35/36, Build-Tools 35–37, Emulator-Images 36/37)
@@ -546,7 +551,7 @@ Damit gilt: **„noch fünfmal“ = fünf weitere Vorkommen des neuen Abschnitts
 
 **Fortschreiben bei einer neuen Nutzeraktion auf das aktuelle K:**
 - **calendar:** erstes Regelvorkommen ab `recurrence_start` mit Datum `o > max(K, Aktionstag)` und `o ∉ C ∪ S`. Der Rhythmus bleibt fest. Dazwischen verstrichene Termine werden nicht automatisch in C oder S eingetragen. Ein regulärer Termin am Tag einer verspäteten Erledigung ist damit abgedeckt.
-- **completion, Erledigen:** B ist der Kalendertag der **neuen** tatsächlichen Erledigung, so wie er mit Offset in `last_completed_at` gespeichert wird; er wird beim Lesen auf einem Gerät in anderer Zone nicht neu datiert. Mit der Serienuhrzeit aus `recurrence_start` wird die Regel ab B ausgewertet. Gesucht ist das erste `o > B`, das **weder in C noch in S** steht.
+- **completion, Erledigen:** B ist der Kalendertag der **neuen** tatsächlichen Erledigung, so wie er mit Offset in `last_completed_at` gespeichert wird; er wird beim Lesen auf einem Gerät in anderer Zone nicht neu datiert. Mit der Serienuhrzeit aus `recurrence_start` wird die Regel ab B ausgewertet. Gesucht ist das erste `o > B`, das **weder in C noch in S** steht. **Regeln ohne BY-Teile** (die Formularoptionen „n Tage/Wochen/Monate/Jahre nach Erledigung“) zählen als fester Abstand ab B mit Klemmen ans Monatsende, jeder Kandidat von B aus gerechnet: 31.10. + 1 Monat = 30.11., + 2 Monate = 31.12.; 29.02. + 1 Jahr = 28.02. Regeln mit BY-Teilen werden mit rrule ab B ausgewertet [F, Fragen-Tool 23.10.2026].
 - **completion, Überspringen:** B = `max(K, Aktionstag)`; dieselbe Suche ohne Änderung von `last_completed_at`. Der berechnete neue aktuelle Schlüssel wird gespeichert, spätere Leser verwenden diesen gespeicherten Zustand.
 - **Kollision bei sehr früher Erledigung [V]:** Bereits aufgelöste Datumsschlüssel werden in derselben Revision nicht wiederverwendet. Beispiel: wöchentlich, K = 19.10., erledigt am 12.10. → Kandidat 19.10. steht nun in C, daher nächster freier Kandidat **26.10.**. Die UI erklärt vor dem Abschluss diese Ausnahme vom einfachen Abstand. Ein früherer, noch freier Kandidat ist bei Completion zulässig; deshalb darf die zeitliche Reihenfolge der tatsächlichen Aktionen nicht aus dem größten Historien-Datum abgeleitet werden.
 - **Kein weiteres Vorkommen nachweisbar:** nur bei regulärer Erschöpfung, nicht bei Berechnungsabbruch, `status: done`, `completedDate` = festgehaltener Aktionszeitpunkt; `recurrence_instance` bleibt als letzter Schlüssel stehen. Ein Timeout oder ungültige Regel beendet niemals automatisch eine Serie.
@@ -620,7 +625,7 @@ Eine Serienaktion trägt Aufgaben-ID, Revision, K, den gelesenen Regel-/Zustands
 - monatlich: am Tag X (1–31), am letzten Tag, am n-ten oder letzten bestimmten Wochentag (1.–4., letzter), alle n Monate
 - jährlich am Datum, alle n Jahre
 - Ende: nie / am Datum (UNTIL) / nach n Kalenderterminen bzw. n Erledigungen (COUNT, je nach Art; 5.2). Bei Änderung ausdrücklich „ab dieser Änderung“, alte Historie bleibt.
-- Art: Kalender / ab Erledigung („n Tage, Wochen, Monate nach Erledigung“)
+- Art: Kalender / ab Erledigung („n Tage, Wochen, Monate nach Erledigung“; Monate und Jahre mit Klemmen ans Monatsende, 5.2)
 - Bezugsfeld, Abstand, Ausnahmen
 
 **Monatsende und Schaltjahr:** Wer beim Monats- oder Jahrestag 29, 30 oder 31 wählt, wird im Formular ausdrücklich gefragt:

@@ -142,6 +142,11 @@ Ein vollständiger Abgleich von PLAN1.md (Abschnitte 1, 3–7, 9) mit dem Code h
 - Die App auf dem AVD ist jetzt mit dem Debug-Keystore signiert: vor dem nächsten Release-Install dort deinstallieren (sonst `INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
 - Aufgefallen, nicht behoben (älter als diese Änderung): Beim Wischen nach rechts erscheint das graue Feld „Aktionen“ statt des roten „Erledigen“; die Aktion selbst erledigt korrekt.
 
+**Testrunde Wiederholungen (23.10.2026):** systematische Prüfung aller Wiederholungsvarianten, Bericht in `docs/TEST-WIEDERHOLUNGEN.md`.
+- Neu: Invarianten-Orakel (`packages/core/test/seriesOracle.ts`), Variantenmatrix mit 1159 Fällen, fast-check-Simulation, 51 dateutil-Golden-Regeln, Repository-Tests für Serienaktionen. 2119 Vitest-Tests grün in vier Zeitzonen.
+- Behoben: Fremddateien ohne `recurrence_start` zählten COUNT nach jedem Fortschreiben neu (Serie endete nie) – Start wird jetzt beim ersten Schreiben festgehalten; clarify-Vorschlag rechnete den Abstand in UTC; Tipp auf eine gesperrte Serie sprang stumm zurück, jetzt mit Grund.
+- Entschieden (Fragen-Tool, 23.10.2026): „ab Erledigung“ ohne BY-Teile rechnet als fester Abstand mit Klemmen ans Monatsende (31.10. + 1 Monat = 30.11., vorher 31.12.); Kalender-COUNT bei versäumten Terminen bleibt wie in PLAN1 5.2.
+
 **[V]-Abweichungen:**
 - Ausnahmen werden nur bei Kalenderserien angeboten. Eine Serie „ab Erledigung“ hat kein festes künftiges Raster; ihr aktuelles Vorkommen wird mit „Überspringen“ bearbeitet.
 - Texte: Die gemeinsamen Begriffe (Ansichten, Felder, Aktionen, Speicherzustände, Vorschau) stehen in `packages/app/src/texts.ts`; einzelne bildschirmspezifische Beschriftungen stehen weiter im jeweiligen Oberflächencode.

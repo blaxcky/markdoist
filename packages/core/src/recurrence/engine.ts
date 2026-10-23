@@ -131,16 +131,15 @@ export function queryOccurrences(q: EngineQuery): EngineResult {
   if (!exhausted && !aborted && dates.length < q.limit) {
     // Iteration endete ohne Abbruch durch uns: COUNT ausgeschöpft am Ende oder Horizont erreicht.
     if (!q.ignoreCount && rule.count !== null && index >= rule.count) exhausted = true;
-    else if (rule.until && Temporal.PlainDate.compare(horizon, rule.until.date) >= 0) exhausted = true;
+    else if (rule.until && Temporal.PlainDate.compare(horizon, rule.until.date) >= 0)
+      exhausted = true;
     else aborted = true;
   }
   return { dates, exhausted, aborted };
 }
 
 export type NextResult =
-  | { kind: "found"; date: Temporal.PlainDate }
-  | { kind: "exhausted" }
-  | { kind: "aborted" };
+  { kind: "found"; date: Temporal.PlainDate } | { kind: "exhausted" } | { kind: "aborted" };
 
 export function nextOccurrence(q: Omit<EngineQuery, "limit">): NextResult {
   const r = queryOccurrences({ ...q, limit: 1 });
@@ -150,7 +149,11 @@ export function nextOccurrence(q: Omit<EngineQuery, "limit">): NextResult {
 }
 
 /** Prüft, ob ein Datum ein Regeltermin ist (für Diagnose „unpassender Start“). */
-export function isOccurrence(rule: Rule, start: Temporal.PlainDate, d: Temporal.PlainDate): boolean {
+export function isOccurrence(
+  rule: Rule,
+  start: Temporal.PlainDate,
+  d: Temporal.PlainDate,
+): boolean {
   const r = queryOccurrences({
     rule,
     start,
@@ -159,4 +162,55 @@ export function isOccurrence(rule: Rule, start: Temporal.PlainDate, d: Temporal.
     ignoreCount: false,
   });
   return r.dates.length > 0 && r.dates[0]!.equals(d);
+}
+
+/** Regel ohne BY-Teile: fester Abstand ab einem Bezugstag (Art „ab Erledigung“, 5.2). */
+export function isPlainInterval(rule: Rule): boolean {
+  return (
+    !rule.byday.length &&
+    !rule.bymonthday.length &&
+    !rule.bymonth.length &&
+    !rule.byyearday.length &&
+    !rule.byweekno.length &&
+    !rule.bysetpos.length
+  );
+}
+
+/**
+ * Kandidaten „ab Erledigung“ nach dem Bezugstag B (5.2, Entscheidung 23.10.2026):
+ * Regeln ohne BY-Teile zählen als fester Abstand ab B mit Klemmen ans Monatsende
+ * (31.10. + 1 Monat = 30.11., 29.02. + 1 Jahr = 28.02.), jeweils von B aus gerechnet, nicht verkettet.
+ * Regeln mit BY-Teilen werden wie bisher mit rrule ab B ausgewertet. COUNT zählt hier nie.
+ */
+export function completionOccurrences(
+  q: Omit<EngineQuery, "start" | "after" | "from" | "ignoreCount"> & { base: Temporal.PlainDate },
+): EngineResult {
+  const { rule, base } = q;
+  if (!isPlainInterval(rule)) {
+    return queryOccurrences({ ...q, start: base, after: base, ignoreCount: true });
+  }
+  const dates: Temporal.PlainDate[] = [];
+  const time = q.time ?? null;
+  const unit =
+    rule.freq === "DAILY"
+      ? "days"
+      : rule.freq === "WEEKLY"
+        ? "weeks"
+        : rule.freq === "MONTHLY"
+          ? "months"
+          : "years";
+  for (let n = 1; dates.length < q.limit; n++) {
+    if (n > 10_000 || (q.deadline && q.deadline.now() > q.deadline.until))
+      return { dates, exhausted: false, aborted: true };
+    let d: Temporal.PlainDate;
+    try {
+      d = base.add({ [unit]: rule.interval * n });
+    } catch {
+      return { dates, exhausted: false, aborted: true };
+    }
+    if (untilPassed(rule, d, time)) return { dates, exhausted: true, aborted: false };
+    if (q.exclude && q.exclude(d)) continue;
+    dates.push(d);
+  }
+  return { dates, exhausted: false, aborted: false };
 }

@@ -4,7 +4,7 @@ import { Temporal } from "temporal-polyfill";
 import { resetCheckboxes, toggleCheckbox } from "./checklist";
 import { datePart, formatTimestamp, parseDateValue, type DateValue } from "./dates";
 import { createFileText, deepEqual, editFrontmatter, type YamlValue } from "./frontmatter";
-import { nextOccurrence, isOccurrence } from "./recurrence/engine";
+import { completionOccurrences, nextOccurrence, isOccurrence } from "./recurrence/engine";
 import { parseRule, sameRule, type Rule } from "./recurrence/rule";
 import {
   parseKey,
@@ -116,14 +116,20 @@ export function planAction(task: Task, action: TaskAction, ctx: ActionContext): 
 }
 
 /** Wendet einen Plan auf den Dateitext an (chirurgisch, mit Selbstprüfung). */
-export function applyPlan(text: string, plan: Plan): { ok: true; text: string } | { ok: false; message: string } {
+export function applyPlan(
+  text: string,
+  plan: Plan,
+): { ok: true; text: string } | { ok: false; message: string } {
   if (plan.kind !== "edit") return { ok: false, message: "Kein Änderungsplan" };
   const r = editFrontmatter(text, { set: plan.set, remove: plan.remove }, plan.body);
   return r.ok ? r : { ok: false, message: r.message };
 }
 
 /** Felder, deren Gleichheit die unabhängige Anwendung auf einen frischen Text erlaubt (7.3). */
-export function actionDependencies(action: TaskAction, plan: Plan): { fields: string[]; body: boolean } {
+export function actionDependencies(
+  action: TaskAction,
+  plan: Plan,
+): { fields: string[]; body: boolean } {
   const fields = new Set<string>();
   if (plan.kind === "edit") {
     for (const k of Object.keys(plan.set)) if (k !== "dateModified" && k !== "id") fields.add(k);
@@ -146,7 +152,12 @@ export function actionDependencies(action: TaskAction, plan: Plan): { fields: st
     default:
       break;
   }
-  if (isSeriesAction(action) || action.type === "complete" || action.type === "reopen" || action.type === "setDate") {
+  if (
+    isSeriesAction(action) ||
+    action.type === "complete" ||
+    action.type === "reopen" ||
+    action.type === "setDate"
+  ) {
     for (const f of SERIES_FIELDS) fields.add(f);
     fields.add("due").add("scheduled").add("status").add("completedDate").add("format_version");
   }
@@ -191,7 +202,8 @@ function datesForInstance(
   const other: RefField = series.field === "due" ? "scheduled" : "due";
   const otherRaw = task.data[other];
   const otherSet = otherRaw !== undefined && otherRaw !== null && otherRaw !== "";
-  const offset = explicitOffset !== undefined && explicitOffset !== null ? explicitOffset : series.offsetDays;
+  const offset =
+    explicitOffset !== undefined && explicitOffset !== null ? explicitOffset : series.offsetDays;
   if (!otherSet) {
     if (explicitOffset !== undefined && explicitOffset !== null) {
       set[other] = k.add({ days: explicitOffset }).toString();
@@ -203,9 +215,12 @@ function datesForInstance(
   let off = offset;
   if (off === null) {
     const refVal = task.fields[series.field];
-    if (!refVal) return { set, error: `Ungültiges Datum in ${series.field} – bitte zuerst korrigieren` };
+    if (!refVal)
+      return { set, error: `Ungültiges Datum in ${series.field} – bitte zuerst korrigieren` };
     // Kalendertage in der Gerätezone, damit Offset-Werte ihren lokalen Tag behalten (3.3).
-    off = datePart(refVal, timeZone).until(datePart(otherVal, timeZone), { largestUnit: "days" }).days;
+    off = datePart(refVal, timeZone).until(datePart(otherVal, timeZone), {
+      largestUnit: "days",
+    }).days;
   }
   const newOther = k.add({ days: off });
   set[other] = withTimeOf(newOther, otherVal, timeZone);
@@ -235,7 +250,12 @@ function seriesBlockedMessage(series: Series): string | null {
   }
 }
 
-function planInner(task: Task, series: Series | null, action: TaskAction, ctx: ActionContext): Plan {
+function planInner(
+  task: Task,
+  series: Series | null,
+  action: TaskAction,
+  ctx: ActionContext,
+): Plan {
   const now = formatTimestamp(ctx.at, ctx.timeZone);
   switch (action.type) {
     case "complete": {
@@ -244,7 +264,11 @@ function planInner(task: Task, series: Series | null, action: TaskAction, ctx: A
         return planInner(
           task,
           series,
-          { type: "completeOccurrence", revision: series.revisionKey, instance: series.instance.toString() },
+          {
+            type: "completeOccurrence",
+            revision: series.revisionKey,
+            instance: series.instance.toString(),
+          },
           ctx,
         );
       }
@@ -252,7 +276,8 @@ function planInner(task: Task, series: Series | null, action: TaskAction, ctx: A
       return { kind: "edit", set: { status: "done", completedDate: now }, remove: [] };
     }
     case "reopen": {
-      if (series) return planInner(task, series, { type: "reopenSeries", revision: series.revisionKey }, ctx);
+      if (series)
+        return planInner(task, series, { type: "reopenSeries", revision: series.revisionKey }, ctx);
       if (task.fields.status !== "done") return noop;
       return { kind: "edit", set: { status: "open" }, remove: ["completedDate"] };
     }
@@ -317,8 +342,9 @@ function planSetDate(
       const otherField: RefField = series.field === "due" ? "scheduled" : "due";
       const other = task.fields[otherField];
       if (ref && other) {
-        set.recurrence_offset_days = datePart(ref, timeZone)
-          .until(datePart(other, timeZone), { largestUnit: "days" }).days;
+        set.recurrence_offset_days = datePart(ref, timeZone).until(datePart(other, timeZone), {
+          largestUnit: "days",
+        }).days;
       }
     }
   }
@@ -342,7 +368,17 @@ function planSeries(
   }
   const rule = series.rule;
   const K = series.instance;
-  const revisionSet: Record<string, YamlValue> = series.revision ? {} : { recurrence_revision: ctx.newId() };
+  // Identität des aktiven Abschnitts beim ersten Schreiben festhalten (3.2, 5.1): Revision und Start.
+  // Ohne gespeicherten Start wanderte das Raster mit jedem neuen Vorkommen mit, und COUNT zählte
+  // bei Fremddateien von vorn (Befund Testrunde Wiederholungen, Oktober 2026).
+  const revisionSet: Record<string, YamlValue> = series.revision
+    ? {}
+    : { recurrence_revision: ctx.newId() };
+  if (!("recurrence_start" in task.data) && series.start) {
+    // Der beim Lesen abgeleitete Start (3.2) wird unverändert festgehalten; ein Termin neben dem
+    // Raster bleibt als Hinweis sichtbar (6), rrule zählt COUNT ohnehin erst ab dem ersten Treffer.
+    revisionSet.recurrence_start = dateValueString(series.start.date, series.start.time);
+  }
 
   switch (action.type) {
     case "completeOccurrence":
@@ -381,16 +417,22 @@ function planSeries(
         });
       } else {
         const B = isComplete ? day : maxDate(K, day);
-        if (isComplete && rule.count !== null && C.size >= rule.count) next = { kind: "exhausted" as const };
-        else
-          next = nextOccurrence({
+        if (isComplete && rule.count !== null && C.size >= rule.count)
+          next = { kind: "exhausted" as const };
+        else {
+          const r = completionOccurrences({
             rule,
-            start: B,
+            base: B,
             time: series.start.time,
-            after: B,
             exclude,
-            ignoreCount: true,
+            limit: 1,
           });
+          next = r.dates.length
+            ? { kind: "found" as const, date: r.dates[0]! }
+            : r.aborted
+              ? { kind: "aborted" as const }
+              : { kind: "exhausted" as const };
+        }
       }
       if (next.kind === "aborted") return blocked("Berechnung zu aufwendig – nichts geändert");
       const set: Record<string, YamlValue> = {
@@ -421,7 +463,8 @@ function planSeries(
       if (series.phase === "ended") return noop;
       const set: Record<string, YamlValue> = { ...revisionSet, status: "done", completedDate: now };
       if (action.completeCurrent) {
-        if (!K || action.instance !== K.toString()) return blocked("Vorkommen ist nicht mehr aktuell");
+        if (!K || action.instance !== K.toString())
+          return blocked("Vorkommen ist nicht mehr aktuell");
         if (series.S.has(K.toString())) return blocked("Vorkommen wurde bereits übersprungen");
         if (!series.C.has(K.toString())) {
           set.complete_instances = sortedKeys(new Set([...series.C, K.toString()]));
@@ -447,19 +490,26 @@ function planSeries(
         after: K,
         exclude: (d) => series.C.has(d.toString()) || series.S.has(d.toString()),
       });
-      if (next.kind !== "found") return blocked("Serie ist erschöpft – Serie mit neuer Regel fortsetzen");
+      if (next.kind !== "found")
+        return blocked("Serie ist erschöpft – Serie mit neuer Regel fortsetzen");
       const dates = datesForInstance(task, series, next.date, undefined, ctx.timeZone);
       if (dates.error) return blocked(dates.error);
       const body = resetCheckboxes(task.body);
       return {
         kind: "edit",
-        set: { ...revisionSet, status: "open", ...dates.set, recurrence_instance: next.date.toString() },
+        set: {
+          ...revisionSet,
+          status: "open",
+          ...dates.set,
+          recurrence_instance: next.date.toString(),
+        },
         remove: ["completedDate"],
         ...(body !== task.body ? { body } : {}),
       };
     }
     case "setException": {
-      if (series.phase !== "active") return blocked(seriesBlockedMessage(series) ?? "Serie ist nicht aktiv");
+      if (series.phase !== "active")
+        return blocked(seriesBlockedMessage(series) ?? "Serie ist nicht aktiv");
       const d = parseKey(action.date);
       if (!d || !K || !rule || !series.start) return blocked("Ungültiges Datum");
       if (Temporal.PlainDate.compare(d, K) <= 0) {
@@ -474,12 +524,22 @@ function planSeries(
       const S = new Set(series.S);
       if (action.skipped) S.add(action.date);
       else S.delete(action.date);
-      return { kind: "edit", set: { ...revisionSet, skipped_instances: sortedKeys(S) }, remove: [] };
+      return {
+        kind: "edit",
+        set: { ...revisionSet, skipped_instances: sortedKeys(S) },
+        remove: [],
+      };
     }
     case "changeReference": {
       if (!K) return blocked("Kein aktuelles Vorkommen");
       // Ein geleerter Abstand entfernt den gespeicherten; dann gilt die Differenz der aktuellen Felder (5.3).
-      const dates = datesForInstance(task, { ...series, field: action.field, offsetDays: null }, K, action.offsetDays, ctx.timeZone);
+      const dates = datesForInstance(
+        task,
+        { ...series, field: action.field, offsetDays: null },
+        K,
+        action.offsetDays,
+        ctx.timeZone,
+      );
       if (dates.error) return blocked(dates.error);
       const set: Record<string, YamlValue> = { ...dates.set, recurrence_field: action.field };
       const remove: string[] = [];
@@ -510,7 +570,8 @@ function planSeries(
         newStart.date.equals(series.start.date) &&
         sameTime(newStart.time, series.start.time);
       if (sameSection) {
-        if (action.spec.field === series.field && action.spec.offsetDays === series.offsetDays) return noop;
+        if (action.spec.field === series.field && action.spec.offsetDays === series.offsetDays)
+          return noop;
         return planSeries(
           task,
           series,
@@ -539,7 +600,9 @@ function sameTime(a: Temporal.PlainTime | null, b: Temporal.PlainTime | null): b
   return a.equals(b);
 }
 
-function parseSpecStart(s: string): { date: Temporal.PlainDate; time: Temporal.PlainTime | null } | null {
+function parseSpecStart(
+  s: string,
+): { date: Temporal.PlainDate; time: Temporal.PlainTime | null } | null {
   const v = parseDateValue(s);
   if (!v) return null;
   if (v.kind === "date") return { date: v.date, time: null };
@@ -628,7 +691,10 @@ function buildSnapshot(
     if (k in d && d[k] !== undefined) snap[k] = d[k]!;
     else if (fallback !== undefined) snap[k] = fallback;
   };
-  copy("recurrence_start", series.start ? dateValueString(series.start.date, series.start.time) : undefined);
+  copy(
+    "recurrence_start",
+    series.start ? dateValueString(series.start.date, series.start.time) : undefined,
+  );
   copy("recurrence_anchor", series.anchor);
   copy("recurrence_field", series.field);
   copy("recurrence_offset_days");

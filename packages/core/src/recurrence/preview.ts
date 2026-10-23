@@ -4,7 +4,7 @@ import { planAction, type ActionContext, type TaskAction } from "../actions";
 import { datePart, parseDateValue } from "../dates";
 import type { YamlValue } from "../frontmatter";
 import type { Task } from "../task";
-import { queryOccurrences } from "./engine";
+import { completionOccurrences, queryOccurrences } from "./engine";
 import { parseKey, readSeries, type RefField } from "./series";
 
 export interface DateChange {
@@ -50,7 +50,11 @@ function str(v: YamlValue | undefined): string | null {
   return v === undefined || v === null || v === "" ? null : String(v);
 }
 
-export function previewSeriesAction(task: Task, action: TaskAction, ctx: ActionContext): ActionPreview {
+export function previewSeriesAction(
+  task: Task,
+  action: TaskAction,
+  ctx: ActionContext,
+): ActionPreview {
   const plan = planAction(task, action, ctx);
   if (plan.kind === "noop") return { result: "noop", message: null, ...EMPTY };
   if (plan.kind === "blocked") return { result: "blocked", message: plan.message, ...EMPTY };
@@ -77,7 +81,8 @@ export function previewSeriesAction(task: Task, action: TaskAction, ctx: ActionC
     const k = series.instance.toString();
     const open = task.fields.status !== "done" && !series.C.has(k) && !series.S.has(k);
     const newSection = action.type === "changeRule" && "recurrence_archive" in plan.set;
-    if (newSection && open && refDate && Temporal.PlainDate.compare(refDate, today) < 0) supersededOverdue = refDate;
+    if (newSection && open && refDate && Temporal.PlainDate.compare(refDate, today) < 0)
+      supersededOverdue = refDate;
   }
 
   const passedOver: ActionPreview["passedOver"] = [];
@@ -94,11 +99,21 @@ export function previewSeriesAction(task: Task, action: TaskAction, ctx: ActionC
     const S = new Set(series.S);
     (isComplete ? C : S).add(k.toString());
     const base = Temporal.PlainDate.compare(k, today) >= 0 ? k : today;
-    const q =
+    const r =
       series.anchor === "calendar"
-        ? { start: series.start.date, after: base }
-        : { start: isComplete ? today : base, after: isComplete ? today : base, ignoreCount: true };
-    const r = queryOccurrences({ rule: series.rule, time: series.start.time, limit: 24, ...q });
+        ? queryOccurrences({
+            rule: series.rule,
+            time: series.start.time,
+            limit: 24,
+            start: series.start.date,
+            after: base,
+          })
+        : completionOccurrences({
+            rule: series.rule,
+            time: series.start.time,
+            limit: 24,
+            base: isComplete ? today : base,
+          });
     for (const d of r.dates) {
       if (Temporal.PlainDate.compare(d, instance) >= 0) break;
       const key = d.toString();
@@ -110,7 +125,9 @@ export function previewSeriesAction(task: Task, action: TaskAction, ctx: ActionC
   return {
     result: "change",
     message: null,
-    newSection: action.type === "createSeries" || (action.type === "changeRule" && "recurrence_archive" in plan.set),
+    newSection:
+      action.type === "createSeries" ||
+      (action.type === "changeRule" && "recurrence_archive" in plan.set),
     ended: statusAfter === "done" && task.fields.status !== "done",
     reopened: task.fields.status === "done" && statusAfter !== "done",
     instance,

@@ -67,9 +67,10 @@ Eine Serie bleibt eine Datei. Felder des **aktiven Abschnitts**:
 
 **Fortschreiben:**
 - `calendar`: erstes Regelvorkommen nach max(K, Aktionstag), das weder in C noch in S steht. `COUNT` zählt Regeltermine ab `recurrence_start`.
-- `completion`: Regel ab dem Kalendertag der Erledigung ausgewertet; erstes Vorkommen danach, das weder in C noch in S steht. `COUNT` zählt Erledigungen im aktiven Abschnitt; Skips zählen nicht.
+- `completion`: Regel ab dem Kalendertag der Erledigung ausgewertet; erstes Vorkommen danach, das weder in C noch in S steht. Regeln ohne BY-Teile gelten als fester Abstand ab diesem Tag mit Klemmen ans Monatsende (31.10. + 1 Monat = 30.11., jeder Kandidat vom Erledigungstag aus gerechnet); Regeln mit BY-Teilen folgen rrule. `COUNT` zählt Erledigungen im aktiven Abschnitt; Skips zählen nicht.
 - Das Bezugsfeld erhält das neue Vorkommen (mit Serienuhrzeit), das andere Feld den Abstand. `inbox` bleibt unverändert. Angehakte Markdown-Checklisten werden beim Wechsel zu einem neuen offenen Vorkommen zurückgesetzt (nicht in Code-Blöcken).
 - Ist kein weiteres Vorkommen möglich, wird die Serie beendet (`status: done`, `completedDate`); `recurrence_instance` bleibt stehen.
+- Fehlen in einer Fremddatei `recurrence_revision` oder `recurrence_start`, ergänzt die erste Serienaktion beide Felder mit den beim Lesen abgeleiteten Werten, damit Raster und `COUNT` danach fest verankert sind.
 
 **Regeländerung = neuer Abschnitt:** Eine Änderung von Regel, Start, Serienuhrzeit, Art, `COUNT` oder `UNTIL` (oder ausdrücklich „ab jetzt noch N-mal“) archiviert den aktiven Abschnitt und beginnt einen neuen mit neuer Revision und leerer Historie. Die alte Historie bleibt sichtbar und zählt nicht mit.
 

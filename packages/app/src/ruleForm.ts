@@ -1,5 +1,6 @@
 // Formularmodell des Wiederholungseditors (Abschnitt 6), gemeinsam für beide Plattformen.
 import {
+  completionOccurrences,
   describeRule,
   formatRule,
   parseRule,
@@ -117,7 +118,12 @@ function untilKept(r: Rule, f: RuleForm): boolean {
   return u.time.equals(Temporal.PlainTime.from("23:59:59"));
 }
 
-const COMPLETION_FREQ: Record<Rule["freq"], SimpleFreq> = { DAILY: "daily", WEEKLY: "weekly", MONTHLY: "monthly", YEARLY: "yearly" };
+const COMPLETION_FREQ: Record<Rule["freq"], SimpleFreq> = {
+  DAILY: "daily",
+  WEEKLY: "weekly",
+  MONTHLY: "monthly",
+  YEARLY: "yearly",
+};
 
 /**
  * Übernimmt die Regel ins einfache Formular, wenn `buildRuleText()` daraus fachlich dieselbe Regel
@@ -127,20 +133,26 @@ function simpleOf(r: Rule, f: RuleForm, start: Temporal.PlainDate): boolean {
   if (r.byyearday.length || r.byweekno.length || r.wkst !== "MO") return false;
   if (f.anchor === "completion") {
     // Ab Erledigung schreibt der Builder nur FREQ, INTERVAL und Ende.
-    if (r.byday.length || r.bymonthday.length || r.bymonth.length || r.bysetpos.length) return false;
+    if (r.byday.length || r.bymonthday.length || r.bymonth.length || r.bysetpos.length)
+      return false;
     f.freq = COMPLETION_FREQ[r.freq];
     return true;
   }
   const plainDays = r.byday.every((d) => d.n === null);
   switch (r.freq) {
     case "DAILY":
-      if (r.byday.length || r.bymonthday.length || r.bymonth.length || r.bysetpos.length) return false;
+      if (r.byday.length || r.bymonthday.length || r.bymonth.length || r.bysetpos.length)
+        return false;
       f.freq = "daily";
       return true;
     case "WEEKLY": {
       if (!plainDays || r.bymonthday.length || r.bymonth.length || r.bysetpos.length) return false;
       const days = r.byday.map((d) => d.wd);
-      if (r.interval === 1 && days.length === 5 && ["MO", "TU", "WE", "TH", "FR"].every((d) => days.includes(d as Weekday))) {
+      if (
+        r.interval === 1 &&
+        days.length === 5 &&
+        ["MO", "TU", "WE", "TH", "FR"].every((d) => days.includes(d as Weekday))
+      ) {
         f.freq = "weekdays";
         return true;
       }
@@ -166,13 +178,22 @@ function simpleOf(r: Rule, f: RuleForm, start: Temporal.PlainDate): boolean {
         }
         return false;
       }
-      if (!r.byday.length && r.bysetpos.join() === "-1" && /^28,29(,30)?$/.test(r.bymonthday.join(","))) {
+      if (
+        !r.byday.length &&
+        r.bysetpos.join() === "-1" &&
+        /^28,29(,30)?$/.test(r.bymonthday.join(","))
+      ) {
         f.monthlyMode = "day";
         f.monthDay = r.bymonthday.length + 27;
         f.monthEnd = "last";
         return true;
       }
-      if (r.byday.length === 1 && r.byday[0]!.n !== null && !r.bymonthday.length && !r.bysetpos.length) {
+      if (
+        r.byday.length === 1 &&
+        r.byday[0]!.n !== null &&
+        !r.bymonthday.length &&
+        !r.bysetpos.length
+      ) {
         const n = r.byday[0]!.n!;
         if (n === 0 || n < -1 || n > 4) return false;
         f.monthlyMode = "nth-weekday";
@@ -211,7 +232,10 @@ export function buildRuleText(f: RuleForm): string {
     freq: "DAILY",
     interval: Math.max(1, Math.floor(f.interval) || 1),
     count: f.end === "count" ? Math.max(1, Math.floor(f.count) || 1) : null,
-    until: f.end === "until" && f.until ? { date: Temporal.PlainDate.from(f.until), time: null, utc: false } : null,
+    until:
+      f.end === "until" && f.until
+        ? { date: Temporal.PlainDate.from(f.until), time: null, utc: false }
+        : null,
     byday: [],
     bymonthday: [],
     bymonth: [],
@@ -225,7 +249,14 @@ export function buildRuleText(f: RuleForm): string {
     r.until = { ...r.until, time: Temporal.PlainTime.from("23:59:59") };
   }
   if (f.anchor === "completion") {
-    r.freq = f.freq === "weekly" || f.freq === "weekdays" ? "WEEKLY" : f.freq === "monthly" ? "MONTHLY" : f.freq === "yearly" ? "YEARLY" : "DAILY";
+    r.freq =
+      f.freq === "weekly" || f.freq === "weekdays"
+        ? "WEEKLY"
+        : f.freq === "monthly"
+          ? "MONTHLY"
+          : f.freq === "yearly"
+            ? "YEARLY"
+            : "DAILY";
     return formatRule(r);
   }
   switch (f.freq) {
@@ -239,7 +270,10 @@ export function buildRuleText(f: RuleForm): string {
       break;
     case "weekly":
       r.freq = "WEEKLY";
-      r.byday = (f.weekdays.length ? f.weekdays : [weekdayOf(start)]).map((wd) => ({ n: null, wd }));
+      r.byday = (f.weekdays.length ? f.weekdays : [weekdayOf(start)]).map((wd) => ({
+        n: null,
+        wd,
+      }));
       break;
     case "monthly":
       r.freq = "MONTHLY";
@@ -284,33 +318,83 @@ export interface FormPreview {
 }
 
 /** Validierung und Vorschau der nächsten höchstens 10 Termine. */
-export function previewForm(f: RuleForm, today: Temporal.PlainDate, existing: boolean): FormPreview {
+export function previewForm(
+  f: RuleForm,
+  today: Temporal.PlainDate,
+  existing: boolean,
+): FormPreview {
   let text: string;
   try {
     text = buildRuleText(f);
   } catch (e) {
-    return { ok: false, rule: "", description: null, dates: [], message: String(e), exhausted: false };
+    return {
+      ok: false,
+      rule: "",
+      description: null,
+      dates: [],
+      message: String(e),
+      exhausted: false,
+    };
   }
   const p = parseRule(text);
   if (p.status !== "ok") {
-    return { ok: false, rule: text, description: null, dates: [], message: p.message, exhausted: false };
+    return {
+      ok: false,
+      rule: text,
+      description: null,
+      dates: [],
+      message: p.message,
+      exhausted: false,
+    };
   }
   if (p.rule.until?.utc) {
-    return { ok: false, rule: text, description: null, dates: [], message: "UNTIL mit UTC-Zeit bitte als Datum angeben", exhausted: false };
+    return {
+      ok: false,
+      rule: text,
+      description: null,
+      dates: [],
+      message: "UNTIL mit UTC-Zeit bitte als Datum angeben",
+      exhausted: false,
+    };
   }
   let start: Temporal.PlainDate;
   try {
     start = Temporal.PlainDate.from(f.startDate);
   } catch {
-    return { ok: false, rule: text, description: null, dates: [], message: "Ungültiger Start", exhausted: false };
+    return {
+      ok: false,
+      rule: text,
+      description: null,
+      dates: [],
+      message: "Ungültiger Start",
+      exhausted: false,
+    };
   }
   if (existing && Temporal.PlainDate.compare(start, today) < 0) start = today;
-  const r = queryOccurrences({ rule: p.rule, start, from: start, limit: 10 });
+  // Ab Erledigung: erster Termin ist der Start selbst, danach fester Abstand ab dem jeweiligen Termin (5.2).
+  const r =
+    f.anchor === "completion"
+      ? completionPreview(p.rule, start, 10)
+      : queryOccurrences({ rule: p.rule, start, from: start, limit: 10 });
   if (r.aborted && !r.dates.length) {
-    return { ok: false, rule: text, description: null, dates: [], message: "Berechnung zu aufwendig", exhausted: false };
+    return {
+      ok: false,
+      rule: text,
+      description: null,
+      dates: [],
+      message: "Berechnung zu aufwendig",
+      exhausted: false,
+    };
   }
   if (!r.dates.length) {
-    return { ok: false, rule: text, description: null, dates: [], message: "Die Regel erzeugt ab dem Start keine Termine", exhausted: true };
+    return {
+      ok: false,
+      rule: text,
+      description: null,
+      dates: [],
+      message: "Die Regel erzeugt ab dem Start keine Termine",
+      exhausted: true,
+    };
   }
   return {
     ok: true,
@@ -320,6 +404,30 @@ export function previewForm(f: RuleForm, today: Temporal.PlainDate, existing: bo
     message: null,
     exhausted: r.exhausted,
   };
+}
+
+function completionPreview(
+  rule: Rule,
+  start: Temporal.PlainDate,
+  limit: number,
+): { dates: Temporal.PlainDate[]; exhausted: boolean; aborted: boolean } {
+  const dates = [start];
+  let exhausted = false;
+  let aborted = false;
+  while (dates.length < limit) {
+    const r = completionOccurrences({ rule, base: dates[dates.length - 1]!, limit: 1 });
+    if (!r.dates.length) {
+      exhausted = r.exhausted;
+      aborted = r.aborted;
+      break;
+    }
+    dates.push(r.dates[0]!);
+  }
+  if (rule.count !== null && dates.length >= rule.count) {
+    dates.splice(rule.count);
+    exhausted = true;
+  }
+  return { dates, exhausted, aborted };
 }
 
 export function specFromForm(f: RuleForm): SeriesSpec {
@@ -334,7 +442,11 @@ export function specFromForm(f: RuleForm): SeriesSpec {
 }
 
 /** Aktion zum Speichern des Editors: Serie anlegen oder Regel ändern (5.4). */
-export function ruleFormAction(f: RuleForm, series: Series | null, carryExceptions: string[] = []): TaskAction {
+export function ruleFormAction(
+  f: RuleForm,
+  series: Series | null,
+  carryExceptions: string[] = [],
+): TaskAction {
   let spec: SeriesSpec;
   try {
     spec = specFromForm(f);
