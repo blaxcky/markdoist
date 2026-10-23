@@ -480,6 +480,12 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen sin
   - Ein gerätelokaler Entwurf wird bereits während der Eingabe fortlaufend gesichert, unabhängig vom verzögerten Schreiben in die Markdown-Datei (7.6). „Gespeichert“ wird erst nach erfolgreichem Dateischreiben angezeigt.
   - Jede tatsächliche App-Änderung setzt `dateModified`; No-ops und die exakte Wiederherstellung durch Undo sind ausgenommen.
 - **Status `in-progress`:** wird bei einer Serie beim Fortschreiben auf `open` zurückgesetzt.
+- **Rückmeldung beim Abhaken** (Desktop und Android, gemeinsamer Ablauf `completionFlow` in `packages/app`):
+  - Der Haken zeigt sofort den Zielzustand mit kurzem Aufspringen; das Schreiben startet im selben Moment.
+  - Die Liste bleibt stehen, bis die Zeile fertig ist: Haken mindestens 250 ms halten, Zeile 150 ms ausblenden, Lücke 220 ms einklappen, die Zeilen darunter rücken nach. Die Snackbar erscheint mit dem Ausblenden.
+  - Bleibt die Aufgabe nach dem Schreiben in der Ansicht (Serie in Alle oder Eingang), geht nur der Haken zurück. Schlägt das Schreiben fehl, springt die Zeile zurück und die Fehlermeldung erscheint (7.6).
+  - Bei reduzierter Bewegung (System-Einstellung) entfallen Halten, Aufspringen und Einklappen.
+- **Lage der Meldung:** Android: Die Snackbar steht über dem Plus-Button und der unteren Leiste, auf Bildschirmen ohne Plus-Button knapp über dem unteren Rand; eine neue Meldung blendet über die alte. Desktop: unten mittig, mit Ein- und Ausblenden.
 
 ### 4.5 Bedienung [V]
 

@@ -134,6 +134,14 @@ Ein vollständiger Abgleich von PLAN1.md (Abschnitte 1, 3–7, 9) mit dem Code h
 - Erster Durchlauf scheiterte in Flow 00 am kalten Metro-Bundle (27 s); der Wiederholungslauf mit warmem Bundle war vollständig grün. Für einen frischen Metro-Start die App einmal vorab laden.
 - Nicht im Emulator geprüft: die neuen Recovery-Fälle aus R7 (nur über die simulierte SAF-Schicht) und R2/R4/R5 (nur Unit-Tests).
 
+**Abhak-Animation und Snackbar-Lage (23.10.2026):** gemeinsamer Ablauf `completionFlow` (PLAN1 4.4), Vorlage war eine Bildschirmaufnahme einer anderen App.
+- Desktop: 28 Playwright-Tests grün, neu „Abhaken per Klick“. Bildfolge per Playwright-Screenshots geprüft: Haken sofort, etwa 250 ms halten, Ausblenden, Lücke klappt ein.
+- Android: Release-Build x86_64 (mit dem Debug-Keystore signiert, AVD `Markdoist_API_36`), alle Maestro-Flows und 13 Dateiprüfungen grün; 30 und 31 prüfen jetzt, dass die Zeile vor „Rückgängig“ verschwunden ist. Per `screenrecord` Bild für Bild geprüft: Haken springt auf, Zeile blendet aus, die Zeilen darunter gleiten nach oben; die Snackbar steht über dem Plus-Button.
+- Gefunden und behoben: RN-`LayoutAnimation` greift unter Fabric mit Reanimated 4 nicht (Lücke sprang) – jetzt Reanimated-Layout-Übergang am FlashList-Zellbehälter, nur während des Einklappens. Beim Ausblenden schienen die Wischaktionen durch die Zeile – während des Ablaufs ohne Wischaktionen. Die Snackbar-Lage ging beim Tabwechsel verloren (Abmeldung des alten Tabs nach Anmeldung des neuen) – jetzt Anmeldeliste, die zuletzt angemeldete Lage gilt.
+- Nicht geprüft: reduzierte Bewegung (System-Einstellung) auf beiden Plattformen und ein echtes Gerät.
+- Die App auf dem AVD ist jetzt mit dem Debug-Keystore signiert: vor dem nächsten Release-Install dort deinstallieren (sonst `INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
+- Aufgefallen, nicht behoben (älter als diese Änderung): Beim Wischen nach rechts erscheint das graue Feld „Aktionen“ statt des roten „Erledigen“; die Aktion selbst erledigt korrekt.
+
 **[V]-Abweichungen:**
 - Ausnahmen werden nur bei Kalenderserien angeboten. Eine Serie „ab Erledigung“ hat kein festes künftiges Raster; ihr aktuelles Vorkommen wird mit „Überspringen“ bearbeitet.
 - Texte: Die gemeinsamen Begriffe (Ansichten, Felder, Aktionen, Speicherzustände, Vorschau) stehen in `packages/app/src/texts.ts`; einzelne bildschirmspezifische Beschriftungen stehen weiter im jeweiligen Oberflächencode.

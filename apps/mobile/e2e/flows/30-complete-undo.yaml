@@ -11,6 +11,10 @@ appId: de.markdoist.aufgaben
     duration: 250
 - assertVisible:
     id: snackbar
+# Zeile blendet aus und klappt ein; erst danach Rückgängig, sonst wäre der Titel ohnehin noch sichtbar.
+- extendedWaitUntil:
+    notVisible: "Zahnarzttermin vereinbaren"
+    timeout: 3000
 - tapOn:
     id: snackbar-undo
 - assertVisible: "Zahnarzttermin vereinbaren"

@@ -1,18 +1,20 @@
 // Listenansichten (4.1–4.3): Eingang, Heute, Alle, Erledigt. Ziehen nach unten liest neu ein.
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Pressable, RefreshControl, Text, View } from "react-native";
 import { ListHeader } from "../components/list-header";
 import { PlusIcon } from "../components/icons";
-import { FlashList } from "@shopify/flash-list";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { useNavigation } from "@react-navigation/native";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { T, toggleDoneAction } from "@markdoist/app";
+import { T } from "@markdoist/app";
 import { allOpenView, describeOccurrence, doneView, inboxView, matchesFilter, sortViews, todayView, type TaskView } from "@markdoist/core";
 import { useFilter } from "../filter";
 import { TaskRow } from "../components/task-row";
 import { ActionsSheet } from "../components/actions-sheet";
 import { useRepo, useRepoState, systemClock } from "../repo";
-import { useNotify } from "../notify";
+import { useNotify, useSnackbarInset } from "../notify";
+import { CollapseCell, CollapseProvider, useCompletionFlow } from "../completion";
 import { useTheme } from "../theme";
 import type { RootStack } from "../navigation";
 
@@ -45,8 +47,15 @@ export function ListScreen({ kind }: { kind: ListKind }) {
   const { filter, sort, inboxNewest } = useFilter();
   const idx = state.index;
   const tz = systemClock().timeZone;
+  // Snackbar über dem Plus-Button: Tableiste + Abstand 20 + Knopf 56 + Luft 12.
+  useSnackbarInset(useBottomTabBarHeight() + 20 + 56 + 12);
 
-  const items: Item[] = useMemo(() => group(build()), [idx, kind, tz, filter, sort, inboxNewest]);
+  const live: Item[] = useMemo(() => group(build()), [idx, kind, tz, filter, sort, inboxNewest]);
+  const listRef = useRef<FlashListRef<Item>>(null);
+  // Abhaken: Haken sofort, Liste bleibt stehen, bis die Zeile ausgeblendet ist; danach rückt der Rest nach.
+  // Bei Serien trägt die Aktion das angezeigte Vorkommen, damit ein zweites Tippen nicht das nächste trifft (R6).
+  const completion = useCompletionFlow({ repo, notify, live, refs: live.flatMap((i) => (i.type === "task" ? [i.key] : [])), list: listRef });
+  const items = completion.shown;
   const count = items.filter((i) => i.type === "task").length;
 
   function build(): Item[] {
@@ -89,12 +98,6 @@ export function ListScreen({ kind }: { kind: ListKind }) {
     }
   }
 
-  // Bei Serien das angezeigte Vorkommen mitgeben, damit ein zweites Tippen nicht das nächste trifft (R6).
-  const toggle = (v: TaskView) => {
-    const { action, label } = toggleDoneAction(v);
-    void repo.perform(v.task.ref, action, label).then((o) => notify(o, label));
-  };
-
   const banner = { marginHorizontal: 8, marginBottom: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: c.badge } as const;
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -111,51 +114,57 @@ export function ListScreen({ kind }: { kind: ListKind }) {
         </View>
       )}
       {state.readError && <Text selectable style={[banner, { color: c.danger, fontSize: 12 }]}>{state.readError}{state.stale ? " – letzter bekannter Stand, schreibgeschützt" : ""}</Text>}
-      <FlashList
-        data={items}
-        keyExtractor={(i) => i.key}
-        getItemType={(i) => i.type}
-        contentContainerStyle={{ paddingTop: 4, paddingBottom: 120 }}
-        refreshControl={<RefreshControl refreshing={state.scanning} onRefresh={() => void repo.scan({ full: true })} colors={[c.primary]} progressBackgroundColor={c.surface} />}
-        ListEmptyComponent={
-          <Text style={{ color: c.muted, textAlign: "center", padding: 40 }} testID="empty">
-            {T.empty[kind]}
-          </Text>
-        }
-        renderItem={({ item }) => {
-          if (item.type === "header")
+      <CollapseProvider value={completion.collapsing}>
+        <FlashList
+          ref={listRef}
+          CellRendererComponent={CollapseCell}
+          data={items}
+          keyExtractor={(i) => i.key}
+          getItemType={(i) => i.type}
+          contentContainerStyle={{ paddingTop: 4, paddingBottom: 120 }}
+          refreshControl={<RefreshControl refreshing={state.scanning} onRefresh={() => void repo.scan({ full: true })} colors={[c.primary]} progressBackgroundColor={c.surface} />}
+          ListEmptyComponent={
+            <Text style={{ color: c.muted, textAlign: "center", padding: 40 }} testID="empty">
+              {T.empty[kind]}
+            </Text>
+          }
+          renderItem={({ item }) => {
+            if (item.type === "header")
+              return (
+                <Text style={{ color: c.fg, fontWeight: "600", fontSize: 15, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10 }} accessibilityRole="header">
+                  {item.title} <Text style={{ color: c.muted, fontWeight: "400", fontVariant: ["tabular-nums"] }}>{item.count}</Text>
+                </Text>
+              );
+            if (item.type === "occurrence")
+              return (
+                <Pressable
+                  onPress={() => nav.navigate("Detail", { ref: item.view.task.ref })}
+                  android_ripple={{ color: c.surfaceHigh }}
+                  style={{ marginHorizontal: 8, marginBottom: item.last ? 0 : 2, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: c.surface, borderTopLeftRadius: item.first ? 12 : 0, borderTopRightRadius: item.first ? 12 : 0, borderBottomLeftRadius: item.last ? 12 : 0, borderBottomRightRadius: item.last ? 12 : 0 }}
+                >
+                  <Text style={{ color: c.fg, fontSize: 16 }}>{item.view.task.fields.title}</Text>
+                  <Text style={{ color: c.muted, fontSize: 13, marginTop: 2 }}>{item.text}</Text>
+                </Pressable>
+              );
             return (
-              <Text style={{ color: c.fg, fontWeight: "600", fontSize: 15, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10 }} accessibilityRole="header">
-                {item.title} <Text style={{ color: c.muted, fontWeight: "400", fontVariant: ["tabular-nums"] }}>{item.count}</Text>
-              </Text>
+              <TaskRow
+                view={item.view}
+                today={idx.today}
+                tz={tz}
+                scheduledHint={item.scheduledHint}
+                first={item.first}
+                last={item.last}
+                showInbox={kind !== "inbox"}
+                onOpen={() => nav.navigate("Detail", { ref: item.view.task.ref })}
+                phase={completion.phase(item.key)}
+                onLeft={() => completion.left(item.key)}
+                onToggle={() => completion.start(item.view)}
+                onActions={() => setActions(item.view)}
+              />
             );
-          if (item.type === "occurrence")
-            return (
-              <Pressable
-                onPress={() => nav.navigate("Detail", { ref: item.view.task.ref })}
-                android_ripple={{ color: c.surfaceHigh }}
-                style={{ marginHorizontal: 8, marginBottom: item.last ? 0 : 2, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: c.surface, borderTopLeftRadius: item.first ? 12 : 0, borderTopRightRadius: item.first ? 12 : 0, borderBottomLeftRadius: item.last ? 12 : 0, borderBottomRightRadius: item.last ? 12 : 0 }}
-              >
-                <Text style={{ color: c.fg, fontSize: 16 }}>{item.view.task.fields.title}</Text>
-                <Text style={{ color: c.muted, fontSize: 13, marginTop: 2 }}>{item.text}</Text>
-              </Pressable>
-            );
-          return (
-            <TaskRow
-              view={item.view}
-              today={idx.today}
-              tz={tz}
-              scheduledHint={item.scheduledHint}
-              first={item.first}
-              last={item.last}
-              showInbox={kind !== "inbox"}
-              onOpen={() => nav.navigate("Detail", { ref: item.view.task.ref })}
-              onToggle={() => toggle(item.view)}
-              onActions={() => setActions(item.view)}
-            />
-          );
-        }}
-      />
+          }}
+        />
+      </CollapseProvider>
       <Pressable
         onPress={() => nav.navigate("Capture")}
         testID="fab-capture"

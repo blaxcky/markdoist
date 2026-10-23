@@ -450,6 +450,8 @@ button:disabled {
 }
 .list {
   margin-top: 16px;
+  /* Platz unter der letzten Zeile, damit die Meldung unten nichts verdeckt */
+  padding-bottom: 72px;
 }
 .group {
   margin-bottom: 18px;
@@ -543,6 +545,37 @@ button:disabled {
 }
 .check.checked svg {
   opacity: 1;
+}
+/* Abhaken: Kreis springt kurz auf, Haken zeichnet sich */
+.check.checked.animate {
+  animation: check-pop 0.15s ease-out;
+}
+.check.checked.animate path {
+  stroke-dasharray: 14;
+  animation: check-draw 0.16s ease-out both;
+}
+@keyframes check-pop {
+  0% {
+    transform: scale(0.8);
+  }
+  60% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes check-draw {
+  from {
+    stroke-dashoffset: 14;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.row.leaving {
+  overflow: hidden;
+  pointer-events: none;
 }
 .check:disabled {
   opacity: 0.5;
@@ -1574,6 +1607,22 @@ kbd {
   z-index: 40;
   max-width: 80vw;
   font-size: 13px;
+  animation: toast-in 0.18s ease-out;
+}
+.toast.out {
+  animation: toast-out 0.15s ease-in forwards;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
 }
 .toast button {
   background: none;
@@ -1606,4 +1655,14 @@ kbd {
 .welcome p {
   margin: 0;
   color: var(--fg-muted);
+}
+
+/* ---------- Reduzierte Bewegung ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .check.checked.animate,
+  .check.checked.animate path,
+  .toast,
+  .toast.out {
+    animation-duration: 0s;
+  }
 }

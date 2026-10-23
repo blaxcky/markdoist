@@ -1,16 +1,16 @@
 // Suche (4.3): Titel und Inhalt, ohne Groß-/Kleinschreibung und Umlaute; Titeltreffer zuerst.
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Switch, Text, TextInput, View } from "react-native";
-import { FlashList } from "@shopify/flash-list";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { matchesFilter, search, sortViews, type TaskView } from "@markdoist/core";
-import { toggleDoneAction } from "@markdoist/app";
 import { useFilter } from "../filter";
 import { TaskRow } from "../components/task-row";
 import { ActionsSheet } from "../components/actions-sheet";
 import { useRepo, useRepoState, systemClock } from "../repo";
 import { useNotify } from "../notify";
+import { CollapseCell, CollapseProvider, useCompletionFlow } from "../completion";
 import { useTheme } from "../theme";
 import type { RootStack } from "../navigation";
 
@@ -31,6 +31,9 @@ export function SearchScreen() {
     const r = sortViews(search(state.index, q, { includeDone }).filter((v) => matchesFilter(v, filter, state.index.today)), sort, tz);
     return { results: r, ms: Date.now() - t0 };
   }, [state.index, q, includeDone, filter, sort, tz]);
+  const listRef = useRef<FlashListRef<TaskView>>(null);
+  const completion = useCompletionFlow({ repo, notify, live: results, refs: results.map((v) => v.task.ref), list: listRef });
+  const shown = completion.shown;
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <View style={{ paddingHorizontal: 8, paddingVertical: 12, gap: 8 }}>
@@ -41,28 +44,31 @@ export function SearchScreen() {
           {q.trim() ? <Text style={{ color: c.muted, marginLeft: "auto", fontVariant: ["tabular-nums"] }} testID="search-stats">{results.length} Treffer · {ms} ms</Text> : null}
         </View>
       </View>
-      <FlashList
-        data={results}
-        keyExtractor={(v) => v.task.ref}
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={q.trim() ? <Text style={{ color: c.muted, textAlign: "center", padding: 30 }}>Keine Treffer.</Text> : null}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        renderItem={({ item, index }) => (
-          <TaskRow
-            view={item}
-            first={index === 0}
-            last={index === results.length - 1}
-            today={state.index.today}
-            tz={tz}
-            onOpen={() => nav.navigate("Detail", { ref: item.task.ref })}
-            onToggle={() => {
-              const { action, label } = toggleDoneAction(item);
-              void repo.perform(item.task.ref, action, label).then((o) => notify(o, label));
-            }}
-            onActions={() => setActions(item)}
-          />
-        )}
-      />
+      <CollapseProvider value={completion.collapsing}>
+        <FlashList
+          ref={listRef}
+          CellRendererComponent={CollapseCell}
+          data={shown}
+          keyExtractor={(v) => v.task.ref}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={q.trim() ? <Text style={{ color: c.muted, textAlign: "center", padding: 30 }}>Keine Treffer.</Text> : null}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          renderItem={({ item, index }) => (
+            <TaskRow
+              view={item}
+              first={index === 0}
+              last={index === shown.length - 1}
+              today={state.index.today}
+              tz={tz}
+              onOpen={() => nav.navigate("Detail", { ref: item.task.ref })}
+              phase={completion.phase(item.task.ref)}
+              onLeft={() => completion.left(item.task.ref)}
+              onToggle={() => completion.start(item)}
+              onActions={() => setActions(item)}
+            />
+          )}
+        />
+      </CollapseProvider>
       <ActionsSheet view={actions} today={state.index.today} onClose={() => setActions(null)} />
     </View>
   );

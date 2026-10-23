@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { TaskView } from "@markdoist/core";
-import { T } from "@markdoist/app";
+import { COMPLETE_COLLAPSE_MS, COMPLETE_FADE_MS, T, type CompletionPhase } from "@markdoist/app";
+import { reducedMotion } from "../completion";
 import { Temporal } from "@markdoist/core";
 import { dateLabel } from "../format";
 import { IconCalendar, IconComment, IconDots, IconInbox, IconPencil, IconRepeat, IconTime, IconTrash, IconWarning, IconDone } from "./Icons";
@@ -12,6 +13,9 @@ interface Props {
   today: Temporal.PlainDate;
   tz: string;
   showScheduledHint?: boolean;
+  /** Abhak-Ablauf: Zielzustand zeigen bzw. ausblenden und einklappen */
+  phase?: CompletionPhase;
+  onLeft?(): void;
   onSelect(): void;
   onToggle(): void;
   /** Detail öffnen und ein Feld fokussieren */
@@ -20,9 +24,41 @@ interface Props {
   onDelete(): void;
 }
 
-export function TaskRow({ view, selected, today, tz, showScheduledHint, onSelect, onToggle, onEdit, onFile, onDelete }: Props) {
+export function TaskRow({ view, selected, today, tz, showScheduledHint, phase, onLeft, onSelect, onToggle, onEdit, onFile, onDelete }: Props) {
   const f = view.task.fields;
   const done = f.status === "done";
+  // Während des Ablaufs zeigt der Haken den Zielzustand (gesetzt bzw. beim Wiederöffnen entfernt).
+  const checked = done !== (phase !== undefined);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const leftRef = useRef(onLeft);
+  leftRef.current = onLeft;
+  useEffect(() => {
+    const el = rowRef.current;
+    if (phase !== "leaving" || !el) return;
+    // Erst ausblenden, dann Höhe einklappen: Die Zeilen darunter rücken weich nach.
+    const quick = reducedMotion();
+    const opt = (ms: number) => ({ duration: quick ? 0 : ms, fill: "forwards" as const, easing: "ease-out" });
+    const cs = getComputedStyle(el);
+    const fade = el.animate([{ opacity: 1 }, { opacity: 0 }], opt(COMPLETE_FADE_MS));
+    let collapse: Animation | undefined;
+    void fade.finished
+      .then(() => {
+        collapse = el.animate(
+          [
+            { height: `${el.offsetHeight}px`, paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, borderBottomWidth: cs.borderBottomWidth },
+            { height: "0px", paddingTop: "0px", paddingBottom: "0px", borderBottomWidth: "0px" },
+          ],
+          opt(COMPLETE_COLLAPSE_MS),
+        );
+        return collapse.finished;
+      })
+      .then(() => leftRef.current?.())
+      .catch(() => {});
+    return () => {
+      fade.cancel();
+      collapse?.cancel();
+    };
+  }, [phase]);
   const warn = view.diagnostics.some((d) => d.severity !== "info");
   const [menu, setMenu] = useState(false);
   const due = view.due ? dateLabel(view.due, today, tz, view.overdue) : null;
@@ -30,7 +66,8 @@ export function TaskRow({ view, selected, today, tz, showScheduledHint, onSelect
   const ro = view.readOnly;
   return (
     <div
-      className={`row${selected ? " selected" : ""}${done ? " done" : ""}${menu ? " menu-open" : ""}`}
+      ref={rowRef}
+      className={`row${selected ? " selected" : ""}${done ? " done" : ""}${menu ? " menu-open" : ""}${phase === "leaving" ? " leaving" : ""}`}
       onClick={onSelect}
       data-testid="task-row"
       data-title={f.title}
@@ -38,9 +75,9 @@ export function TaskRow({ view, selected, today, tz, showScheduledHint, onSelect
       aria-selected={selected}
     >
       <button
-        className={`check prio-${f.priority}${done ? " checked" : ""}`}
+        className={`check prio-${f.priority}${checked ? " checked" : ""}${phase ? " animate" : ""}`}
         role="checkbox"
-        aria-checked={done}
+        aria-checked={checked}
         onClick={(e) => {
           e.stopPropagation();
           onToggle();

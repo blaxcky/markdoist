@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { T, toggleDoneAction, type Outcome, type Repository } from "@markdoist/app";
+import { T, type Outcome, type Repository } from "@markdoist/app";
 import {
   allOpenView,
   doneView,
@@ -18,6 +18,7 @@ import {
 import { bridge, type Settings } from "./bridge";
 import { clock, createRepository, startClockWatch, useRepoState } from "./repo";
 import { TaskRow } from "./components/TaskRow";
+import { useCompletionFlow } from "./completion";
 import { Detail } from "./components/Detail";
 import { Capture } from "./components/Capture";
 import { Problems } from "./components/Problems";
@@ -55,6 +56,8 @@ interface Toast {
   error?: boolean;
   undo?: boolean;
   id: number;
+  /** blendet gerade aus */
+  out?: boolean;
 }
 
 export function App() {
@@ -150,7 +153,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), toast.error ? 7000 : 5000);
+    // Erst ausblenden (.toast.out), dann entfernen.
+    const t = toast.out ? setTimeout(() => setToast(null), 150) : setTimeout(() => setToast({ ...toast, out: true }), toast.error ? 7000 : 5000);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -181,6 +185,9 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   }, [idx, view, query, includeDone, filter, inboxNewest, tz, sort]);
 
   const flat = sections.flatMap((s) => s.items);
+  // Abhaken: Haken sofort, Liste bleibt stehen, bis die Zeile ausgeblendet und eingeklappt ist.
+  const completion = useCompletionFlow({ repo, notify, live: sections, refs: flat.map((v) => v.task.ref), key: `${view}|${query}` });
+  const shown = completion.shown;
   const selectedView = idx.tasks.find((v) => v.task.ref === selected) ?? null;
   // Extern umbenannt: Auswahl über die ID nachführen (7.1).
   useEffect(() => {
@@ -214,13 +221,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const selIndex = selectedView ? flat.findIndex((v) => v.task.ref === selectedView.task.ref) : -1;
 
   // Aktion und Ziel beim Bedienereignis festhalten: bei Serien das angezeigte Vorkommen (R6).
-  const toggleDone = useCallback(
-    (v: TaskView) => {
-      const { action, label } = toggleDoneAction(v);
-      void repo.perform(v.task.ref, action, label).then((o) => notify(o, label));
-    },
-    [repo, notify],
-  );
+  const toggleDone = completion.start;
 
   const doUndo = useCallback(() => {
     void repo.undo().then((o) => {
@@ -650,7 +651,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
               <Trash repo={repo} state={state} onOutcome={notify} />
             ) : (
               <div className="list" role="listbox" aria-label="Aufgaben" data-testid="list">
-                {sections.map((s, i) =>
+                {shown.map((s, i) =>
                   s.items.length ? (
                     <div key={i} className="group" data-testid={`section-${i}`}>
                       {s.title && (
@@ -667,6 +668,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                           today={idx.today}
                           tz={tz}
                           showScheduledHint={s.scheduledHint && !!v.scheduled}
+                          phase={completion.phase(v.task.ref)}
+                          onLeft={() => completion.left(v.task.ref)}
                           onSelect={() => openTask(v.task.ref)}
                           onToggle={() => toggleDone(v)}
                           onEdit={(field) => openTask(v.task.ref, field)}
@@ -681,7 +684,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                     </div>
                   ) : null,
                 )}
-                {flat.length === 0 && (
+                {shown.every((s) => s.items.length === 0) && (
                   <div className="empty">{query ? "Keine Treffer." : T.empty[view as "inbox" | "today" | "all" | "done"]}</div>
                 )}
                 {!query && view !== "done" && (
@@ -751,7 +754,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
       )}
       {help && <Help onClose={() => setHelp(false)} />}
       {toast && (
-        <div className={`toast${toast.error ? " error" : ""}`} role="status" data-testid="toast">
+        <div key={toast.id} className={`toast${toast.error ? " error" : ""}${toast.out ? " out" : ""}`} role="status" data-testid="toast">
           <span>{toast.text}</span>
           {toast.undo && state.undo.length > 0 && (
             <button onClick={() => (setToast(null), doUndo())} data-testid="toast-undo">

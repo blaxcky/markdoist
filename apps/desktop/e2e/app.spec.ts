@@ -116,6 +116,19 @@ test("Erledigen per Leertaste und Aufgaben-Undo stellt exakt wieder her", async 
   await expect.poll(() => file("Zahnarzt.md")).toBe(before);
 });
 
+test("Abhaken per Klick: Haken sofort, Zeile blendet aus, Meldung mit Rückgängig", async () => {
+  const r = row("Zahnarzttermin vereinbaren");
+  const check = r.getByRole("checkbox");
+  await check.click();
+  await expect(check).toHaveAttribute("aria-checked", "true");
+  await expect(r).toHaveCount(0);
+  await expect(page.getByTestId("toast-undo")).toBeVisible();
+  expect(await file("Zahnarzt.md")).toContain("status: done");
+  await page.getByTestId("toast-undo").click();
+  await expect(row("Zahnarzttermin vereinbaren")).toBeVisible();
+  await expect(row("Zahnarzttermin vereinbaren").getByRole("checkbox")).toHaveAttribute("aria-checked", "false");
+});
+
 test("Priorität ändert nur priority und dateModified (AK-07)", async () => {
   const before = await file("Zahnarzt.md");
   await row("Zahnarzttermin vereinbaren").click();
