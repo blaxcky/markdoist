@@ -130,3 +130,36 @@ describe("INTERVAL und COUNT als sichere Ganzzahlen (R6)", () => {
     expect(parseRule("FREQ=DAILY;COUNT=10001").status).toBe("invalid");
   });
 });
+
+describe("Zweistufige Suche bis zum Kalenderzyklus (Nachprüfung 24.10.2026, N1)", () => {
+  it("Schalttag am Montag: 2072 → 2112 über das Nicht-Schaltjahr 2100", () => {
+    const n = nextOccurrence({ rule: rule("FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO"), start: D("2016-02-29"), after: D("2072-02-29") });
+    expect(n).toEqual({ kind: "found", date: D("2112-02-29") });
+  });
+  it("großes INTERVAL erreicht seinen Folgetermin", () => {
+    const n = nextOccurrence({ rule: rule("FREQ=YEARLY;INTERVAL=500"), start: D("2026-10-24"), after: D("2026-10-24") });
+    expect(n).toEqual({ kind: "found", date: D("2526-10-24") });
+  });
+  it("Tagesregel ohne jeden Treffer: voller Zyklus begrenzt, Abbruch statt Serienende", () => {
+    const t0 = Date.now();
+    const r = queryOccurrences({ rule: { ...rule("FREQ=DAILY"), bymonth: [2], bymonthday: [31] }, start: D("2026-10-24"), limit: 1 });
+    expect(r).toMatchObject({ dates: [], exhausted: false, aborted: true });
+    expect(Date.now() - t0).toBeLessThan(1000);
+  });
+});
+
+describe("Zeitbudget (Abschnitt 6)", () => {
+  it("beendet eine Suche ohne Treffer auch ohne Rückruf von rrule, als Abbruch", () => {
+    let calls = 0;
+    const r = queryOccurrences({
+      rule: { ...rule("FREQ=DAILY"), bymonth: [2], bymonthday: [31] },
+      start: D("2026-10-24"),
+      limit: 1,
+      deadline: { now: () => ++calls, until: 3 },
+    });
+    expect(r).toMatchObject({ dates: [], exhausted: false, aborted: true });
+    // Der Haken fragt die Uhr alle 1024 Zeiträume: nach wenigen Abfragen ist Schluss.
+    expect(calls).toBeLessThan(10);
+    expect((globalThis as { __markdoistRruleStop?: unknown }).__markdoistRruleStop).toBeUndefined();
+  });
+});

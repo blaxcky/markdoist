@@ -21,16 +21,42 @@ const FREQ = {
   YEARLY: RRule.YEARLY,
 } as const;
 
-/** Suchhorizont je Frequenz in Jahren über den Suchbeginn hinaus (Abschnitt 6).
- *  rrule.js iteriert jeden Zeitraum einzeln; der Horizont begrenzt unmögliche Regeln.
- *  DAILY muss die größte Lücke einer gültigen Tagesregel abdecken: Schalttag auf festem
- *  Wochentag, 28 Jahre (Review 23.10.2026, R5). */
+/** Suchhorizont der ersten, schnellen Suchstufe je Frequenz in Jahren über den Suchbeginn
+ *  hinaus (Abschnitt 6). Er deckt die üblichen Regeln ab; seltene Regeln findet die zweite
+ *  Stufe über den vollen Kalenderzyklus (siehe `CYCLE_YEARS`). */
 export const HORIZON_YEARS: Record<Rule["freq"], number> = {
   DAILY: 30,
   WEEKLY: 30,
   MONTHLY: 100,
   YEARLY: 400,
 };
+
+/** Der Gregorianische Kalender wiederholt sich nach 400 Jahren (146.097 Tage = 20.871 Wochen,
+ *  Wochentage und Schaltjahre eingeschlossen). Eine Regel mit INTERVAL n ist damit spätestens
+ *  nach n solchen Zyklen periodisch: Hat sie nach dem Suchbeginn überhaupt noch einen Termin,
+ *  liegt er innerhalb von 400 × n Jahren. Die zweite Suchstufe verwendet diesen Horizont, so dass
+ *  akzeptierte Regeln nicht an einer willkürlichen Grenze stehen bleiben (Nachprüfung 24.10.2026,
+ *  N1: Schalttag am Montag springt über das Nicht-Schaltjahr 2100 hinweg 40 Jahre). */
+export const CYCLE_YEARS = 400;
+
+const MAX_DATE = Temporal.PlainDate.from("9999-12-31");
+
+/** Zeitbudget je Abfrage in Millisekunden, wenn der Aufrufer keine eigene Grenze setzt (Abschnitt 6).
+ *  Treffer seltener gültiger Regeln liegen weit darunter (Schalttag am Montag über 40 Jahre: rund
+ *  40 ms); erreicht wird es nur von Regeln, die nie einen Termin erzeugen. Abbruch heißt
+ *  „Berechnung zu aufwendig“, nie Serienende. */
+export const SEARCH_BUDGET_MS = 500;
+
+const clock = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
+/** Haken im gepatchten rrule (patches/rrule@2.8.1.patch): wird je Zählzeitraum gefragt, ob die
+ *  Iteration enden soll. rrule ruft die Engine sonst nur bei Treffern zurück. */
+const hooks = globalThis as { __markdoistRruleStop?: () => boolean };
+
+function horizonFrom(base: Temporal.PlainDate, years: number): Temporal.PlainDate {
+  if (base.year + years > 9999) return MAX_DATE;
+  return base.add({ years });
+}
 
 export interface EngineQuery {
   rule: Rule;
@@ -80,13 +106,28 @@ function untilPassed(rule: Rule, d: Temporal.PlainDate, time: Temporal.PlainTime
 }
 
 export function queryOccurrences(q: EngineQuery): EngineResult {
-  const { rule } = q;
   const searchBase = [q.start, q.after, q.from].reduce<Temporal.PlainDate>(
     (acc, d) => (d && Temporal.PlainDate.compare(d, acc) > 0 ? d : acc),
     q.start,
   );
-  let horizon = searchBase.add({ years: HORIZON_YEARS[rule.freq] });
-  if (horizon.year > 9999) horizon = Temporal.PlainDate.from("9999-12-31");
+  // Ein gemeinsames Budget für beide Stufen.
+  const start = clock();
+  const deadline = q.deadline ?? { now: clock, until: start + SEARCH_BUDGET_MS };
+  const quick = horizonFrom(searchBase, HORIZON_YEARS[q.rule.freq]);
+  const first = search(q, quick, deadline);
+  if (!first.horizonReached) return first.result;
+  // Zweite Stufe nur, wenn die schnelle Suche am Horizont endete (nicht bei Zeitgrenze, COUNT, UNTIL).
+  const cycle = horizonFrom(searchBase, CYCLE_YEARS * q.rule.interval);
+  if (Temporal.PlainDate.compare(cycle, quick) <= 0) return first.result;
+  return search(q, cycle, deadline).result;
+}
+
+function search(
+  q: EngineQuery,
+  horizon: Temporal.PlainDate,
+  deadline: { now(): number; until: number },
+): { result: EngineResult; horizonReached: boolean } {
+  const { rule } = q;
   const opts: Partial<Options> = {
     freq: FREQ[rule.freq],
     interval: rule.interval,
@@ -107,42 +148,60 @@ export function queryOccurrences(q: EngineQuery): EngineResult {
   const dates: Temporal.PlainDate[] = [];
   let exhausted = false;
   let aborted = false;
+  let horizonReached = false;
   let index = 0;
   let last: Temporal.PlainDate | null = null;
   const time = q.time ?? null;
-  rr.all((raw) => {
-    if (q.deadline && q.deadline.now() > q.deadline.until) {
-      aborted = true;
-      return false;
-    }
-    const d = fromDate(raw);
-    // Ein doppelt gelieferter Termin (rrule dedupliziert BYSETPOS-Treffer erst seit unserem Patch
-    // nach Zeitwert) darf COUNT nicht verbrauchen; die Folge ist aufsteigend, Vergleich mit dem Vorgänger reicht.
-    if (last && d.equals(last)) return true;
-    last = d;
-    index++;
-    if (!q.ignoreCount && rule.count !== null && index > rule.count) {
-      exhausted = true;
-      return false;
-    }
-    if (untilPassed(rule, d, time)) {
-      exhausted = true;
-      return false;
-    }
-    if (q.after && Temporal.PlainDate.compare(d, q.after) <= 0) return true;
-    if (q.from && Temporal.PlainDate.compare(d, q.from) < 0) return true;
-    if (q.exclude && q.exclude(d)) return true;
-    dates.push(d);
-    return dates.length < q.limit;
-  });
+  let stoppedByTime = false;
+  let ticks = 0;
+  const previousHook = hooks.__markdoistRruleStop;
+  hooks.__markdoistRruleStop = () => {
+    if (++ticks % 1024 !== 0) return false;
+    if (deadline.now() <= deadline.until) return false;
+    stoppedByTime = true;
+    return true;
+  };
+  try {
+    rr.all((raw) => {
+      if (deadline.now() > deadline.until) {
+        aborted = true;
+        return false;
+      }
+      const d = fromDate(raw);
+      // Ein doppelt gelieferter Termin (rrule dedupliziert BYSETPOS-Treffer erst seit unserem Patch
+      // nach Zeitwert) darf COUNT nicht verbrauchen; die Folge ist aufsteigend, Vergleich mit dem Vorgänger reicht.
+      if (last && d.equals(last)) return true;
+      last = d;
+      index++;
+      if (!q.ignoreCount && rule.count !== null && index > rule.count) {
+        exhausted = true;
+        return false;
+      }
+      if (untilPassed(rule, d, time)) {
+        exhausted = true;
+        return false;
+      }
+      if (q.after && Temporal.PlainDate.compare(d, q.after) <= 0) return true;
+      if (q.from && Temporal.PlainDate.compare(d, q.from) < 0) return true;
+      if (q.exclude && q.exclude(d)) return true;
+      dates.push(d);
+      return dates.length < q.limit;
+    });
+  } finally {
+    hooks.__markdoistRruleStop = previousHook;
+  }
+  if (stoppedByTime) aborted = true;
   if (!exhausted && !aborted && dates.length < q.limit) {
     // Iteration endete ohne Abbruch durch uns: COUNT ausgeschöpft am Ende oder Horizont erreicht.
     if (!q.ignoreCount && rule.count !== null && index >= rule.count) exhausted = true;
     else if (rule.until && Temporal.PlainDate.compare(horizon, rule.until.date) >= 0)
       exhausted = true;
-    else aborted = true;
+    else {
+      aborted = true;
+      horizonReached = true;
+    }
   }
-  return { dates, exhausted, aborted };
+  return { result: { dates, exhausted, aborted }, horizonReached };
 }
 
 export type NextResult =

@@ -56,7 +56,7 @@ Du willst eine persönliche, lokal arbeitende Todo-App mit einer Markdown-Datei 
 **Entscheidungen aus `.fragen/2026-10-23-2320-wiederholungen.md` (23.10.2026, Testrunde Wiederholungen, Bericht `docs/TEST-WIEDERHOLUNGEN.md`):**
 - „Ab Erledigung“ mit Regel ohne BY-Teile rechnet als fester Abstand ab dem Erledigungstag mit Klemmen ans Monatsende (31.10. + 1 Monat = 30.11.); rrule-Verhalten gilt nur noch für Completion-Regeln mit BY-Teilen (5.2).
 - Kalenderserien mit COUNT bleiben wie in 5.2: versäumte Termine verlängern die Serie nicht.
-- Außerdem festgelegt: Fehlen in einer Fremddatei `recurrence_revision` oder `recurrence_start`, ergänzt die erste Serienaktion beide Felder mit den beim Lesen abgeleiteten Werten (3.2, 5.4).
+- Außerdem festgelegt: Fehlen in einer Fremddatei `recurrence_revision` oder `recurrence_start`, ergänzt die erste Serienaktion beide Felder mit den beim Lesen abgeleiteten Werten (3.2, 5.4) Das gilt für jede schreibende Serienaktion einschließlich Bezugsfeld ändern und Wiederöffnen.
 
 Das Projektverzeichnis `/home/markus/GitHub/local-first-todo` enthält bislang nur die Planungsdokumente. Festgestellte Umgebung (in M0 erneut prüfen):
 - Node 22.22
@@ -644,12 +644,13 @@ Alles lässt sich mit Standard-RRULE ausdrücken und wird pro Serie entschieden.
 
 **Validierung und begrenzte Berechnung [V]:** Neben der Positivliste werden Wertebereiche, doppelte Tokens, Kombinationen von FREQ und BY-Teilen, positive INTERVAL/COUNT-Werte, COUNT/UNTIL-Ausschluss und Datumstypen geprüft. Die Vorschau zeigt maximal 10 Termine; keine unbeschränkte `.all()`-Abfrage. Berechnung läuft außerhalb des UI-Threads in einem abbrechbaren Worker bzw. einem entsprechend isolierten nativen Auftrag. Nach spätestens 1 s wird der Auftrag beendet und „Berechnung zu aufwendig“ angezeigt; dies ist nicht gleichbedeutend mit „keine Termine“ und beendet keine Serie. Syntaktisch gültige unmögliche Regeln wie `FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30` werden diagnostiziert. Ein Abbruch oder Parserfehler führt zu keinem Schreiben. Die konkreten Grenzen werden in M0/M3 auf beiden Laufzeiten nachgewiesen.
 
-**Konkrete Grenzen [V, Review 23.10.2026]:**
+**Konkrete Grenzen [V, Review 23.10.2026, Nachprüfung 24.10.2026]:**
 - `INTERVAL` höchstens 1000, `COUNT` höchstens 10000; größere oder nicht als sichere Ganzzahl darstellbare Werte sind ungültig.
-- Suchhorizont je Suche über den Suchbeginn hinaus: DAILY 30, WEEKLY 30, MONTHLY 100, YEARLY 400 Jahre. DAILY deckt die größte Lücke einer gültigen Tagesregel ab (Schalttag auf festem Wochentag, 28 Jahre). Eine Folgesuche beginnt jeweils am vorigen Termin.
+- Zweistufige Suche ab dem Suchbeginn: Stufe 1 mit kurzem Horizont (DAILY 30, WEEKLY 30, MONTHLY 100, YEARLY 400 Jahre) für den Normalfall. Findet sie nichts, Stufe 2 über `400 × INTERVAL` Jahre, höchstens bis 9999. Der Gregorianische Kalender wiederholt sich nach 400 Jahren einschließlich Wochentagen und Schaltjahren; eine Regel, die nach dem Suchbeginn noch einen Termin hat, hat ihn daher innerhalb dieses Fensters. Beispiel: Schalttag am Montag springt über das Nicht-Schaltjahr 2100 von 2072 auf 2112 (40 Jahre).
+- Zeitbudget je Abfrage 500 ms für beide Stufen gemeinsam, durchgesetzt auch ohne Treffer über einen Haken im rrule-Patch. Erreicht wird es nur von Regeln, die nie einen Termin erzeugen; dann gilt „Berechnung zu aufwendig“, nie Serienende.
 - Die Formularvorschau verwendet für den ersten Termin dieselbe Berechnung wie „Serie anlegen“ (erster Regeltermin ab Start, mit Serienuhrzeit und UNTIL). Lässt sich nach dem ersten Termin der Folgetermin nicht berechnen, wird die Regel mit „Berechnung zu aufwendig“ abgelehnt statt angelegt.
-- Termine nach dem Jahr 9999 werden nie geschrieben; die Aktion wird mit Hinweis gesperrt.
-- rrule.js 2.8.1 wird mit einem versionierten Patch ausgeliefert (`patches/rrule@2.8.1.patch`, CJS- und ESM-Build): Abbruch hinter UNTIL, BYSETPOS-Treffer nach Zeitwert dedupliziert, negative BYSETPOS-Positionen jenseits der Kandidatenliste verworfen. Zusätzlich ignoriert die Engine einen doppelt gelieferten Termin, bevor COUNT zählt.
+- Kein geschriebenes Datumsfeld liegt nach dem Jahr 9999: weder der Vorkommensschlüssel noch das über den Abstand abgeleitete zweite Feld. Sonst wird die gesamte Aktion mit Hinweis gesperrt.
+- rrule.js 2.8.1 wird mit einem versionierten Patch ausgeliefert (`patches/rrule@2.8.1.patch`, CJS- und ESM-Build): Abbruch hinter UNTIL, Zeitbudget-Haken je Zählzeitraum, BYSETPOS-Treffer nach Zeitwert dedupliziert, negative BYSETPOS-Positionen jenseits der Kandidatenliste verworfen. Zusätzlich ignoriert die Engine einen doppelt gelieferten Termin, bevor COUNT zählt.
 
 Für Regeln außerhalb der einfachen Optionen gibt es eine deutsche Beschreibung nur, soweit der eigene Beschreiber sie abdeckt. Sonst werden Rohregel und Terminvorschau angezeigt.
 

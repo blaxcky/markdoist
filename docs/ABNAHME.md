@@ -155,6 +155,12 @@ Ein vollständiger Abgleich von PLAN1.md (Abschnitte 1, 3–7, 9) mit dem Code h
 - Hinweis Emulator: Die fensterlose Variante (`-no-window`, `qemu-system-x86_64-headless`, Emulator 37.1.11) stürzt auf diesem Rechner beim Start mit SIGSEGV ab; mit Fenster läuft sie.
 - Nicht geprüft: echtes Gerät, Synchronisation zwischen mehreren Geräten.
 
+**Nachprüfung Wiederholungen (24.10.2026):** Befunde N1–N3 aus `docs/REVIEW-WIEDERHOLUNGEN-2026-10-24.md` behoben, Einzelheiten in `docs/TEST-WIEDERHOLUNGEN.md`.
+- Zweistufige Suche bis zum Gregorianischen Zyklus (`400 × INTERVAL` Jahre) und Zeitbudget 500 ms je Abfrage über einen Haken im rrule-Patch; Datumsgrenze 9999 für alle geschriebenen Felder; Wiederöffnen hält Start und Revision fest.
+- `pnpm test:tz` mit 5.481 Tests grün in vier Zonen, `pnpm typecheck` und `pnpm lint` grün, `pnpm e2e:desktop` 28 Playwright-Tests grün. Beide Review-Suiten (2.572 und 775 Tests) vollständig grün.
+- Android (Emulator `Markdoist_API_36`, Release x86_64, Debug-Keystore des Projekts): **15 Maestro-Flows und 20 Dateiprüfungen grün**. Der Bundle-Task lief nach den Kernänderungen neu (Gradle-Inputs aus dem Config-Plugin); das Bundle im APK enthält den neuen Patch-Haken und die neue Meldung zur Datumsgrenze.
+- Gefunden und behoben: Nach längerer Ruhe war der Emulator-Bildschirm aus, Flow 00 fand daher kein Element. `run.sh` weckt und entsperrt das Gerät jetzt vor den Flows und hält es wach. Hermes speichert Texte mit Umlauten als UTF-16; eine Suche im Bundle nach solchen Meldungen braucht diese Kodierung.
+
 **[V]-Abweichungen:**
 - Ausnahmen werden nur bei Kalenderserien angeboten. Eine Serie „ab Erledigung“ hat kein festes künftiges Raster; ihr aktuelles Vorkommen wird mit „Überspringen“ bearbeitet.
 - Texte: Die gemeinsamen Begriffe (Ansichten, Felder, Aktionen, Speicherzustände, Vorschau) stehen in `packages/app/src/texts.ts`; einzelne bildschirmspezifische Beschriftungen stehen weiter im jeweiligen Oberflächencode.

@@ -193,7 +193,16 @@ function revisionMatches(series: Series, rev: string): boolean {
   return rev === series.revisionKey || rev === legacyKey(series);
 }
 
-/** Datumsfelder für ein neues Vorkommen nach 5.3. */
+const OUT_OF_RANGE = "Termin liegt außerhalb des unterstützten Datumsbereichs";
+
+/** Vorkommensschlüssel und Dateiformat verlangen vierstellige Jahre (3.2). */
+function inDateRange(d: Temporal.PlainDate): boolean {
+  return d.year >= 1 && d.year <= 9999;
+}
+
+/** Datumsfelder für ein neues Vorkommen nach 5.3. Liegt der Termin oder ein daraus abgeleitetes
+ *  Datumsfeld außerhalb des unterstützten Bereichs, wird nichts geschrieben (Review 23.10.2026, R6;
+ *  Nachprüfung 24.10.2026, N2). */
 function datesForInstance(
   task: Task,
   series: Pick<Series, "field" | "offsetDays" | "start">,
@@ -202,10 +211,7 @@ function datesForInstance(
   timeZone: string,
 ): { set: Record<string, YamlValue>; error?: string } {
   const set: Record<string, YamlValue> = {};
-  // Vorkommensschlüssel und Dateiformat verlangen vierstellige Jahre (3.2); ein Termin dahinter
-  // darf nicht geschrieben werden (Review 23.10.2026, R6).
-  if (k.year > 9999)
-    return { set, error: "Termin liegt außerhalb des unterstützten Datumsbereichs" };
+  if (!inDateRange(k)) return { set, error: OUT_OF_RANGE };
   const time = series.start?.time ?? null;
   set[series.field] = dateValueString(k, time);
   const other: RefField = series.field === "due" ? "scheduled" : "due";
@@ -215,7 +221,9 @@ function datesForInstance(
     explicitOffset !== undefined && explicitOffset !== null ? explicitOffset : series.offsetDays;
   if (!otherSet) {
     if (explicitOffset !== undefined && explicitOffset !== null) {
-      set[other] = k.add({ days: explicitOffset }).toString();
+      const d = k.add({ days: explicitOffset });
+      if (!inDateRange(d)) return { set, error: OUT_OF_RANGE };
+      set[other] = d.toString();
     }
     return { set };
   }
@@ -232,6 +240,7 @@ function datesForInstance(
     }).days;
   }
   const newOther = k.add({ days: off });
+  if (!inDateRange(newOther)) return { set, error: OUT_OF_RANGE };
   set[other] = withTimeOf(newOther, otherVal, timeZone);
   return { set };
 }
@@ -489,7 +498,8 @@ function planSeries(
       if (!K) return blocked("Kein gespeichertes Vorkommen – Serie mit neuer Regel fortsetzen");
       const k = K.toString();
       if (!series.C.has(k) && !series.S.has(k)) {
-        return { kind: "edit", set: { status: "open" }, remove: ["completedDate"] };
+        // Auch dieser Schreibpfad hält Start und Revision einer Fremdserie fest (Nachprüfung 24.10.2026, N3).
+        return { kind: "edit", set: { ...revisionSet, status: "open" }, remove: ["completedDate"] };
       }
       if (series.anchor !== "calendar" || !rule || !series.start) {
         return blocked("Folgetermin nicht eindeutig – Serie mit neuer Regel fortsetzen");

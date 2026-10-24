@@ -59,7 +59,7 @@ Läufe: `pnpm test` 2119 Tests grün; `pnpm test:tz` grün in Europe/Berlin, UTC
 
 ### Spezifikationslücken ohne Handlungsbedarf
 
-- `EngineQuery.deadline` (1-s-Abbruch im Worker, PLAN1 6) wird produktiv nicht gesetzt; die Begrenzung über Suchhorizont und rrule-Patch reicht gemessen aus (siehe oben, bereits in `docs/ABNAHME.md` M3 vermerkt).
+- Erledigt mit der Nachprüfung vom 24.10.2026: Jede Abfrage hat jetzt ein Zeitbudget von 500 ms, das ein Haken im rrule-Patch auch ohne Treffer durchsetzt (vorher wurde `EngineQuery.deadline` produktiv nicht gesetzt und hätte bei Suchen ohne Treffer nicht gegriffen).
 - `describeRule` wertet `wkst !== "MO" && interval > 1 && freq === "WEEKLY"` ohne Klammern aus; betrifft nur die deutsche Beschreibung, nicht die Berechnung.
 
 ## Review vom 23.10.2026 und Korrekturen
@@ -90,6 +90,20 @@ Neue unabhängige Prüfungen ohne App-Berechnung, aus dem Review ins Repository 
 `dateutil.test.ts` akzeptiert einen Suchabbruch nur noch, wenn jeder Folgetermin einzeln so gefunden wird, wie das Fortschreiben ihn sucht.
 
 Ergebnis: `pnpm test:tz` mit 4.699 Tests grün in allen vier Zonen; die ursprüngliche Review-Suite (2.572 Tests, vorher 68 rot) läuft vollständig grün.
+
+## Nachprüfung vom 24.10.2026
+
+Die Nachprüfung (`docs/REVIEW-WIEDERHOLUNGEN-2026-10-24.md`) bestätigte alle Korrekturen und fand drei weitere Randfälle.
+
+| Befund | Korrektur |
+|---|---|
+| N1 Schalttag am Montag blieb 2072 stehen: über das Nicht-Schaltjahr 2100 beträgt die Lücke 40, nicht 28 Jahre; `YEARLY;INTERVAL=500` erreichte nie den Folgetermin | zweistufige Suche bis `400 × INTERVAL` Jahre (Gregorianischer Zyklus); Zeitbudget 500 ms über einen Haken im rrule-Patch, damit Regeln ohne jeden Treffer die Oberfläche nicht blockieren |
+| N2 abgeleitetes zweites Datumsfeld konnte `+010000-01-01` werden | jedes geschriebene Datumsfeld wird gegen Jahr 1–9999 geprüft, sonst ist die Aktion gesperrt |
+| N3 Wiederöffnen einer Fremdserie hielt Start und Revision nicht fest | `reopenSeries` schreibt sie wie die übrigen Serienaktionen |
+
+Neu im Repository: `packages/app/test/review-2026-10-24.test.ts` (N1–N3, N3 getrennt für fehlenden Start, fehlende Revision und beides), `packages/core/test/completion-by-reference.test.ts` mit 770 Completion-Fällen mit BY-Teilen gegen python-dateutil (Seed 20261024; 30 Referenzfälle über 300 ms in `tools/completion-by-timeouts.json` ausgelassen), Engine-Tests für die zweite Suchstufe und das Zeitbudget.
+
+Ergebnis: `pnpm test:tz` mit 5.481 Tests grün in vier Zonen; beide Review-Suiten (2.572 und 775 Tests) vollständig grün.
 
 ## Nicht geprüft
 

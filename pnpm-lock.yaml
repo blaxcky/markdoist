@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   rrule@2.8.1:
-    hash: ed42551f372323d1845bb44e2496f1db6181ee2807cfa9e2f9d44a74ffdb0b1d
+    hash: 11d8f2c52228f085a5d174f2574f5a59061a5aade0e191ea3a0dc7897da816a1
     path: patches/rrule@2.8.1.patch
 
 importers:
@@ -218,7 +218,7 @@ importers:
         version: 15.0.3
       rrule:
         specifier: 2.8.1
-        version: 2.8.1(patch_hash=ed42551f372323d1845bb44e2496f1db6181ee2807cfa9e2f9d44a74ffdb0b1d)
+        version: 2.8.1(patch_hash=11d8f2c52228f085a5d174f2574f5a59061a5aade0e191ea3a0dc7897da816a1)
       temporal-polyfill:
         specifier: 1.0.6
         version: 1.0.6
@@ -8500,7 +8500,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  rrule@2.8.1(patch_hash=ed42551f372323d1845bb44e2496f1db6181ee2807cfa9e2f9d44a74ffdb0b1d):
+  rrule@2.8.1(patch_hash=11d8f2c52228f085a5d174f2574f5a59061a5aade0e191ea3a0dc7897da816a1):
     dependencies:
       tslib: 2.8.1
 

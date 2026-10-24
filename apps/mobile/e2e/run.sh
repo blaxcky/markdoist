@@ -9,6 +9,11 @@ if [ -z "${JAVA_HOME:-}" ]; then
   for j in /usr/lib/jvm/java-21-openjdk "$HOME/.local/opt/jdk-21"; do [ -d "$j" ] && export JAVA_HOME="$j" && break; done
 fi
 DIR=/sdcard/Documents/MarkdoistTest
+# Bildschirm wecken und entsperren: Nach längerer Ruhe ist der Emulator-Bildschirm aus, dann findet
+# Maestro keine Elemente. Während des Laufs wach halten (stayon gilt bis zum Neustart des Geräts).
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
+adb shell svc power stayon true
 adb shell rm -rf "$DIR"
 adb shell mkdir -p "$DIR"
 for f in seed/*.md; do adb push "$f" "$DIR/" >/dev/null; done
