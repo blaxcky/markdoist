@@ -6,6 +6,8 @@ appId: de.markdoist.aufgaben
       id: scan-progress
     timeout: 180000
 - tapOn:
+    id: nav-menu
+- tapOn:
     id: nav-settings
 - extendedWaitUntil:
     visible:

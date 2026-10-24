@@ -341,6 +341,78 @@ describe("Cache mit vorgeparster Frontmatter", () => {
   });
 });
 
+describe("Start ohne unnötige Arbeit", () => {
+  class CountingKv extends MemoryKeyValueStore {
+    cacheWrites = 0;
+    override async set(key: string, value: string) {
+      if (key.endsWith(":cache")) this.cacheWrites++;
+      await super.set(key, value);
+    }
+  }
+
+  it("unveränderte Dateien behalten Objekt und Index; Cache wird nicht neu geschrieben", async () => {
+    const kv = new CountingKv();
+    const { repo, adapter } = setup(undefined, kv);
+    for (let i = 0; i < 5; i++) adapter.tasks.set(`A${i}.md`, { text: task(`Aufgabe ${i}`), mtime: 1 });
+    await repo.open();
+    expect(kv.cacheWrites).toBe(1);
+    const before = repo.getState();
+    await repo.scan({ full: true });
+    const after = repo.getState();
+    expect(after.index).toBe(before.index);
+    for (const [ref, f] of before.files) expect(after.files.get(ref)).toBe(f);
+    expect(kv.cacheWrites).toBe(1);
+  });
+
+  it("Start aus dem Cache: gleicher Inhalt baut den Index nicht neu", async () => {
+    const kv = new CountingKv();
+    const adapter = new MemoryAdapter();
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await setup(adapter, kv).repo.open();
+    const { repo } = setup(adapter, kv);
+    const indexes = new Set<unknown>();
+    repo.subscribe(() => indexes.add(repo.getState().index));
+    await repo.open();
+    expect(indexes.size).toBe(1);
+    expect(kv.cacheWrites).toBe(1);
+  });
+
+  it("externe Änderung mit gleicher mtime und Größe wird beim Vollabgleich übernommen", async () => {
+    const { repo, adapter } = setup();
+    adapter.tasks.set("A.md", { text: task("A").replace("Notiz", "Alt__"), mtime: 1 });
+    await repo.open();
+    adapter.tasks.set("A.md", { text: task("A").replace("Notiz", "Neu__"), mtime: 1 });
+    await repo.scan({ full: true });
+    const f = repo.getState().files.get("tasks/A.md")!;
+    expect(f.kind === "task" && f.body).toContain("Neu__");
+  });
+
+  it("lokale Änderung landet beim nächsten Abgleich im Cache", async () => {
+    const kv = new CountingKv();
+    const adapter = new MemoryAdapter();
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    const a = setup(adapter, kv);
+    await a.repo.open();
+    expect((await a.repo.perform("tasks/A.md", { type: "setPriority", priority: "high" })).status).toBe("ok");
+    await a.repo.scan({ full: true });
+    adapter.listFails = true; // zweiter Start: nur Cache
+    const b = setup(adapter, kv);
+    await b.repo.open();
+    const cached = b.repo.getState().files.get("tasks/A.md")!;
+    expect(cached.kind === "task" && cached.data.priority).toBe("high");
+  });
+
+  it("loading bis der Cache gelesen ist, auch ohne Cache", async () => {
+    const { repo } = setup();
+    expect(repo.getState().loading).toBe(true);
+    const seen: boolean[] = [];
+    repo.subscribe(() => seen.push(repo.getState().loading));
+    await repo.open();
+    expect(seen[0]).toBe(false);
+    expect(repo.getState().loading).toBe(false);
+  });
+});
+
 describe("AK-21: Undo nach Serienfortschritt mit Checklisten-Reset", () => {
   it("stellt den alten Zustand byte-genau wieder her", async () => {
     const { repo, adapter } = setup();

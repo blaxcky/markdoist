@@ -64,6 +64,8 @@ export interface Draft {
 }
 
 export interface RepoState {
+  /** true, bis der Cache beim Öffnen geladen ist; leere Ansichten sind dann noch nicht aussagekräftig */
+  loading: boolean;
   index: Index;
   files: Map<string, IndexedFile>;
   trash: FileMeta[];
@@ -132,6 +134,10 @@ export class Repository {
   private recovery: RecoveryCase[] = [];
   private drafts: Draft[] = [];
   private unverified = true;
+  private loading = true;
+  /** Dateistand und Metadaten seit dem letzten Laden oder Schreiben des Caches geändert */
+  private savedVersion = -1;
+  private metaDirty = false;
   private scanning: Promise<void> | null = null;
   private scanningFull = false;
   /** nachzuholender Vollabgleich, angefordert während eines Teilabgleichs (7.1) */
@@ -202,6 +208,7 @@ export class Repository {
 
   private snapshot(): RepoState {
     return {
+      loading: this.loading,
       index: this.currentIndex(),
       files: this.filesCopy(),
       trash: [...this.trash],
@@ -247,10 +254,9 @@ export class Repository {
   async open(): Promise<void> {
     const t0 = Date.now();
     await this.loadCache();
-    if (this.files.size) {
-      this.emit(); // Anzeige aus dem Cache, noch als ungeprüft markiert
-      this.cacheLoadMs = Date.now() - t0;
-    }
+    this.loading = false;
+    this.emit(); // Anzeige aus dem Cache, noch als ungeprüft markiert
+    if (this.files.size) this.cacheLoadMs = Date.now() - t0;
     try {
       this.undoStack = JSON.parse((await this.kv.get(this.key("undo"))) ?? "[]");
     } catch {
@@ -294,6 +300,7 @@ export class Repository {
         );
       }
       this.unverified = true;
+      this.savedVersion = this.files.version;
     } catch {
       // Defekter Cache ist jederzeit aus den Dateien rekonstruierbar.
       this.files.clear();
@@ -301,18 +308,31 @@ export class Repository {
     }
   }
 
+  /** Metadaten setzen und merken, ob der Cache dadurch veraltet. */
+  private putMeta(m: FileMeta) {
+    const old = this.metas.get(m.ref);
+    if (!old || old.name !== m.name || old.mtime !== m.mtime || old.size !== m.size) this.metaDirty = true;
+    this.metas.set(m.ref, m);
+  }
+
   private async saveCache() {
+    // Unveränderten Stand nicht erneut serialisieren und schreiben.
+    if (this.savedVersion === this.files.version && !this.metaDirty) return;
+    const version = this.files.version;
+    this.metaDirty = false;
     const entries = [...this.files.values()].map((f) => ({
       meta: this.metas.get(f.ref) ?? { name: f.name, ref: f.ref, mtime: f.mtime, size: null },
       text: f.text,
       hash: f.hash,
       ...(f.kind === "task" ? { parsed: { data: f.data, hasAnchors: f.hasAnchors } } : {}),
       // Ungültige Kodierung auch aus dem Cache als solche zeigen (R4).
-      ...(f.kind === "invalid" && f.diagnostics.some((d) => d.code === "invalid-utf8") ? { invalidUtf8: true } : {}),
+      ...(hasInvalidUtf8(f) ? { invalidUtf8: true } : {}),
     }));
     try {
       await this.kv.set(this.key("cache"), JSON.stringify(entries));
+      this.savedVersion = version;
     } catch {
+      this.metaDirty = true;
       /* Cache ist nur eine Beschleunigung */
     }
   }
@@ -416,7 +436,7 @@ export class Repository {
         const changed =
           !old || !knownFile || m.mtime === null || m.size === null || old.mtime !== m.mtime || old.size !== m.size;
         if (full || changed) toRead.push(m);
-        else this.metas.set(m.ref, m);
+        else this.putMeta(m);
       }
       let readFailures = 0;
       let readMs = 0;
@@ -447,7 +467,10 @@ export class Repository {
             return;
           }
           const mtime = r.mtime ?? m.mtime;
-          this.metas.set(m.ref, { ...m, mtime });
+          this.putMeta({ ...m, mtime });
+          // Unveränderten Inhalt nicht neu auswerten: Dasselbe Objekt hält Index und Zwischenergebnisse gültig.
+          const prev = this.files.get(m.ref);
+          if (prev && prev.hash === r.hash && prev.mtime === mtime && prev.name === m.name && !r.invalidUtf8 && !hasInvalidUtf8(prev)) return;
           this.files.set(m.ref, fileFromRead(m.ref, m.name, r, mtime));
         });
         parseMs += Date.now() - tParse;
@@ -474,7 +497,7 @@ export class Repository {
       }
       for (const ref of touched) {
         const f = this.files.get(ref);
-        if (f) this.metas.set(ref, { ref, name: f.name, mtime: null, size: null });
+        if (f) this.putMeta({ ref, name: f.name, mtime: null, size: null });
         else this.metas.delete(ref);
       }
       return {
@@ -1234,6 +1257,10 @@ function verifyGenerated(
   }
   if (f.body !== expected.body) return "Notiz stimmt nicht";
   return null;
+}
+
+function hasInvalidUtf8(f: IndexedFile): boolean {
+  return f.kind === "invalid" && f.diagnostics.some((d) => d.code === "invalid-utf8");
 }
 
 export function isTaskFileName(m: FileMeta): boolean {

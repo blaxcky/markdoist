@@ -630,7 +630,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                 {flat.length === 1 ? "1 Aufgabe" : `${flat.length} Aufgaben`}
               </div>
             )}
-            {state.unverified && !state.scanProgress && <div className="banner">{T.unverified}</div>}
+            {state.unverified && !state.loading && !state.scanProgress && <div className="banner">{T.unverified}</div>}
             {state.scanProgress && state.scanProgress.total > 0 && (
               <div className="banner" data-testid="scan-progress">
                 Prüfe Dateien {state.scanProgress.done}/{state.scanProgress.total}{" "}
@@ -684,7 +684,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                     </div>
                   ) : null,
                 )}
-                {shown.every((s) => s.items.length === 0) && (
+                {!state.loading && shown.every((s) => s.items.length === 0) && (
                   <div className="empty">{query ? "Keine Treffer." : T.empty[view as "inbox" | "today" | "all" | "done"]}</div>
                 )}
                 {!query && view !== "done" && (

@@ -44,6 +44,8 @@ export function ListScreen({ kind }: { kind: ListKind }) {
   const c = useTheme();
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
   const [actions, setActions] = useState<TaskView | null>(null);
+  // Kreisel nur beim Ziehen; Abgleiche bei Start und Zurückwechseln zeigt das Banner.
+  const [pulling, setPulling] = useState(false);
   const { filter, sort, inboxNewest } = useFilter();
   const idx = state.index;
   const tz = systemClock().timeZone;
@@ -102,7 +104,7 @@ export function ListScreen({ kind }: { kind: ListKind }) {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <ListHeader title={TITLES[kind]} subtitle={count ? `${count} ${count === 1 ? "Aufgabe" : "Aufgaben"}` : undefined} />
-      {state.unverified && !state.scanProgress && <Text style={[banner, { color: c.muted, fontSize: 12 }]}>{T.unverified}</Text>}
+      {state.unverified && !state.loading && !state.scanProgress && <Text style={[banner, { color: c.muted, fontSize: 12 }]}>{T.unverified}</Text>}
       {state.scanProgress && state.scanProgress.total > 0 && (
         <View style={[banner, { flexDirection: "row", alignItems: "center", gap: 12 }]} testID="scan-progress">
           <Text style={{ color: c.muted, fontSize: 12, flex: 1, fontVariant: ["tabular-nums"] }}>
@@ -122,11 +124,23 @@ export function ListScreen({ kind }: { kind: ListKind }) {
           keyExtractor={(i) => i.key}
           getItemType={(i) => i.type}
           contentContainerStyle={{ paddingTop: 4, paddingBottom: 120 }}
-          refreshControl={<RefreshControl refreshing={state.scanning} onRefresh={() => void repo.scan({ full: true })} colors={[c.primary]} progressBackgroundColor={c.surface} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={pulling}
+              onRefresh={() => {
+                setPulling(true);
+                void repo.scan({ full: true }).finally(() => setPulling(false));
+              }}
+              colors={[c.primary]}
+              progressBackgroundColor={c.surface}
+            />
+          }
           ListEmptyComponent={
-            <Text style={{ color: c.muted, textAlign: "center", padding: 40 }} testID="empty">
-              {T.empty[kind]}
-            </Text>
+            state.loading ? null : (
+              <Text style={{ color: c.muted, textAlign: "center", padding: 40 }} testID="empty">
+                {T.empty[kind]}
+              </Text>
+            )
           }
           renderItem={({ item }) => {
             if (item.type === "header")

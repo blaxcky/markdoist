@@ -98,6 +98,8 @@ M0 ist damit vollständig abgenommen.
 | Vollständiger SAF-Abgleich (Kaltstart mit Cache) | – | 6,7 s | < 15 s |
 | Suche „bettwasche schritt“ (1 400 Treffer) | 18 ms | 18 ms | < 100 ms |
 
+**Nachmessung 24.10.2026** (gleicher Emulator und Aufbau): Kaltstart mit Cache: vollständiger SAF-Abgleich 2,8 s statt 6,7 s (Auswerten 5 ms statt ~160 ms, weil unveränderte Dateien ihr Objekt behalten und der Index nicht neu entsteht); Anzeige aus Cache 1,55 s; Erststart-Abgleich 4,5 s. Der Lade-Kreisel erscheint nur noch beim Ziehen, nicht bei Abgleichen nach Start oder Zurückwechseln; bis der Cache gelesen ist, zeigt die Liste weder „leer“ noch das Ungeprüft-Banner.
+
 Optimierungen: schneller Lesepfad für einfache Frontmatter (Auswerten 2 000 Dateien: 0,19 s), Stapel-Lesen mit sechs parallelen Zugriffen im SAF-Modul ohne zusätzliche Metadaten-Abfrage je Datei, Cache mit vorgeparsten Daten, Fortschrittsmeldungen höchstens alle 300 ms, Zähler nur bei geändertem Index. Die Werte gelten für den Emulator, nicht als Zusage für ein echtes Gerät. Die Oberfläche blieb während des Abgleichs bedienbar (Maestro-Flows liefen parallel zum Abgleich).
 
 **[V]-Abweichungen M7:**
