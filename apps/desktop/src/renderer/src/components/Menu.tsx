@@ -29,6 +29,8 @@ export function Menu({ onClose, align = "right", className, label, children, tes
       }
       // Eigene Tastaturbedienung (R9): Pfeile, Pos1 und Ende wandern zwischen den Einträgen.
       if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+      // In Eingabefeldern im Menü (Datum, Auswahl) gehören die Pfeiltasten dem Feld.
+      if ((e.target as HTMLElement).closest("input, select, textarea")) return;
       const items = [...(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? [])];
       if (!items.length) return;
       e.stopPropagation();
@@ -60,6 +62,7 @@ export function MenuItem({
   disabled,
   testId,
   hint,
+  sub,
 }: {
   icon?: ReactNode;
   children: ReactNode;
@@ -68,11 +71,16 @@ export function MenuItem({
   disabled?: boolean;
   testId?: string;
   hint?: ReactNode;
+  /** Erklärzeile unter der Beschriftung */
+  sub?: ReactNode;
 }) {
   return (
     <button role="menuitem" className={`menu-item${danger ? " danger" : ""}`} onClick={onClick} disabled={disabled} data-testid={testId}>
       {icon && <span className="menu-icon">{icon}</span>}
-      <span className="menu-label">{children}</span>
+      <span className="menu-label">
+        {children}
+        {sub && <span className="menu-sub">{sub}</span>}
+      </span>
       {hint && <span className="menu-hint">{hint}</span>}
     </button>
   );

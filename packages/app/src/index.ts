@@ -9,3 +9,4 @@ export * from "./seriesPreview";
 export * from "./dateEdit";
 export * from "./listActions";
 export * from "./completionFlow";
+export * from "./seriesStrip";

@@ -1,13 +1,27 @@
-// Detailansicht (4.4): Formularfelder, Serienbereich, Markdown-Editor und Vorschau.
+// Detailansicht (4.4): links Titel, Serienkarte und Notiz, rechts die Eigenschaften.
+// Serienkarte wie auf Android (Vorkommen-Streifen, „Danach“, Überspringen), aber für Maus und Tastatur:
+// Tooltips statt Erklärtexten, seltene Serienaktionen im Aufklappmenü, Verlauf klappt in der Karte auf.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { diffLines } from "diff";
-import { previewAction, renderMarkdown, T, type Outcome, type Repository } from "@markdoist/app";
+import {
+  pastSkippedCount,
+  previewAction,
+  renderMarkdown,
+  seriesHistory,
+  seriesStrip,
+  skippedBeyondStrip,
+  stripByMonth,
+  T,
+  type Outcome,
+  type Repository,
+  type StripCell,
+} from "@markdoist/app";
 import {
   describeOccurrence,
   describeRule,
+  formatGermanDate,
   parseKey,
   Temporal,
-  upcomingForExceptions,
   type Priority,
   type Status,
   type TaskAction,
@@ -18,6 +32,7 @@ import { RecurrenceEditor } from "./RecurrenceEditor";
 import { Menu, MenuItem } from "./Menu";
 import {
   IconCalendar,
+  IconCheck,
   IconChevronDown,
   IconChevronUp,
   IconClose,
@@ -26,11 +41,12 @@ import {
   IconDots,
   IconFlag,
   IconFolder,
-  IconHistory,
   IconInbox,
   IconPencil,
   IconRepeat,
+  IconSkip,
   IconStatus,
+  IconStop,
   IconTime,
   IconTrash,
 } from "./Icons";
@@ -38,6 +54,10 @@ import { dateLabel, splitDateValue } from "../format";
 import { clock } from "../repo";
 
 type SaveState = "idle" | "pending" | "draft" | "saved" | "failed" | "conflict";
+
+const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+const MONTHS_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+const WD_SHORT = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 interface Props {
   repo: Repository;
@@ -55,6 +75,41 @@ interface Props {
   onNext?: () => void;
 }
 
+/** Ein Vorkommen im Streifen; künftige sind Umschalter fürs Überspringen (Tooltip nennt Datum und Wirkung). */
+function StripDay({ cell, label, ro, onToggle }: { cell: StripCell; label: string; ro: boolean; onToggle?(): void }) {
+  const occ = describeOccurrence(cell.date);
+  const skipped = cell.kind === "skipped" || cell.kind === "future-skipped";
+  const content = (
+    <>
+      <span className="strip-label">{label}</span>
+      <span className="strip-dot">{cell.kind === "done" ? <IconCheck size={16} /> : cell.date.day}</span>
+    </>
+  );
+  if (onToggle) {
+    return (
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={skipped}
+        aria-label={`${occ} überspringen`}
+        title={skipped ? `${occ} wird übersprungen – klicken zum Zurücknehmen` : `${occ} – klicken zum Überspringen`}
+        className={`strip-day ${cell.kind}`}
+        disabled={ro}
+        onClick={onToggle}
+        data-testid={`exception-${cell.date}`}
+      >
+        {content}
+      </button>
+    );
+  }
+  const state = { done: "erledigt", skipped: "übersprungen", current: "aktuelles Vorkommen", future: "", "future-skipped": "" }[cell.kind];
+  return (
+    <div className={`strip-day ${cell.kind}`} title={`${occ}: ${state}`} aria-label={`${occ}: ${state}`} role="img" data-testid={cell.kind === "current" ? "series-current" : undefined}>
+      {content}
+    </div>
+  );
+}
+
 export function Detail({ repo, view, today, draftText, draftConflict, focusField, onOutcome, onClose, onToggle, onPrev, onNext }: Props) {
   const t = view.task;
   const f = t.fields;
@@ -66,7 +121,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
   const [save, setSave] = useState<SaveState>(draftConflict ? "conflict" : draftText !== null ? "draft" : "idle");
   const [editRule, setEditRule] = useState<false | "edit" | "continue">(false);
   const [extraException, setExtraException] = useState("");
-  const [menu, setMenu] = useState(false);
+  const [menu, setMenu] = useState<false | "task" | "series">(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef(false);
@@ -118,7 +173,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
       void flush();
     };
     // beim Wechsel der Aufgabe speichern
-  }, [ref]);  
+  }, [ref]);
 
   const onBodyChange = (text: string) => {
     pending.current = true;
@@ -136,6 +191,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
     void act({ type: "setDate", field, value }, field === "due" ? "Frist geändert" : "Planung geändert");
   };
 
+  // Datum als Text („Heute“, „Mi 14. Okt“) über dem unsichtbaren nativen Feld; Uhrzeit und Entfernen erscheinen beim Überfahren.
   const dateEditor = (field: "due" | "scheduled") => {
     const raw = t.data[field];
     const { date, time } = splitDateValue(raw, clock().timeZone);
@@ -144,9 +200,9 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
     return (
       <div className={`side-value dateedit${date ? "" : " unset"}${tone}`}>
         {field === "due" ? <IconCalendar size={16} /> : <IconTime size={16} />}
-        <span className="date-pick">
+        <span className="date-pick" title={date ? formatGermanDate(Temporal.PlainDate.from(date)) : undefined}>
           <span className="date-text" aria-hidden="true">
-            {date ? dateLabel({ kind: "date", date: Temporal.PlainDate.from(date), raw: date }, today, clock().timeZone).text : "Kein Datum"}
+            {date ? dateLabel({ kind: "date", date: Temporal.PlainDate.from(date), raw: date }, today, clock().timeZone).text : "Hinzufügen"}
           </span>
           <input
             ref={field === "due" ? dueRef : schRef}
@@ -159,19 +215,19 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
             aria-label={T.fields[field]}
           />
         </span>
-        {date && (
-          <button className="icon-btn small" disabled={ro} onClick={() => setDate(field, "", "")} aria-label={`${T.fields[field]} entfernen`} title={`${T.fields[field]} entfernen`}>
-            <IconClose size={16} />
-          </button>
-        )}
-        {date &&
-          (time ? (
-            <input type="time" value={time} disabled={ro} onChange={(e) => setDate(field, date, e.target.value)} aria-label="Uhrzeit" />
-          ) : (
-            <button className="link-btn" disabled={ro} onClick={() => setDate(field, date, "09:00")}>
-              Uhrzeit hinzufügen
+        {date && time && <input type="time" value={time} disabled={ro} onChange={(e) => setDate(field, date, e.target.value)} aria-label="Uhrzeit" />}
+        <span className="hover-tools">
+          {date && !time && (
+            <button className="icon-btn small" disabled={ro} onClick={() => setDate(field, date, "09:00")} aria-label="Zeit hinzufügen" title="Uhrzeit hinzufügen">
+              <IconTime size={16} />
             </button>
-          ))}
+          )}
+          {date && (
+            <button className="icon-btn small" disabled={ro} onClick={() => setDate(field, "", "")} aria-label={`${T.fields[field]} entfernen`} title={`${T.fields[field]} entfernen`}>
+              <IconClose size={16} />
+            </button>
+          )}
+        </span>
         {invalid && <span className="badge warn">ungültig: {String(raw)}</span>}
       </div>
     );
@@ -180,17 +236,28 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
   const K = s?.instance?.toString() ?? "";
   const seriesActive = s && s.phase === "active";
   // Vorschau vor dem Abschluss (5.2, 5.4): was Erledigen bzw. Wiederöffnen tatsächlich bewirkt.
-  const completePreview = useMemo(
-    () => (s && s.phase === "active" ? previewAction(t, { type: "completeOccurrence", revision: s.revisionKey, instance: K }, clock()).lines : []),
+  const complete = useMemo(
+    () => (s && s.phase === "active" ? previewAction(t, { type: "completeOccurrence", revision: s.revisionKey, instance: K }, clock()) : null),
     [t, s, K, today],
   );
   const reopenPreview = useMemo(
     () => (s && s.phase === "ended" ? previewAction(t, { type: "reopenSeries", revision: s.revisionKey }, clock()) : null),
     [t, s, today],
   );
-  const futureExceptions = s ? [...s.S].filter((d) => s.instance && d > s.instance.toString()).sort() : [];
-  const upcoming = s ? upcomingForExceptions(s) : [];
-  const extraSkipped = futureExceptions.filter((d) => !upcoming.some((u) => u.date.toString() === d));
+  const strip = useMemo(() => (s ? seriesStrip(s) : []), [s]);
+  const extraSkipped = s ? skippedBeyondStrip(s, strip) : [];
+  const byMonth = stripByMonth(strip);
+  const history = useMemo(() => (s ? seriesHistory(s) : null), [s]);
+  const preview = complete?.preview ?? null;
+  const nextDate = preview?.result === "change" && !preview.ended ? preview.instance : null;
+  // Hinweise der Vorschau ohne das, was „Nächstes Vorkommen“ und die Terminfelder schon zeigen.
+  const hidden = [`${T.preview.nextOccurrence}:`, `${T.preview.firstOccurrence}:`, `${T.fields.due}:`, `${T.fields.scheduled}:`];
+  const notes = (complete?.lines ?? []).filter((l) => l !== T.preview.ends && !hidden.some((h) => l.startsWith(h)));
+  const occ = s?.instance ? describeOccurrence(s.instance) : "";
+  const ruleText = s ? (s.rule ? (describeRule(s.rule, s.anchor) ?? s.raw) : s.raw) : "";
+  const phaseNote = !s ? "" : s.phase === "ended" ? "beendet" : s.phase === "clarify" ? "Fortschreibung klären" : s.phase === "active" ? "" : "gesperrt";
+  const toggleException = (d: string, skipped: boolean) =>
+    s && void act({ type: "setException", revision: s.revisionKey, date: d, skipped: !skipped }, skipped ? "Ausnahme entfernt" : "Termin wird übersprungen");
 
   const onPreviewClick = (e: React.MouseEvent) => {
     const el = e.target as HTMLElement;
@@ -204,25 +271,37 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
     }
   };
 
-  const history = useMemo(() => {
-    if (!s && !Array.isArray(t.data.recurrence_archive)) return null;
-    const sections: { label: string; done: string[]; skipped: string[] }[] = [];
-    if (s) sections.push({ label: `Aktiver Abschnitt (${s.raw})`, done: [...s.C].sort().reverse(), skipped: [...s.S].sort().reverse() });
+  // Frühere Abschnitte (Regeländerung, entfernte Wiederholung) als Zusammenfassung.
+  const archive = useMemo(() => {
     const arch = t.data.recurrence_archive;
-    if (Array.isArray(arch)) {
-      for (const a of arch) {
-        if (!a || typeof a !== "object" || Array.isArray(a)) continue;
+    if (!Array.isArray(arch)) return [];
+    return arch
+      .filter((a) => !!a && typeof a === "object" && !Array.isArray(a))
+      .map((a) => {
         const snap = a as Record<string, unknown>;
-        const list = (k: string) => (Array.isArray(snap[k]) ? (snap[k] as unknown[]).map(String) : []);
-        sections.push({
-          label: `Archiv (${String(snap.recurrence)}, ${snap.closed_reason === "removed" ? "entfernt" : "Regel geändert"})`,
-          done: [...new Set(list("complete_instances"))].sort().reverse(),
-          skipped: [...new Set(list("skipped_instances"))].sort().reverse(),
-        });
-      }
-    }
-    return sections;
-  }, [s, t.data.recurrence_archive]);
+        const list = (k: string) => (Array.isArray(snap[k]) ? [...new Set((snap[k] as unknown[]).map(String))].sort() : []);
+        const done = list("complete_instances");
+        const skipped = list("skipped_instances");
+        const all = [...done, ...skipped].sort();
+        return { rule: String(snap.recurrence ?? "?"), removed: snap.closed_reason === "removed", done: done.length, skipped: skipped.length, from: parseKey(all[0] ?? ""), to: parseKey(all[all.length - 1] ?? "") };
+      })
+      .reverse();
+  }, [t.data.recurrence_archive]);
+  const archiveList =
+    archive.length > 0 ? (
+      <div className="history-archive">
+        <div className="history-archive-head">Frühere Abschnitte</div>
+        {archive.map((a, i) => (
+          <div key={i} className="history-archive-row">
+            <span>{a.rule}</span>
+            <span className="muted">
+              {a.removed ? "entfernt" : "Regel geändert"}
+              {a.from && a.to ? ` · ${describeOccurrence(a.from)} – ${describeOccurrence(a.to)}` : ""} · {a.done} erledigt, {a.skipped} übersprungen
+            </span>
+          </div>
+        ))}
+      </div>
+    ) : null;
 
   const checkDisabled = ro || (!!s && !seriesActive);
   const onCheck = () => {
@@ -230,6 +309,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
       if (seriesActive) void act({ type: "completeOccurrence", revision: s.revisionKey, instance: K }, "Vorkommen erledigt");
     } else onToggle();
   };
+  const checkLabel = s ? `Vorkommen ${occ} erledigen` : f.status === "done" ? T.actions.reopen : T.actions.complete;
   const folderName = repo.folder.split("/").filter(Boolean).pop() ?? repo.folder;
 
   return (
@@ -253,10 +333,10 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
               <IconChevronDown size={24} />
             </button>
             <span className="menu-anchor">
-              <button className="icon-btn" onClick={() => setMenu((m) => !m)} data-menu-anchor title="Weitere Aktionen" aria-label="Weitere Aktionen" data-testid="detail-more">
+              <button className="icon-btn" onClick={() => setMenu((m) => (m === "task" ? false : "task"))} data-menu-anchor title="Weitere Aktionen" aria-label="Weitere Aktionen" data-testid="detail-more">
                 <IconDots size={24} />
               </button>
-              {menu && (
+              {menu === "task" && (
                 <Menu label="Aufgabenaktionen" onClose={() => setMenu(false)}>
                   {!s && (
                     <MenuItem icon={<IconDone size={20} />} disabled={ro} onClick={() => (setMenu(false), onToggle())}>
@@ -285,9 +365,11 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                 className={`check big prio-${f.priority}${f.status === "done" ? " checked" : ""}`}
                 role="checkbox"
                 aria-checked={f.status === "done"}
-                aria-label={s ? "Vorkommen erledigen" : f.status === "done" ? T.actions.reopen : T.actions.complete}
+                aria-label={checkLabel}
+                title={`${checkLabel} (Leertaste)`}
                 disabled={checkDisabled}
                 onClick={onCheck}
+                data-testid={seriesActive ? "series-complete" : undefined}
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M7.5 12.3l3 3 6-6.3" />
@@ -316,9 +398,254 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                 {d.message}
               </div>
             ))}
+
+            {s && (
+              <section className="series-card" data-testid="series-panel" aria-label="Serie">
+                <div className="series-card-head">
+                  <span className="series-card-title">
+                    Serie{phaseNote && <span className="series-phase"> · {phaseNote}</span>}
+                  </span>
+                  {!ro && (
+                    <span className="menu-anchor">
+                      <button className="icon-btn" onClick={() => setMenu((m) => (m === "series" ? false : "series"))} data-menu-anchor title="Serien-Aktionen" aria-label="Serien-Aktionen" data-testid="series-menu">
+                        <IconDots size={20} />
+                      </button>
+                      {menu === "series" && (
+                        <Menu label="Serien-Aktionen" className="series-menu" onClose={() => setMenu(false)}>
+                          <div className="menu-info">
+                            <IconRepeat size={18} />
+                            <div>
+                              <div className="menu-info-title">{ruleText}</div>
+                              {occ && <div className="menu-info-sub">{s.phase === "ended" ? "zuletzt" : "aktuell"} {occ}</div>}
+                            </div>
+                          </div>
+                          <div className="menu-sep" />
+                          <MenuItem icon={<IconPencil size={20} />} testId="series-edit" onClick={() => (setMenu(false), setEditRule("edit"))}>
+                            Regel bearbeiten …
+                          </MenuItem>
+                          {seriesActive && s.anchor === "calendar" && (
+                            <div className="menu-form">
+                              <span className="menu-icon">
+                                <IconSkip size={20} />
+                              </span>
+                              <label className="menu-form-body">
+                                <span>Termin überspringen</span>
+                                <span className="menu-form-row">
+                                  <input type="date" value={extraException} onChange={(e) => setExtraException(e.target.value)} aria-label="Weiteren Termin überspringen" data-testid="exception-date" />
+                                  <button
+                                    className="btn"
+                                    disabled={!extraException}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      void act({ type: "setException", revision: s.revisionKey, date: extraException, skipped: true }, "Termin wird übersprungen").then((o) => {
+                                        if (o.status === "ok") {
+                                          setExtraException("");
+                                          setMenu(false);
+                                        }
+                                      });
+                                    }}
+                                    data-testid="exception-add"
+                                  >
+                                    Überspringen
+                                  </button>
+                                </span>
+                              </label>
+                            </div>
+                          )}
+                          {seriesActive && (
+                            <>
+                              <div className="menu-sep" />
+                              <MenuItem
+                                icon={<IconDone size={20} />}
+                                sub={`${occ} zählt als erledigt, danach keine Termine mehr.`}
+                                testId="series-end-complete"
+                                onClick={() => (setMenu(false), void act({ type: "endSeries", revision: s.revisionKey, instance: K, completeCurrent: true }, "Serie beendet"))}
+                              >
+                                Erledigen und Serie beenden
+                              </MenuItem>
+                              <MenuItem
+                                icon={<IconStop size={20} />}
+                                sub={`Ohne ${occ} zu erledigen. Die Aufgabe wird abgeschlossen.`}
+                                testId="series-end"
+                                onClick={() => (setMenu(false), void act({ type: "endSeries", revision: s.revisionKey, instance: K, completeCurrent: false }, "Serie beendet"))}
+                              >
+                                Serie beenden
+                              </MenuItem>
+                            </>
+                          )}
+                          <div className="menu-sep" />
+                          <MenuItem
+                            icon={<IconRepeat size={20} />}
+                            danger
+                            sub="Die Aufgabe bleibt als einmalige Aufgabe. Der Verlauf wird archiviert."
+                            testId="series-remove"
+                            onClick={() => (setMenu(false), void act({ type: "removeRecurrence", revision: s.revisionKey }, "Wiederholung entfernt"))}
+                          >
+                            Wiederholung entfernen
+                          </MenuItem>
+                        </Menu>
+                      )}
+                    </span>
+                  )}
+                </div>
+
+                {strip.length > 0 && (
+                  <div className="strip" data-testid="exceptions">
+                    {strip.map((cell) => {
+                      const future = cell.kind === "future" || cell.kind === "future-skipped";
+                      return (
+                        <StripDay
+                          key={cell.date.toString()}
+                          cell={cell}
+                          ro={ro}
+                          label={byMonth ? MONTHS_SHORT[cell.date.month - 1]! : WD_SHORT[cell.date.dayOfWeek - 1]!}
+                          onToggle={future ? () => toggleException(cell.date.toString(), cell.kind === "future-skipped") : undefined}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+                {extraSkipped.length > 0 && (
+                  <div className="strip-extra">
+                    <span>Später übersprungen:</span>
+                    {extraSkipped.map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        role="checkbox"
+                        aria-checked
+                        className="strip-chip"
+                        disabled={ro}
+                        title="Klicken zum Zurücknehmen"
+                        onClick={() => toggleException(d, true)}
+                        data-testid={`exception-${d}`}
+                      >
+                        {parseKey(d) ? describeOccurrence(parseKey(d)!) : d}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {s.phase === "clarify" && s.proposal && <div className="series-note warn">Vorschlag für das nächste Vorkommen: {describeOccurrence(s.proposal)}</div>}
+
+                {seriesActive && (
+                  <div className="series-next">
+                    <div className="series-next-text" data-testid="complete-preview">
+                      {nextDate ? (
+                        <div>
+                          <span className="muted">{T.preview.nextOccurrence}:</span> <strong>{formatGermanDate(nextDate)}</strong>
+                        </div>
+                      ) : preview?.ended ? (
+                        <div className="muted">{T.preview.ends}</div>
+                      ) : null}
+                      {notes.map((l) => (
+                        <div key={l} className="series-note">
+                          {l}
+                        </div>
+                      ))}
+                    </div>
+                    <button className="btn" disabled={ro} onClick={() => void act({ type: "skipOccurrence", revision: s.revisionKey, instance: K }, "Übersprungen")} title={`${occ} überspringen`} data-testid="series-skip">
+                      <IconSkip size={16} />
+                      {T.actions.skip}
+                    </button>
+                  </div>
+                )}
+                {s.phase === "ended" && (
+                  <div className="series-next">
+                    <div className="series-next-text" data-testid="reopen-preview">
+                      {reopenPreview?.lines.map((l) => (
+                        <div key={l} className="series-note">
+                          {l}
+                        </div>
+                      ))}
+                    </div>
+                    {reopenPreview?.preview.result === "change" && (
+                      <button className="btn primary" disabled={ro} onClick={() => void act({ type: "reopenSeries", revision: s.revisionKey }, "Serie wiederöffnet")} data-testid="series-reopen">
+                        Serie wiederöffnen
+                      </button>
+                    )}
+                    {reopenPreview?.preview.result === "blocked" && (
+                      <button className="btn" disabled={ro} onClick={() => setEditRule("continue")} data-testid="series-continue">
+                        <IconRepeat size={16} />
+                        Mit neuer Regel fortsetzen
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {(s.C.size > 0 || s.S.size > 0 || archive.length > 0) && (
+                  <details className="series-history" data-testid="history">
+                    <summary>
+                      <span className="series-count">
+                        <b>{s.C.size}</b> erledigt · <b>{pastSkippedCount(s)}</b> übersprungen
+                      </span>
+                      <span className="series-history-link">
+                        Verlauf <IconChevronDown size={16} />
+                      </span>
+                    </summary>
+                    <div className="history-legend">
+                      <span>
+                        <i className="lg done" /> erledigt
+                      </span>
+                      <span>
+                        <i className="lg skipped" /> übersprungen
+                      </span>
+                      {s.phase !== "ended" && s.instance && (
+                        <span>
+                          <i className="lg current" /> aktuell
+                        </span>
+                      )}
+                    </div>
+                    <div className="history-months">
+                      {history?.months.map((m) => (
+                        <div key={`${m.year}-${m.month}`} className="history-month">
+                          <div className="history-month-name">
+                            {MONTHS[m.month - 1]} {m.year}
+                          </div>
+                          <div className="history-grid">
+                            {WD_SHORT.map((w) => (
+                              <span key={w} className="wd">
+                                {w}
+                              </span>
+                            ))}
+                            {m.cells.map((d, i) => {
+                              const mk = d ? history.mark(d) : null;
+                              return (
+                                <span key={i} className={`hd${mk ? ` ${mk}` : ""}`} title={d && mk ? `${describeOccurrence(d)}: ${{ done: "erledigt", skipped: "übersprungen", current: "aktuelles Vorkommen", upcoming: "geplant" }[mk]}` : undefined}>
+                                  {d?.day}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {archiveList}
+                  </details>
+                )}
+              </section>
+            )}
+            {!s && archiveList && (
+              <details className="series-history standalone" data-testid="history">
+                <summary>
+                  <span className="series-count">Frühere Wiederholungen</span>
+                  <span className="series-history-link">
+                    anzeigen <IconChevronDown size={16} />
+                  </span>
+                </summary>
+                {archiveList}
+              </details>
+            )}
+
             <div className="desc-head">
               <IconDescription size={16} />
               <span className="desc-label">Beschreibung</span>
+              <span className={`state ${save}`} data-testid="save-state">
+                {save === "pending" && T.save.pending}
+                {save === "draft" && T.save.draft}
+                {save === "saved" && T.save.saved}
+                {save === "failed" && T.save.failed}
+                {save === "conflict" && T.save.conflict}
+              </span>
               <div className="seg" role="tablist" aria-label="Notiz">
                 <button role="tab" aria-selected={tab === "edit"} className={tab === "edit" ? "on" : ""} onClick={() => setTab("edit")}>
                   Bearbeiten
@@ -336,13 +663,6 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                   Vorschau
                 </button>
               </div>
-              <span className={`state ${save}`} data-testid="save-state">
-                {save === "pending" && T.save.pending}
-                {save === "draft" && T.save.draft}
-                {save === "saved" && T.save.saved}
-                {save === "failed" && T.save.failed}
-                {save === "conflict" && T.save.conflict}
-              </span>
             </div>
             {save === "failed" && (
               <div className="diag error" data-testid="save-failed">
@@ -404,133 +724,6 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
             ) : (
               <div className="preview" data-testid="preview" onClick={onPreviewClick} dangerouslySetInnerHTML={{ __html: html }} />
             )}
-            {s && (
-              <div className="series" data-testid="series-panel">
-                <div className="series-head">
-                  <IconRepeat size={16} />
-                  <span>Serie</span>
-                  {s.instance && (
-                    <span className="series-instance">
-                      Aktuelles Vorkommen: <b>{describeOccurrence(s.instance)}</b>
-                      {s.phase === "clarify" && s.proposal && <> – Vorschlag: {describeOccurrence(s.proposal)}</>}
-                    </span>
-                  )}
-                </div>
-                <div className="actions">
-                  {seriesActive && (
-                    <>
-                      <button className="btn primary" disabled={ro} onClick={() => void act({ type: "completeOccurrence", revision: s.revisionKey, instance: K }, "Vorkommen erledigt")} data-testid="series-complete">
-                        Vorkommen erledigen
-                      </button>
-                      <button className="btn" disabled={ro} onClick={() => void act({ type: "skipOccurrence", revision: s.revisionKey, instance: K }, "Übersprungen")} data-testid="series-skip">
-                        {T.actions.skip}
-                      </button>
-                      <button className="btn" disabled={ro} onClick={() => void act({ type: "endSeries", revision: s.revisionKey, instance: K, completeCurrent: true }, "Serie beendet")}>
-                        Erledigen und Serie beenden
-                      </button>
-                      <button className="btn" disabled={ro} onClick={() => void act({ type: "endSeries", revision: s.revisionKey, instance: K, completeCurrent: false }, "Serie beendet")}>
-                        Serie ohne Erledigung beenden
-                      </button>
-                    </>
-                  )}
-                  {s.phase === "ended" && reopenPreview?.preview.result === "change" && (
-                    <button className="btn" disabled={ro} onClick={() => void act({ type: "reopenSeries", revision: s.revisionKey }, "Serie wiederöffnet")} data-testid="series-reopen">
-                      Serie wiederöffnen
-                    </button>
-                  )}
-                  {s.phase === "ended" && reopenPreview?.preview.result === "blocked" && (
-                    <button className="btn" disabled={ro} onClick={() => setEditRule("continue")} data-testid="series-continue">
-                      Serie mit neuer Regel fortsetzen
-                    </button>
-                  )}
-                </div>
-                {seriesActive && completePreview.length > 0 && (
-                  <ul className="preview-lines" data-testid="complete-preview" aria-label="Beim Erledigen">
-                    <li className="preview-head">Beim Erledigen:</li>
-                    {completePreview.map((l) => (
-                      <li key={l}>{l}</li>
-                    ))}
-                  </ul>
-                )}
-                {reopenPreview && (
-                  <ul className="preview-lines" data-testid="reopen-preview" aria-label="Beim Wiederöffnen">
-                    <li className="preview-head">Beim Wiederöffnen:</li>
-                    {reopenPreview.lines.map((l) => (
-                      <li key={l}>{l}</li>
-                    ))}
-                  </ul>
-                )}
-                {seriesActive && s.anchor === "calendar" && (
-                  <details className="exceptions" data-testid="exceptions">
-                    <summary>Ausnahmen (künftige Termine überspringen)</summary>
-                    {upcoming.map((u) => (
-                      <label key={u.date.toString()} className="exception">
-                        <input
-                          type="checkbox"
-                          checked={u.skipped}
-                          disabled={ro}
-                          data-testid={`exception-${u.date}`}
-                          onChange={(e) =>
-                            void act(
-                              { type: "setException", revision: s.revisionKey, date: u.date.toString(), skipped: e.target.checked },
-                              e.target.checked ? "Termin wird übersprungen" : "Ausnahme entfernt",
-                            )
-                          }
-                        />{" "}
-                        {describeOccurrence(u.date)} überspringen
-                      </label>
-                    ))}
-                    {extraSkipped.map((d) => (
-                      <label key={d} className="exception">
-                        <input
-                          type="checkbox"
-                          checked
-                          disabled={ro}
-                          data-testid={`exception-${d}`}
-                          onChange={() => void act({ type: "setException", revision: s.revisionKey, date: d, skipped: false }, "Ausnahme entfernt")}
-                        />{" "}
-                        {parseKey(d) ? describeOccurrence(parseKey(d)!) : d} überspringen
-                      </label>
-                    ))}
-                    <div className="dateedit">
-                      <input type="date" value={extraException} disabled={ro} onChange={(e) => setExtraException(e.target.value)} aria-label="Weiteren Termin überspringen" data-testid="exception-date" />
-                      <button
-                        className="btn"
-                        disabled={ro || !extraException}
-                        onClick={() =>
-                          void act({ type: "setException", revision: s.revisionKey, date: extraException, skipped: true }, "Termin wird übersprungen").then(
-                            (o) => o.status === "ok" && setExtraException(""),
-                          )
-                        }
-                        data-testid="exception-add"
-                      >
-                        Diesen Termin überspringen
-                      </button>
-                    </div>
-                  </details>
-                )}
-              </div>
-            )}
-            {history && history.some((h) => h.done.length || h.skipped.length) && (
-              <details className="history" data-testid="history">
-                <summary>
-                  <IconHistory size={16} /> Historie
-                </summary>
-                {history.map((h, i) => (
-                  <div key={i}>
-                    <div>{h.label}</div>
-                    <ul>
-                      {h.done.map((d) => (
-                        <li key={`c${d}`}>Vorkommen {parseKey(d) ? describeOccurrence(parseKey(d)!) : d} – erledigt</li>
-                      ))}
-                      {h.skipped.map((d) => (
-                        <li key={`s${d}`}>Vorkommen {parseKey(d) ? describeOccurrence(parseKey(d)!) : d} – übersprungen</li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </details>
-            )}
           </div>
           <aside className="detail-side" aria-label="Eigenschaften">
             <div className="side-field">
@@ -559,7 +752,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                   data-testid="field-status"
                   aria-label={T.fields.status}
                 >
-                  {/* Bei Serien kein „Erledigt“: Erledigen und Beenden nur über die Serienknöpfe (Entscheidung 18.10.2026). */}
+                  {/* Bei Serien kein „Erledigt“: Erledigen und Beenden nur über die Serienaktionen (Entscheidung 18.10.2026). */}
                   {(["open", "in-progress", "done"] as Status[]).filter((x) => !(s && x === "done" && f.status !== "done")).map((x) => (
                     <option key={x} value={x} disabled={!!s && x === "done"}>
                       {T.status[x]}
@@ -598,22 +791,13 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
             </div>
             <div className="side-field">
               <div className="side-label">Wiederholung</div>
-              <div className="side-value column">
+              <button className={`side-value side-button${s ? "" : " unset"}`} disabled={ro} onClick={() => setEditRule("edit")} title={s ? "Regel bearbeiten" : "Wiederholung festlegen"} data-testid="edit-recurrence">
+                <IconRepeat size={16} />
                 <span className="side-text" data-testid="series-desc">
-                  <IconRepeat size={16} />
-                  {s ? (s.rule ? describeRule(s.rule, s.anchor) ?? s.raw : s.raw) : "keine"}
+                  {s ? ruleText : "Hinzufügen"}
                 </span>
-                <div className="side-links">
-                  <button className="link-btn" disabled={ro} onClick={() => setEditRule("edit")} data-testid="edit-recurrence">
-                    {s ? "Regel bearbeiten" : "Wiederholung …"}
-                  </button>
-                  {s && (
-                    <button className="link-btn" disabled={ro} onClick={() => void act({ type: "removeRecurrence", revision: s.revisionKey }, "Wiederholung entfernt")}>
-                      Entfernen
-                    </button>
-                  )}
-                </div>
-              </div>
+                {s && <span className="side-sub">{s.anchor === "calendar" ? "nach Kalender" : "ab Erledigung"}</span>}
+              </button>
             </div>
           </aside>
         </div>

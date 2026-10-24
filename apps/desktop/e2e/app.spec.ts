@@ -311,7 +311,6 @@ test("Sortierung wählbar und Zeitraum-Filter (4.3)", async () => {
 
 test("Ausnahme: künftigen Termin überspringen (5.4)", async () => {
   await row("Wochenrückblick").click();
-  await page.getByTestId("exceptions").locator("summary").click();
   await page.getByTestId("exception-2026-10-19").click();
   await expect(page.getByTestId("exception-2026-10-19")).toBeChecked();
   await expect.poll(() => file("Wochenrückblick.md")).toContain("skipped_instances:\n  - 2026-10-19");
@@ -322,11 +321,11 @@ test("Ausnahme: künftigen Termin überspringen (5.4)", async () => {
 test("Vorschau vor dem Erledigen nennt Folgetermin und übergangene Ausnahme (5.2, 5.4)", async () => {
   await row("Wochenrückblick").click();
   await expect(page.getByTestId("complete-preview")).toContainText("Nächstes Vorkommen: Mo, 19.10.2026");
-  await page.getByTestId("exceptions").locator("summary").click();
   await page.getByTestId("exception-2026-10-19").click();
   await expect(page.getByTestId("complete-preview")).toContainText("Nächstes Vorkommen: Mo, 26.10.2026");
   await expect(page.getByTestId("complete-preview")).toContainText("19.10.2026 ist als Ausnahme übersprungen");
-  // weiter entfernter Termin über das Datumsfeld
+  // weiter entfernter Termin über das Datumsfeld im Serien-Menü
+  await page.getByTestId("series-menu").click();
   await page.getByTestId("exception-date").fill("2027-03-01");
   await page.getByTestId("exception-add").click();
   await expect.poll(() => file("Wochenrückblick.md")).toContain("  - 2027-03-01");
@@ -335,7 +334,6 @@ test("Vorschau vor dem Erledigen nennt Folgetermin und übergangene Ausnahme (5.
 
 test("Regel ändern: Ausnahmen ausdrücklich übernehmen, Vorschau zeigt Wirkung (5.1)", async () => {
   await row("Wochenrückblick").click();
-  await page.getByTestId("exceptions").locator("summary").click();
   await page.getByTestId("exception-2026-10-26").click();
   await expect.poll(() => file("Wochenrückblick.md")).toContain("  - 2026-10-26");
   await page.getByTestId("edit-recurrence").click();

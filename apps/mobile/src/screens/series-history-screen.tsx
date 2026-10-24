@@ -2,7 +2,8 @@
 import { ScrollView, Text, View } from "react-native";
 import { useRoute, type RouteProp } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { describeOccurrence, describeRule, parseKey, Temporal, upcomingForExceptions } from "@markdoist/core";
+import { pastSkippedCount, seriesHistory, type HistoryMark, type HistoryMonth } from "@markdoist/app";
+import { describeOccurrence, describeRule, parseKey, type Temporal } from "@markdoist/core";
 import { useRepoState } from "../repo";
 import { useTheme, type Theme } from "../theme";
 import type { RootStack } from "../navigation";
@@ -10,10 +11,6 @@ import type { RootStack } from "../navigation";
 const MONTHS = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 const MONTHS_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-/** Höchstens so viele Monate zurück, damit lange Serien das Blatt nicht sprengen. */
-const MAX_MONTHS = 24;
-
-type Mark = "done" | "skipped" | "current" | "upcoming" | null;
 
 function shortDate(d: Temporal.PlainDate, today: Temporal.PlainDate): string {
   return `${d.day}. ${MONTHS_SHORT[d.month - 1]}${d.year !== today.year ? ` ${d.year}` : ""}`;
@@ -28,10 +25,7 @@ function Stat({ c, value, label, color }: { c: Theme; value: string; label: stri
   );
 }
 
-function Month({ c, year, month, mark }: { c: Theme; year: number; month: number; mark(d: Temporal.PlainDate): Mark }) {
-  const first = Temporal.PlainDate.from({ year, month, day: 1 });
-  const cells: (Temporal.PlainDate | null)[] = [...Array<null>(first.dayOfWeek - 1).fill(null)];
-  for (let d = 1; d <= first.daysInMonth; d++) cells.push(first.with({ day: d }));
+function Month({ c, month: { year, month, cells }, mark }: { c: Theme; month: HistoryMonth; mark(d: Temporal.PlainDate): HistoryMark }) {
   return (
     <View style={{ backgroundColor: c.surface, borderRadius: 18, paddingTop: 12, paddingHorizontal: 10, paddingBottom: 10 }}>
       <Text style={{ color: c.fg, fontSize: 15, fontWeight: "600", marginLeft: 6, marginBottom: 8 }}>
@@ -100,35 +94,9 @@ export function SeriesHistoryScreen() {
     .reverse();
 
   const K = s?.instance ?? null;
-  const upcoming = s ? upcomingForExceptions(s, 40).map((u) => u.date.toString()) : [];
-  const keys = s ? [...s.C, ...s.S].filter((k) => parseKey(k)).sort() : [];
-  const pastSkipped = s ? [...s.S].filter((k) => !K || k < K.toString()).length : 0;
+  const pastSkipped = s ? pastSkippedCount(s) : 0;
   const plannedSkipped = s ? s.S.size - pastSkipped : 0;
-  const mark = (d: Temporal.PlainDate): Mark => {
-    if (!s) return null;
-    const k = d.toString();
-    if (s.C.has(k)) return "done";
-    if (s.S.has(k)) return "skipped";
-    if (K && s.phase !== "ended" && d.equals(K)) return "current";
-    if (upcoming.includes(k)) return "upcoming";
-    return null;
-  };
-
-  const months: { year: number; month: number }[] = [];
-  if (s) {
-    const firstKey = parseKey(keys[0] ?? "") ?? s.start?.date ?? K;
-    const lastCandidates = [K, parseKey(keys[keys.length - 1] ?? "")].filter((d): d is Temporal.PlainDate => !!d);
-    const last = lastCandidates.sort(Temporal.PlainDate.compare).pop();
-    const start = [firstKey, s.start?.date].filter((d): d is Temporal.PlainDate => !!d).sort(Temporal.PlainDate.compare)[0];
-    if (start && last) {
-      let ym = Temporal.PlainYearMonth.from({ year: last.year, month: last.month });
-      const stop = Temporal.PlainYearMonth.from({ year: start.year, month: start.month });
-      while (Temporal.PlainYearMonth.compare(ym, stop) >= 0 && months.length < MAX_MONTHS) {
-        months.push({ year: ym.year, month: ym.month });
-        ym = ym.subtract({ months: 1 });
-      }
-    }
-  }
+  const { months, mark } = s ? seriesHistory(s) : { months: [], mark: () => null };
   const ruleText = s ? (s.rule ? (describeRule(s.rule, s.anchor) ?? s.raw) : s.raw) : null;
 
   return (
@@ -166,7 +134,7 @@ export function SeriesHistoryScreen() {
             )}
           </View>
           {months.map((m) => (
-            <Month key={`${m.year}-${m.month}`} c={c} year={m.year} month={m.month} mark={mark} />
+            <Month key={`${m.year}-${m.month}`} c={c} month={m} mark={mark} />
           ))}
         </>
       )}

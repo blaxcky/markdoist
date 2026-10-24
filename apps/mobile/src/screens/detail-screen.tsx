@@ -11,14 +11,13 @@ import { diffLines } from "diff";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { previewAction, renderMarkdown, splitDateValue, T, type Outcome } from "@markdoist/app";
+import { pastSkippedCount, previewAction, renderMarkdown, seriesStrip, skippedBeyondStrip, splitDateValue, stripByMonth as byMonth, T, type Outcome, type StripCell } from "@markdoist/app";
 import {
   describeOccurrence,
   describeRule,
   formatGermanDate,
   parseKey,
   Temporal,
-  upcomingForExceptions,
   type Priority,
   type TaskAction,
 } from "@markdoist/core";
@@ -122,12 +121,6 @@ document.addEventListener('click',function(e){var t=e.target;
 if(t.classList&&t.classList.contains('md-check')){e.preventDefault();window.ReactNativeWebView.postMessage(JSON.stringify({check:Number(t.dataset.line)}));}
 else if(t.tagName==='A'){e.preventDefault();window.ReactNativeWebView.postMessage(JSON.stringify({link:t.href}));}},true);
 </script></body></html>`;
-}
-
-type StripKind = "done" | "skipped" | "current" | "future" | "future-skipped";
-interface StripCell {
-  date: Temporal.PlainDate;
-  kind: StripKind;
 }
 
 /** Ein Vorkommen im Streifen: Kopfzeile (Wochentag oder Monat) über dem Tageskreis. */
@@ -265,10 +258,9 @@ export function DetailScreen() {
   const clock = systemClock();
   const complete = s && s.phase === "active" ? previewAction(t, { type: "completeOccurrence", revision: s.revisionKey, instance: K }, clock) : null;
   const reopen = s && s.phase === "ended" ? previewAction(t, { type: "reopenSeries", revision: s.revisionKey }, clock) : null;
-  const upcoming = s ? upcomingForExceptions(s) : [];
-  const extraSkipped = s
-    ? [...s.S].filter((d) => s.instance && d > s.instance.toString() && !upcoming.slice(0, 3).some((u) => u.date.toString() === d) && parseKey(d)).sort()
-    : [];
+  // Streifen: bis zu drei nächste Termine (nur Kalenderserien), das aktuelle Vorkommen und davor der Verlauf.
+  const strip = s ? seriesStrip(s) : [];
+  const extraSkipped = s ? skippedBeyondStrip(s, strip) : [];
 
   const onBody = (text: string) => {
     setBody(text);
@@ -366,21 +358,7 @@ export function DetailScreen() {
     setTimeout(() => editor.current?.focus(), 50);
   };
 
-  // Streifen: bis zu drei nächste Termine (nur Kalenderserien), das aktuelle Vorkommen und davor der Verlauf.
-  const strip: StripCell[] = (() => {
-    if (!s || !s.instance) return [];
-    const future = s.phase === "active" ? upcoming.slice(0, 3) : [];
-    const past = [...s.C, ...s.S]
-      .filter((d) => d < K && parseKey(d))
-      .sort()
-      .slice(-(6 - future.length))
-      .map((d) => ({ date: parseKey(d)!, kind: (s.C.has(d) ? "done" : "skipped") as StripKind }));
-    const currentKind: StripKind = s.phase === "ended" ? (s.C.has(K) ? "done" : s.S.has(K) ? "skipped" : "current") : "current";
-    return [...past, { date: s.instance, kind: currentKind }, ...future.map((u) => ({ date: u.date, kind: (u.skipped ? "future-skipped" : "future") as StripKind }))];
-  })();
-  // Monat statt Wochentag, wenn die Termine über einen Monat auseinanderliegen oder alle auf denselben Wochentag fallen.
-  const stripByMonth =
-    strip.length > 1 && (strip[0]!.date.until(strip[strip.length - 1]!.date).days > 31 || strip.every((x) => x.date.dayOfWeek === strip[0]!.date.dayOfWeek));
+  const stripByMonth = byMonth(strip);
   const toggleException = (d: Temporal.PlainDate, skipped: boolean) =>
     s && act({ type: "setException", revision: s.revisionKey, date: d.toString(), skipped: !skipped }, skipped ? "Ausnahme entfernt" : "Termin wird übersprungen");
 
@@ -389,7 +367,7 @@ export function DetailScreen() {
   // Zusatzhinweise der Vorschau ohne die Zeilen, die Streifen und Terminzeilen schon zeigen.
   const hidden = [`${T.preview.nextOccurrence}:`, `${T.preview.firstOccurrence}:`, `${T.fields.due}:`, `${T.fields.scheduled}:`];
   const notes = (complete?.lines ?? []).filter((l) => l !== T.preview.ends && !hidden.some((h) => l.startsWith(h)));
-  const pastSkipped = s ? [...s.S].filter((d) => !K || d < K).length : 0;
+  const pastSkipped = s ? pastSkippedCount(s) : 0;
   const hasArchive = Array.isArray(t.data.recurrence_archive) && t.data.recurrence_archive.length > 0;
   const occ = s?.instance ? describeOccurrence(s.instance) : "";
   const ruleText = s ? (s.rule ? (describeRule(s.rule, s.anchor) ?? s.raw) : s.raw) : "";

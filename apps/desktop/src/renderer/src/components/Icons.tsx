@@ -200,3 +200,20 @@ export const IconHistory = (p: P) => (
   </Svg>
 );
 export const IconTime = IconHistory;
+export const IconCheck = (p: P) => (
+  <Svg {...p} strokeWidth={2.2}>
+    <path d="M6.5 12.5l3.5 3.5 7.5-8" />
+  </Svg>
+);
+export const IconSkip = (p: P) => (
+  <Svg {...p} strokeWidth={1.6}>
+    <path d="M7 6.5l8 5.5-8 5.5z" fill="currentColor" />
+    <path d="M17.5 6.5v11" />
+  </Svg>
+);
+export const IconStop = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="7.5" />
+    <rect x="9.5" y="9.5" width="5" height="5" rx="0.8" fill="currentColor" stroke="none" />
+  </Svg>
+);
