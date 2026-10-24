@@ -31,6 +31,10 @@ interface Props {
 }
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+// Wischen erst nach deutlicher Seitwärtsbewegung; wer zuerst senkrecht zieht, scrollt die Liste.
+// failOffsetY kommt aus patches/react-native-gesture-handler@3.3.0.patch.
+const SWIPE_OFFSET_X = 20;
+const SWIPE_FAIL_Y: [number, number] = [-10, 10];
 
 export function TaskRow({ view, today, tz, scheduledHint, first = true, last = true, showInbox = true, phase, onLeft, onOpen, onToggle, onActions }: Props) {
   const c = useTheme();
@@ -73,6 +77,9 @@ export function TaskRow({ view, today, tz, scheduledHint, first = true, last = t
         friction={2}
         leftThreshold={70}
         rightThreshold={70}
+        dragOffsetFromLeft={SWIPE_OFFSET_X}
+        dragOffsetFromRight={-SWIPE_OFFSET_X}
+        failOffsetY={SWIPE_FAIL_Y}
         // Während des Ablaufs keine Wischaktionen: Beim Ausblenden schienen sie durch die Zeile.
         renderLeftActions={phase ? undefined : () => (
           <View style={{ flex: 1, backgroundColor: c.primary, justifyContent: "center", paddingLeft: 20 }}>

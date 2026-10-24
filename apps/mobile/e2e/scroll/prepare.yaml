@@ -1,0 +1,9 @@
+# Eingang öffnen und auf das Ende des Abgleichs warten; die Scrollbewegung selbst kommt aus scroll.sh.
+appId: de.markdoist.aufgaben
+---
+- tapOn:
+    id: tab-inbox
+- extendedWaitUntil:
+    notVisible:
+      id: scan-progress
+    timeout: 60000

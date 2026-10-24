@@ -2,6 +2,7 @@ packages:
   - packages/*
   - apps/*
 patchedDependencies:
+  react-native-gesture-handler@3.3.0: patches/react-native-gesture-handler@3.3.0.patch
   rrule@2.8.1: patches/rrule@2.8.1.patch
 onlyBuiltDependencies:
   - electron
