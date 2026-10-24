@@ -89,6 +89,8 @@ export interface RepoState {
 
 const UNDO_LIMIT = 50;
 const MAX_ATTEMPTS = 3;
+/** Zurückwechseln nach längerer Pause gleicht vollständig ab, sonst schnell (7.1). */
+export const FULL_SCAN_AFTER_MS = 30 * 60_000;
 
 export interface RepositoryOptions {
   adapter: StorageAdapter;
@@ -98,6 +100,8 @@ export interface RepositoryOptions {
   clock: () => Clock;
   random?: (bytes: Uint8Array) => void;
   batchSize?: number;
+  /** Fortschritt eines Abgleichs erst nach dieser Laufzeit zeigen (7.1); Standard 1 s */
+  progressDelayMs?: number;
 }
 
 /** Map, die jede Änderung zählt – damit der Index nur bei geänderten Dateien neu entsteht. */
@@ -124,6 +128,8 @@ export class Repository {
   private readonly clock: () => Clock;
   private readonly random?: (bytes: Uint8Array) => void;
   private readonly batchSize: number;
+  private readonly progressDelayMs: number;
+  private scanStartedAt = 0;
   private files = new TrackedMap<string, IndexedFile>();
   private indexCache: { version: number; clockTick: number; index: Index } | null = null;
   private clockTick = 0;
@@ -172,6 +178,7 @@ export class Repository {
     this.clock = opts.clock;
     this.random = opts.random;
     this.batchSize = opts.batchSize ?? 50;
+    this.progressDelayMs = opts.progressDelayMs ?? 1000;
     this.state = this.snapshot();
   }
 
@@ -220,7 +227,8 @@ export class Repository {
       recovery: [...this.recovery],
       drafts: [...this.drafts],
       lastScan: this.lastScan,
-      scanProgress: this.scanProgress,
+      // Kurze Abgleiche bleiben unsichtbar.
+      scanProgress: this.progressVisible() ? this.scanProgress : null,
       cacheLoadMs: this.cacheLoadMs,
     };
   }
@@ -228,6 +236,16 @@ export class Repository {
   private emit() {
     this.state = this.snapshot();
     for (const l of this.listeners) l();
+  }
+
+  private progressVisible() {
+    return Date.now() - this.scanStartedAt >= this.progressDelayMs;
+  }
+
+  /** Zurückwechseln (3.3, 7.1): Heute neu auswerten; nach längerer Pause vollständig, sonst schnell abgleichen. */
+  resume(awayMs: number): Promise<void> {
+    this.refreshClock();
+    return this.scan({ full: awayMs > FULL_SCAN_AFTER_MS });
   }
 
   /** Neu auswerten, z. B. bei Mitternacht oder Zeitzonenwechsel (3.3). */
@@ -369,6 +387,7 @@ export class Repository {
     }
     this.scanCancelled = false;
     this.scanningFull = full;
+    this.scanStartedAt = Date.now();
     this.scanning = this.doScan(full).finally(() => {
       this.scanning = null;
       this.scanProgress = null;
@@ -392,7 +411,8 @@ export class Repository {
       pending = next.pending;
     }
     this.readError = failures ? `${failures} Datei(en) konnten nicht gelesen werden` : null;
-    if (full && !first.readFailures) this.unverified = false;
+    // Auch ein schneller Abgleich gilt als Prüfung (7.1).
+    if (!first.readFailures) this.unverified = false;
     this.lastScan = { ...first.stats, ms: Date.now() - t0, full };
     await this.saveCache();
   }
@@ -476,7 +496,7 @@ export class Repository {
         parseMs += Date.now() - tParse;
         this.scanProgress = { done: Math.min(i + this.batchSize, toRead.length), total: toRead.length };
         // Fortschritt höchstens alle 300 ms melden; jede Meldung lässt die Oberfläche rendern.
-        if (toRead.length > this.batchSize && Date.now() - lastProgress >= 300) {
+        if (toRead.length > this.batchSize && this.progressVisible() && Date.now() - lastProgress >= 300) {
           lastProgress = Date.now();
           this.progressOnly = true;
           try {

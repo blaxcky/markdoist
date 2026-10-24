@@ -76,6 +76,8 @@ export const T = {
     noFolder: "Bitte einen Aufgabenordner wählen.",
   },
   unverified: "Anzeige aus dem Zwischenspeicher – wird geprüft …",
+  /** Kurzform in der Kopfzeile (Android): ohne eigenes Banner, damit die Liste beim Start nicht springt */
+  unverifiedShort: "wird geprüft …",
 };
 
 export function writeResultMessage(r: WriteResult): string {

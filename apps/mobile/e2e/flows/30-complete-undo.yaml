@@ -4,6 +4,13 @@ appId: de.markdoist.aufgaben
 - runFlow: ../launch.yaml
 - tapOn:
     id: tab-inbox
+# Direkt nach Kaltstart und Tabwechsel kam die Wischgeste im Gesamtlauf teils nicht an: Startabgleich und
+# Tabwechsel abwarten, bevor gewischt wird.
+- extendedWaitUntil:
+    notVisible: ".*wird geprüft.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
 - swipe:
     from:
       id: "row-Zahnarzttermin vereinbaren"

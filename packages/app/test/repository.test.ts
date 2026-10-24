@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { clockAtLocal, fileNameForTitle, utf8Length } from "@markdoist/core";
-import { MemoryAdapter, MemoryKeyValueStore, Repository } from "../src";
+import { FULL_SCAN_AFTER_MS, MemoryAdapter, MemoryKeyValueStore, Repository } from "../src";
 
 const TZ = "Europe/Berlin";
 let seed = 0;
@@ -262,7 +262,7 @@ describe("Abgleich: Fortschritt und Abbruch (7.1)", () => {
   it("Abbruch entfernt nichts und markiert die Anzeige als ungeprüft", async () => {
     const adapter = new MemoryAdapter();
     for (let i = 0; i < 120; i++) adapter.tasks.set(`A${i}.md`, { text: task(`A${i}`), mtime: 1 });
-    const repo = new Repository({ adapter, kv: new MemoryKeyValueStore(), folder: "t", clock: () => clockAtLocal("2026-10-12T10:00", TZ), batchSize: 10 });
+    const repo = new Repository({ adapter, kv: new MemoryKeyValueStore(), folder: "t", clock: () => clockAtLocal("2026-10-12T10:00", TZ), batchSize: 10, progressDelayMs: 0 });
     await repo.open();
     expect(repo.getState().files.size).toBe(120);
     const seen: number[] = [];
@@ -410,6 +410,53 @@ describe("Start ohne unnötige Arbeit", () => {
     await repo.open();
     expect(seen[0]).toBe(false);
     expect(repo.getState().loading).toBe(false);
+  });
+});
+
+describe("Zurückwechseln: schneller oder vollständiger Abgleich (7.1)", () => {
+  it("kurze Pause: schneller Abgleich liest nur Geändertes und übernimmt externe Änderungen", async () => {
+    const { repo, adapter } = setup();
+    for (let i = 0; i < 5; i++) adapter.tasks.set(`A${i}.md`, { text: task(`Aufgabe ${i}`), mtime: 1 });
+    await repo.open();
+    adapter.tasks.set("A0.md", { text: task("Aufgabe 0").replace("Notiz", "Extern"), mtime: 2 });
+    await repo.resume(60_000);
+    expect(repo.getState().lastScan).toMatchObject({ full: false, files: 5, read: 1 });
+    const f = repo.getState().files.get("tasks/A0.md")!;
+    expect(f.kind === "task" && f.body).toContain("Extern");
+  });
+
+  it("lange Pause: vollständiger Abgleich", async () => {
+    const { repo, adapter } = setup();
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await repo.open();
+    await repo.resume(FULL_SCAN_AFTER_MS + 1);
+    expect(repo.getState().lastScan).toMatchObject({ full: true, read: 1 });
+  });
+
+  it("erfolgreicher schneller Abgleich entfernt den Ungeprüft-Hinweis", async () => {
+    const kv = new MemoryKeyValueStore();
+    const adapter = new MemoryAdapter();
+    adapter.tasks.set("A.md", { text: task("A"), mtime: 1 });
+    await setup(adapter, kv).repo.open();
+    adapter.listFails = true;
+    const { repo } = setup(adapter, kv);
+    await repo.open();
+    expect(repo.getState().unverified).toBe(true);
+    adapter.listFails = false;
+    await repo.resume(0);
+    expect(repo.getState().unverified).toBe(false);
+    expect(repo.getState().readError).toBeNull();
+  });
+
+  it("kurzer Abgleich zeigt keinen Fortschritt", async () => {
+    const adapter = new MemoryAdapter();
+    for (let i = 0; i < 120; i++) adapter.tasks.set(`A${i}.md`, { text: task(`A${i}`), mtime: 1 });
+    const repo = new Repository({ adapter, kv: new MemoryKeyValueStore(), folder: "t", clock: () => clockAtLocal("2026-10-12T10:00", TZ), batchSize: 10 });
+    let shown = false;
+    repo.subscribe(() => (shown ||= repo.getState().scanProgress !== null));
+    await repo.open();
+    await repo.scan({ full: true });
+    expect(shown).toBe(false);
   });
 });
 

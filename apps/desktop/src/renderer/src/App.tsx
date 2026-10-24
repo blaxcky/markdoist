@@ -88,14 +88,22 @@ export function App() {
     setRepo(r);
     void r.open();
     const offWatch = bridge().onStorageChanged((overflow) => void r.scan({ full: overflow }));
+    // Zurückholen des Fensters: nach längerer Pause vollständig abgleichen, sonst schnell (7.1). Der erste Fokus
+    // beim Öffnen des Fensters zählt nicht; dafür läuft der Startabgleich.
+    let leftAt: number | null = null;
+    const onBlur = () => (leftAt ??= Date.now());
+    window.addEventListener("blur", onBlur);
     const offFocus = bridge().onFocus(() => {
-      r.refreshClock();
-      void r.scan({ full: true });
+      if (leftAt === null) return;
+      const away = Date.now() - leftAt;
+      leftAt = null;
+      void r.resume(away);
     });
     const offClock = startClockWatch(r);
     return () => {
       offWatch();
       offFocus();
+      window.removeEventListener("blur", onBlur);
       offClock();
       r.close();
     };

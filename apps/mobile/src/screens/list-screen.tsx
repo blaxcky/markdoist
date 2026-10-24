@@ -59,6 +59,9 @@ export function ListScreen({ kind }: { kind: ListKind }) {
   const completion = useCompletionFlow({ repo, notify, live, refs: live.flatMap((i) => (i.type === "task" ? [i.key] : [])), list: listRef });
   const items = completion.shown;
   const count = items.filter((i) => i.type === "task").length;
+  // Ungeprüfte Anzeige in der Kopfzeile statt als Banner: Ein verschwindendes Banner ließe die Liste springen (7.1).
+  const unverified = state.unverified && !state.loading && !state.scanProgress;
+  const subtitle = [count ? `${count} ${count === 1 ? "Aufgabe" : "Aufgaben"}` : "", unverified ? T.unverifiedShort : ""].filter(Boolean).join(" · ") || undefined;
 
   function build(): Item[] {
     const tasks = (list: TaskView[], hint = false): Item[] =>
@@ -103,8 +106,7 @@ export function ListScreen({ kind }: { kind: ListKind }) {
   const banner = { marginHorizontal: 8, marginBottom: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: c.badge } as const;
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <ListHeader title={TITLES[kind]} subtitle={count ? `${count} ${count === 1 ? "Aufgabe" : "Aufgaben"}` : undefined} />
-      {state.unverified && !state.loading && !state.scanProgress && <Text style={[banner, { color: c.muted, fontSize: 12 }]}>{T.unverified}</Text>}
+      <ListHeader title={TITLES[kind]} subtitle={subtitle} />
       {state.scanProgress && state.scanProgress.total > 0 && (
         <View style={[banner, { flexDirection: "row", alignItems: "center", gap: 12 }]} testID="scan-progress">
           <Text style={{ color: c.muted, fontSize: 12, flex: 1, fontVariant: ["tabular-nums"] }}>

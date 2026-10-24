@@ -59,18 +59,21 @@ export default function App() {
     return () => r.close();
   }, [folder]);
 
-  // Zurückwechseln: Heute neu auswerten und vollständig abgleichen (3.3, 7.1).
+  // Zurückwechseln: Heute neu auswerten und abgleichen, nach längerer Pause vollständig (3.3, 7.1).
   useEffect(() => {
     if (!repo) return;
-    // Nur ein echter Wechsel zurück zählt; ein erneutes „active“ nach dem Kaltstart löst keinen zweiten Abgleich aus.
-    let prev = AppState.currentState;
+    // Nur ein echter Wechsel zurück zählt: Ein „active“ beim Kaltstart ohne vorheriges Verlassen löst keinen
+    // zusätzlichen Abgleich neben dem Startabgleich aus.
+    let leftAt: number | null = null;
     const sub = AppState.addEventListener("change", (s) => {
-      const back = s === "active" && prev !== "active";
-      prev = s;
-      if (back) {
-        repo.refreshClock();
-        void repo.scan({ full: true });
+      if (s !== "active") {
+        leftAt ??= Date.now();
+        return;
       }
+      if (leftAt === null) return;
+      const away = Date.now() - leftAt;
+      leftAt = null;
+      void repo.resume(away);
     });
     let timer: ReturnType<typeof setTimeout>;
     const tick = () => {

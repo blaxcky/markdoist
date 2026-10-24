@@ -78,7 +78,7 @@ M0 ist damit vollständig abgenommen.
 
 **Konfliktansicht:** beide Plattformen zeigen Feldvergleich und Body-Diff; Entscheidungen „Variante behalten“ (die andere wandert in den Papierkorb) und „Beide behalten“ (Kopie erhält neue ID).
 
-**Abgleich:** Fortschritt („Prüfe Dateien n/N“) und Abbrechen sichtbar; ein abgebrochener Abgleich entfernt nichts und markiert die Anzeige als nicht vollständig geprüft. Fortschrittsmeldungen bauen den Index nicht neu auf.
+**Abgleich:** Fortschritt („Prüfe Dateien n/N“) und Abbrechen sichtbar, sobald ein Abgleich länger als 1 s läuft (Entscheidung 24.10.2026); Zurückwechseln nach höchstens 30 Minuten gleicht schnell ab, danach vollständig; ein abgebrochener Abgleich entfernt nichts und markiert die Anzeige als nicht vollständig geprüft. Fortschrittsmeldungen bauen den Index nicht neu auf.
 
 **Leistung Desktop** (2 000 Aufgaben à ~3,3 KiB, echter `FsAdapter`, Messung `apps/desktop/bench/perf.test.ts`; Host: AMD Ryzen 7 8845HS, 16 Threads, 30 GiB, Fedora 43, Node 22):
 
