@@ -10,9 +10,12 @@ target="$app_dir/Markdoist.AppImage"
 
 pnpm --dir "$root" --filter desktop dist:appimage
 
-mkdir -p "$app_dir" "$data_dir/applications" "$data_dir/icons/hicolor/512x512/apps"
+mkdir -p "$app_dir" "$data_dir/applications"
 install -m 755 "$root/apps/desktop/release/Markdoist.AppImage" "$target"
-install -m 644 "$root/apps/desktop/build/icon.png" "$data_dir/icons/hicolor/512x512/apps/markdoist.png"
+for icon in "$root"/apps/desktop/build/icons/*.png; do
+  size="$(basename "$icon" .png)"
+  install -D -m 644 "$icon" "$data_dir/icons/hicolor/$size/apps/markdoist.png"
+done
 
 cat > "$data_dir/applications/markdoist.desktop" <<DESKTOP
 [Desktop Entry]

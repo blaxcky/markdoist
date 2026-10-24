@@ -16,9 +16,8 @@ const config: ExpoConfig = {
     package: "de.markdoist.aufgaben",
     versionCode,
     adaptiveIcon: {
-      backgroundColor: "#2E7D32",
+      backgroundColor: "#FFFFFF",
       foregroundImage: "./assets/android-icon-foreground.png",
-      backgroundImage: "./assets/android-icon-background.png",
       monochromeImage: "./assets/android-icon-monochrome.png",
     },
     predictiveBackGestureEnabled: false,

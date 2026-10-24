@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electro
 import { createHash } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
+import icon from "../../build/icons/256x256.png?asset";
 import { FsAdapter } from "./fsAdapter";
 import { LocalStore, loadSettings, saveSettings, type Settings } from "./settings";
 
@@ -56,6 +57,7 @@ function createWindow(): void {
     minWidth: 720,
     minHeight: 480,
     title: "Markdoist",
+    icon,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#1e1f22" : "#ffffff",

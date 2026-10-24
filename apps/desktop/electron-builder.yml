@@ -14,7 +14,7 @@ linux:
     - rpm
   category: Office
   syncDesktopName: true
-  icon: build/icon.png
+  icon: build/icons
   synopsis: Lokale Markdown-Todo-App
   description: Markdoist verwaltet Aufgaben als Markdown-Dateien in einem frei wählbaren Ordner.
   desktop:
