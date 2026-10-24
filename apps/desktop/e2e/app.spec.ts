@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const appDir = join(__dirname, "..");
+// Fenster bleiben verborgen; MARKDOIST_E2E_SHOW=1 zeigt sie zum Zuschauen.
+const hide = process.env.MARKDOIST_E2E_SHOW ? {} : { MARKDOIST_TEST_HIDDEN: "1" };
 let base: string;
 let folder: string;
 let app: ElectronApplication;
@@ -55,6 +57,7 @@ test.beforeEach(async () => {
     args: [join(appDir, "out/main/index.js")],
     env: {
       ...process.env,
+      ...hide,
       MARKDOIST_FOLDER: folder,
       MARKDOIST_DATA_DIR: join(base, "data"),
       MARKDOIST_TEST_NOW: "2026-10-12T10:00",
@@ -266,7 +269,7 @@ test("Dialoge: Fokus beim Öffnen, Escape schließt, keine Aufgabenkürzel im Di
 test("Prozessabbruch beim Schreiben: alte Fassung bleibt, Wiederherstellung angeboten (AK-22, M7)", async () => {
   const before = await file("Zahnarzt.md");
   await app.close();
-  const env = { ...process.env, MARKDOIST_FOLDER: folder, MARKDOIST_DATA_DIR: join(base, "data"), MARKDOIST_TEST_NOW: "2026-10-12T10:00" };
+  const env = { ...process.env, ...hide, MARKDOIST_FOLDER: folder, MARKDOIST_DATA_DIR: join(base, "data"), MARKDOIST_TEST_NOW: "2026-10-12T10:00" };
   const crashing = await electron.launch({ args: [join(appDir, "out/main/index.js")], env: { ...env, MARKDOIST_TEST_CRASH: "write:before-rename" } });
   const p1 = await crashing.firstWindow();
   await p1.getByTestId("list").waitFor();

@@ -48,6 +48,8 @@ function requireAdapter(): FsAdapter {
 }
 
 function createWindow(): void {
+  // Nur für E2E-Tests: MARKDOIST_TEST_HIDDEN=1 lässt das Fenster verborgen, damit Testläufe nicht stören.
+  const hidden = !!process.env.MARKDOIST_TEST_HIDDEN;
   win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -62,9 +64,10 @@ function createWindow(): void {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      backgroundThrottling: !hidden,
     },
   });
-  win.on("ready-to-show", () => win?.show());
+  if (!hidden) win.on("ready-to-show", () => win?.show());
   // Links nur extern und nur http(s) öffnen (2.2).
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);

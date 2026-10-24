@@ -47,7 +47,7 @@ corepack enable || npm i -g pnpm
 pnpm install
 pnpm test:tz          # Vitest in vier Zeitzonen
 pnpm lint && pnpm typecheck
-pnpm e2e:desktop      # Playwright gegen die Electron-App
+pnpm e2e:desktop      # Playwright gegen die Electron-App, Fenster bleiben verborgen (MARKDOIST_E2E_SHOW=1 zeigt sie)
 pnpm --filter desktop dev
 ```
 
