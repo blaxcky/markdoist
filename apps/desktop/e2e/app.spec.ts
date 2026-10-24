@@ -132,6 +132,21 @@ test("Abhaken per Klick: Haken sofort, Zeile blendet aus, Meldung mit Rückgäng
   await expect(row("Zahnarzttermin vereinbaren").getByRole("checkbox")).toHaveAttribute("aria-checked", "false");
 });
 
+test("Haken trifft auch knapp neben dem Kreis, der Titel daneben wählt nur aus", async () => {
+  const r = row("Zahnarzttermin vereinbaren");
+  const check = r.getByRole("checkbox");
+  // Titelbeginn: Klick dort öffnet nur das Detail, hakt nicht ab.
+  await r.locator(".title").click({ position: { x: 2, y: 10 } });
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(check).toHaveAttribute("aria-checked", "false");
+  const box = (await check.boundingBox())!;
+  // 5 px links unterhalb des Kreises liegt noch in der unsichtbaren Klickfläche.
+  await page.mouse.click(box.x - 5, box.y + box.height + 5);
+  await expect.poll(() => file("Zahnarzt.md")).toContain("status: done");
+});
+
 test("Priorität ändert nur priority und dateModified (AK-07)", async () => {
   const before = await file("Zahnarzt.md");
   await row("Zahnarzttermin vereinbaren").click();

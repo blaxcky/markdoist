@@ -504,6 +504,12 @@ button:disabled {
   align-items: center;
   justify-content: center;
 }
+/* Unsichtbar größere Klickfläche: Der Kreis muss nicht genau getroffen werden. Rechts knapper, damit der Titel klickbar bleibt. */
+.check::before {
+  content: "";
+  position: absolute;
+  inset: -7px -5px -7px -9px;
+}
 .check svg {
   width: 14px;
   height: 14px;
