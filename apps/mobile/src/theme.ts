@@ -24,6 +24,9 @@ export const light = {
   toneToday: "#058527",
   toneTomorrow: "#AD6200",
   toneWeek: "#692EC2",
+  doneContainer: "#E3F1E6",
+  onDoneContainer: "#056B20",
+  divider: "#EFEAE5",
 };
 
 export const dark: typeof light = {
@@ -48,6 +51,9 @@ export const dark: typeof light = {
   toneToday: "#25B84C",
   toneTomorrow: "#FF9A14",
   toneWeek: "#A970FF",
+  doneContainer: "#1E3B25",
+  onDoneContainer: "#7BD88F",
+  divider: "#303030",
 };
 
 export type Theme = typeof light;

@@ -11,8 +11,12 @@ appId: de.markdoist.aufgaben
       id: complete-preview
 - assertVisible: ".*Nächstes Vorkommen: .*"
 - assertVisible: ".*ist als Ausnahme übersprungen und wird übergangen.*"
+# Beenden liegt im Serien-Aktionsblatt (⋯ auf der Serienkarte).
+- tapOn:
+    id: series-menu
 - assertVisible:
     id: series-end-complete
 - assertVisible:
     id: series-end
+- back
 - back

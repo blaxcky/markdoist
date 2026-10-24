@@ -15,6 +15,7 @@ import { ProblemsScreen } from "./screens/problems-screen";
 import { TrashScreen } from "./screens/trash-screen";
 import { SettingsScreen } from "./screens/settings-screen";
 import { RecurrenceScreen } from "./screens/recurrence-screen";
+import { SeriesHistoryScreen } from "./screens/series-history-screen";
 import { useRepoState } from "./repo";
 import { useTheme } from "./theme";
 import { FilterProvider, FilterSheet } from "./filter";
@@ -30,6 +31,7 @@ export type RootStack = {
   Trash: undefined;
   Settings: undefined;
   Recurrence: { ref: string; continueSeries?: boolean };
+  SeriesHistory: { ref: string };
 };
 
 const Tab = createBottomTabNavigator<Tabs>();
@@ -125,6 +127,7 @@ function RootStackNavigator() {
       <Stack.Screen name="Trash" component={TrashScreen} options={{ title: T.views.trash }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Einstellungen" }} />
       <Stack.Screen name="Recurrence" component={RecurrenceScreen} options={{ title: "Wiederholung" }} />
+      <Stack.Screen name="SeriesHistory" component={SeriesHistoryScreen} options={{ title: "Verlauf" }} />
     </Stack.Navigator>
   );
 }

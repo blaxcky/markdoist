@@ -176,3 +176,73 @@ export function PlusIcon({ color, size = 16, weight }: P & { weight?: number }) 
 export function Glyph({ children, color, size = 14, bold }: P & { children: string; bold?: boolean }) {
   return <Text style={{ color, fontSize: size, lineHeight: size * 1.15, fontWeight: bold ? "700" : "400", includeFontPadding: false }}>{children}</Text>;
 }
+
+/** Haken ohne Kreis (erledigtes Vorkommen). */
+export function CheckIcon({ color, size = 14, weight }: P & { weight?: number }) {
+  const b = weight ?? Math.max(2, size / 7);
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: size * 0.62, height: size * 0.34, borderLeftWidth: b, borderBottomWidth: b, borderColor: color, transform: [{ translateY: -size * 0.08 }, { rotate: "-45deg" }] }} />
+    </View>
+  );
+}
+
+/** Winkelpfeil; Standard nach rechts (weiter), `dir` dreht ihn. */
+export function ChevronIcon({ color, size = 14, dir = "right" }: P & { dir?: "right" | "down" | "left" }) {
+  const b = stroke(size) + 0.4;
+  const rot = { right: "-45deg", down: "45deg", left: "135deg" }[dir];
+  const shift = { right: { translateX: -size * 0.1 }, down: { translateY: -size * 0.1 }, left: { translateX: size * 0.1 } }[dir];
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: size * 0.5, height: size * 0.5, borderRightWidth: b, borderBottomWidth: b, borderColor: color, transform: [shift, { rotate: rot }] }} />
+    </View>
+  );
+}
+
+/** Dreieck mit Strich (überspringen). */
+export function SkipIcon({ color, size = 14 }: P) {
+  const b = stroke(size) + 0.4;
+  const h = size * 0.7;
+  return (
+    <View style={{ width: size, height: size, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: size * 0.06 }}>
+      <View style={{ width: 0, height: 0, borderTopWidth: h / 2, borderBottomWidth: h / 2, borderLeftWidth: size * 0.55, borderTopColor: "transparent", borderBottomColor: "transparent", borderLeftColor: color }} />
+      <View style={{ width: b, height: h, borderRadius: b, backgroundColor: color }} />
+    </View>
+  );
+}
+
+/** Offener Kreis mit Pfeilspitze (Wiederholung). */
+export function RepeatIcon({ color, size = 14 }: P) {
+  const b = stroke(size) + 0.2;
+  const head = size * 0.22;
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: size * 0.84, height: size * 0.84, borderRadius: size, borderWidth: b, borderColor: color, borderTopColor: "transparent", transform: [{ rotate: "45deg" }] }} />
+      <View
+        style={{
+          position: "absolute",
+          top: size * 0.02,
+          right: size * 0.04,
+          width: 0,
+          height: 0,
+          borderLeftWidth: head,
+          borderRightWidth: head,
+          borderBottomWidth: head * 1.3,
+          borderLeftColor: "transparent",
+          borderRightColor: "transparent",
+          borderBottomColor: color,
+          transform: [{ rotate: "100deg" }],
+        }}
+      />
+    </View>
+  );
+}
+
+/** Kreis mit Quadrat (beenden). */
+export function StopIcon({ color, size = 14 }: P) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: size, borderWidth: stroke(size), borderColor: color, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: size * 0.32, height: size * 0.32, borderRadius: 1.5, backgroundColor: color }} />
+    </View>
+  );
+}
