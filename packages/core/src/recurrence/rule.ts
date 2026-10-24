@@ -5,6 +5,10 @@ import { Temporal } from "temporal-polyfill";
 export type Freq = "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
 export type Weekday = "MO" | "TU" | "WE" | "TH" | "FR" | "SA" | "SU";
 export const WEEKDAYS: Weekday[] = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+/** Obergrenzen für INTERVAL und COUNT (Abschnitt 6): endliche, sichere Ganzzahlen; größere Werte
+ *  wurden bisher zu Infinity und als gültig akzeptiert (Review 23.10.2026, R6). */
+export const MAX_INTERVAL = 1000;
+export const MAX_COUNT = 10000;
 
 export interface ByDay {
   n: number | null;
@@ -151,12 +155,16 @@ export function parseRule(raw: string): RuleParse {
     const v = seen.get("INTERVAL")!;
     if (!/^\d+$/.test(v) || parseInt(v, 10) < 1) return bad("INTERVAL muss positiv sein");
     interval = parseInt(v, 10);
+    if (!Number.isSafeInteger(interval) || interval > MAX_INTERVAL)
+      return bad(`INTERVAL darf höchstens ${MAX_INTERVAL} sein`);
   }
   let count: number | null = null;
   if (seen.has("COUNT")) {
     const v = seen.get("COUNT")!;
     if (!/^\d+$/.test(v) || parseInt(v, 10) < 1) return bad("COUNT muss positiv sein");
     count = parseInt(v, 10);
+    if (!Number.isSafeInteger(count) || count > MAX_COUNT)
+      return bad(`COUNT darf höchstens ${MAX_COUNT} sein`);
   }
   let until: UntilValue | null = null;
   if (seen.has("UNTIL")) {

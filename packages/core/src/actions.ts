@@ -4,7 +4,12 @@ import { Temporal } from "temporal-polyfill";
 import { resetCheckboxes, toggleCheckbox } from "./checklist";
 import { datePart, formatTimestamp, parseDateValue, type DateValue } from "./dates";
 import { createFileText, deepEqual, editFrontmatter, type YamlValue } from "./frontmatter";
-import { completionOccurrences, nextOccurrence, isOccurrence } from "./recurrence/engine";
+import {
+  completionOccurrences,
+  firstOccurrence,
+  isOccurrence,
+  nextOccurrence,
+} from "./recurrence/engine";
 import { parseRule, sameRule, type Rule } from "./recurrence/rule";
 import {
   parseKey,
@@ -197,6 +202,10 @@ function datesForInstance(
   timeZone: string,
 ): { set: Record<string, YamlValue>; error?: string } {
   const set: Record<string, YamlValue> = {};
+  // Vorkommensschlüssel und Dateiformat verlangen vierstellige Jahre (3.2); ein Termin dahinter
+  // darf nicht geschrieben werden (Review 23.10.2026, R6).
+  if (k.year > 9999)
+    return { set, error: "Termin liegt außerhalb des unterstützten Datumsbereichs" };
   const time = series.start?.time ?? null;
   set[series.field] = dateValueString(k, time);
   const other: RefField = series.field === "due" ? "scheduled" : "due";
@@ -461,10 +470,12 @@ function planSeries(
     }
     case "endSeries": {
       if (series.phase === "ended") return noop;
+      // Beide Varianten binden an das aktuelle K (5.4): eine veraltete Beenden-Aktion darf nicht
+      // das inzwischen fortgeschriebene Vorkommen beenden (Review 23.10.2026, R4).
+      if (!K || action.instance !== K.toString())
+        return blocked("Vorkommen ist nicht mehr aktuell");
       const set: Record<string, YamlValue> = { ...revisionSet, status: "done", completedDate: now };
       if (action.completeCurrent) {
-        if (!K || action.instance !== K.toString())
-          return blocked("Vorkommen ist nicht mehr aktuell");
         if (series.S.has(K.toString())) return blocked("Vorkommen wurde bereits übersprungen");
         if (!series.C.has(K.toString())) {
           set.complete_instances = sortedKeys(new Set([...series.C, K.toString()]));
@@ -541,7 +552,11 @@ function planSeries(
         ctx.timeZone,
       );
       if (dates.error) return blocked(dates.error);
-      const set: Record<string, YamlValue> = { ...dates.set, recurrence_field: action.field };
+      const set: Record<string, YamlValue> = {
+        ...revisionSet,
+        ...dates.set,
+        recurrence_field: action.field,
+      };
       const remove: string[] = [];
       if (action.offsetDays !== null) set.recurrence_offset_days = action.offsetDays;
       else if (series.offsetDays !== null) remove.push("recurrence_offset_days");
@@ -626,7 +641,7 @@ function planNewSection(
   if (rule.until && rule.until.utc) return blocked("UNTIL mit UTC-Zeit wird nicht unterstützt");
   // Bei Änderung liegt der erste Termin frühestens am Änderungstag.
   const from = series ? maxDate(chosen.date, actionDay(ctx)) : chosen.date;
-  const first = nextOccurrence({ rule, start: from, from, time: chosen.time });
+  const first = firstOccurrence(rule, from, chosen.time);
   if (first.kind === "aborted") return blocked("Berechnung zu aufwendig");
   if (first.kind === "exhausted") return blocked("Die Regel erzeugt ab dem Start keine Termine");
   const k = first.date;

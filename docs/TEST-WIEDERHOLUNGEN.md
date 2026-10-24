@@ -16,7 +16,7 @@ Es gibt keinen Hintergrundjob. Eine Serie wird beim Erledigen oder Überspringen
 | Golden-Fixtures | `packages/core/test/fixtures/dateutil.json` | 23 → 51 Regeln gegen python-dateutil 2.9.0 (Monatsenden, BYSETPOS, INTERVAL mit Monatsende, WKST, UNTIL mit Uhrzeit, Schalttage). |
 | Repository | `packages/app/test/repository-series.test.ts` | Doppeltipp, externe Änderung an fremdem Feld (übernommen) und an Frist/Historie/Regel (Konflikt, 0 Schreibvorgänge), Undo byte-identisch und erneutes Erledigen, „in Arbeit“ → „offen“, Statusauswahl „erledigt“, Tipp auf clarify-Serie, Aktionszeitpunkt = Tipp. |
 | Abhak-Ablauf | `packages/app/test/completionFlow.test.ts` | gesperrte Serie meldet den Grund statt stummem Zurückspringen. |
-| Formularkette | `packages/app/test/formChain.test.ts` | alle 288 Formularvarianten (`forms.ts`): Vorschau → Serie anlegen → erstes Vorkommen erledigen; erster Termin = Vorschau, Folgetermin = zweiter Vorschautermin. |
+| Formularkette | `packages/app/test/formChain.test.ts` | alle 288 Formularvarianten (`forms.ts`): Vorschau → Serie anlegen → erstes Vorkommen erledigen; erster Termin = Vorschau, Folgetermin = zweiter Vorschautermin (seit dem Review auch für „ab Erledigung“). |
 | Oberfläche | Playwright (Desktop), Maestro (Android, nicht erneut gelaufen) | bestehende Flows „Vorkommen erledigen schreibt nächsten Termin“, „Wiederholung anlegen“, Vorschau, Ausnahmen, Serie fortsetzen. |
 
 Läufe: `pnpm test` 2119 Tests grün; `pnpm test:tz` grün in Europe/Berlin, UTC, America/Los_Angeles, Pacific/Kiritimati; `pnpm typecheck` und `pnpm lint` grün; `pnpm e2e:desktop` 28 Playwright-Tests grün.
@@ -61,6 +61,35 @@ Läufe: `pnpm test` 2119 Tests grün; `pnpm test:tz` grün in Europe/Berlin, UTC
 
 - `EngineQuery.deadline` (1-s-Abbruch im Worker, PLAN1 6) wird produktiv nicht gesetzt; die Begrenzung über Suchhorizont und rrule-Patch reicht gemessen aus (siehe oben, bereits in `docs/ABNAHME.md` M3 vermerkt).
 - `describeRule` wertet `wkst !== "MO" && interval > 1 && freq === "WEEKLY"` ohne Klammern aus; betrifft nur die deutsche Beschreibung, nicht die Berechnung.
+
+## Review vom 23.10.2026 und Korrekturen
+
+Ein externes Review (`docs/REVIEW-WIEDERHOLUNGEN-2026-10-23.md`) fand sieben Fehler, die diese Testrunde nicht erkannt hatte. Hauptursache: Das Orakel rechnet Kalender und Completion mit denselben Funktionen wie die App (`queryOccurrences`, `completionOccurrences`), ein gemeinsamer Bibliotheksfehler bestätigte sich also selbst. Dazu akzeptierte die Golden-Prüfung bei Suchabbruch einen passenden Anfang, und die Formularkette ließ den Folgetermin bei „ab Erledigung“ aus.
+
+| Befund | Korrektur |
+|---|---|
+| R1 überlappendes BYSETPOS verbrauchte COUNT doppelt, Serie endete zu früh | rrule-Patch dedupliziert nach Zeitwert; Engine ignoriert doppelte Termine vor der COUNT-Zählung |
+| R2 negatives BYSETPOS jenseits der Kandidatenliste erfand Termine | rrule-Patch verwirft die Position |
+| R3 Completion-Vorschau zeigte andere Termine als gespeichert | Vorschau und Anlegen nutzen `firstOccurrence`/`previewNewSection` im Kern, mit Serienuhrzeit und UNTIL |
+| R4 veraltetes „Serie ohne Erledigung beenden“ beendete das Folgevorkommen | K-Prüfung für beide Beenden-Varianten |
+| R5 Schalttag-am-Montag-Regel blieb am 12-Jahres-Horizont stehen | DAILY-Horizont 30 Jahre; Vorschau lehnt Regeln ab, deren Folgetermin nicht berechenbar ist |
+| R6 INTERVAL/COUNT als `Infinity`, Jahr 10000 geschrieben | sichere Ganzzahlen mit Obergrenzen; Termine nach 9999 werden gesperrt |
+| R7 Bezugsfeld ändern hielt Start und Revision einer Fremdserie nicht fest | `changeReference` schreibt sie wie die übrigen Serienaktionen |
+| Android-Bundle blieb trotz Änderungen in `packages/*` veraltet | Config-Plugin `withWorkspaceBundleInputs` registriert Workspace-Quellen, Patches und Lockdatei als Gradle-Inputs |
+
+Neue unabhängige Prüfungen ohne App-Berechnung, aus dem Review ins Repository übernommen:
+
+| Datei | Inhalt |
+|---|---|
+| `packages/core/test/dateutil-generated.test.ts` | 1.357 zufällig erzeugte Regeln gegen python-dateutil 2.9.0.post0 (Seed 20261023); 243 weitere Referenzfälle überschritten in dateutil 50 ms und sind in `tools/reference-timeouts.json` ausdrücklich ausgelassen |
+| `packages/core/test/completion-reference.test.ts` | 1.200 Completion-Aktionen gegen eigene Python-Kalenderarithmetik, vier Zeitzonen |
+| `packages/core/test/tools/generate-review-fixtures.py` | Generator; läuft nicht in der CI, die Fixtures sind eingefroren |
+| `packages/app/test/review-2026-10-23.test.ts`, `repository-review.test.ts` | Regressionssperren R1–R7 bis zur Speicherung |
+| `apps/mobile/e2e/flows/46-…48-…` | Android: Monatsende bei „ab Erledigung“, BYSETPOS mit COUNT, gesperrte Serie (mit Dateiprüfungen in `run.sh`) |
+
+`dateutil.test.ts` akzeptiert einen Suchabbruch nur noch, wenn jeder Folgetermin einzeln so gefunden wird, wie das Fortschreiben ihn sucht.
+
+Ergebnis: `pnpm test:tz` mit 4.699 Tests grün in allen vier Zonen; die ursprüngliche Review-Suite (2.572 Tests, vorher 68 rot) läuft vollständig grün.
 
 ## Nicht geprüft
 

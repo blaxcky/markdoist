@@ -1,10 +1,9 @@
 // Formularmodell des Wiederholungseditors (Abschnitt 6), gemeinsam für beide Plattformen.
 import {
-  completionOccurrences,
   describeRule,
   formatRule,
   parseRule,
-  queryOccurrences,
+  previewNewSection,
   Temporal,
   type Anchor,
   type RefField,
@@ -371,29 +370,46 @@ export function previewForm(
     };
   }
   if (existing && Temporal.PlainDate.compare(start, today) < 0) start = today;
-  // Ab Erledigung: erster Termin ist der Start selbst, danach fester Abstand ab dem jeweiligen Termin (5.2).
-  const r =
-    f.anchor === "completion"
-      ? completionPreview(p.rule, start, 10)
-      : queryOccurrences({ rule: p.rule, start, from: start, limit: 10 });
-  if (r.aborted && !r.dates.length) {
-    return {
-      ok: false,
-      rule: text,
-      description: null,
-      dates: [],
-      message: "Berechnung zu aufwendig",
-      exhausted: false,
-    };
+  let time: Temporal.PlainTime | null = null;
+  if (f.startTime) {
+    try {
+      time = Temporal.PlainTime.from(f.startTime);
+    } catch {
+      return {
+        ok: false,
+        rule: text,
+        description: null,
+        dates: [],
+        message: "Ungültige Uhrzeit",
+        exhausted: false,
+      };
+    }
   }
+  // Dieselbe Grundlage wie das Anlegen (5.4): erster passender Termin ab Start mit Serienuhrzeit,
+  // danach festes Raster (Kalender) bzw. Abstand ab dem jeweiligen Termin (ab Erledigung, 5.2).
+  const r = previewNewSection(p.rule, f.anchor, start, time, 10);
   if (!r.dates.length) {
     return {
       ok: false,
       rule: text,
       description: null,
       dates: [],
-      message: "Die Regel erzeugt ab dem Start keine Termine",
-      exhausted: true,
+      message: r.aborted
+        ? "Berechnung zu aufwendig"
+        : "Die Regel erzeugt ab dem Start keine Termine",
+      exhausted: !r.aborted,
+    };
+  }
+  // Eine Regel, deren zweiter Termin nicht berechenbar ist, würde beim ersten Erledigen stehen bleiben;
+  // sie wird gar nicht erst angelegt (Review 23.10.2026, R5).
+  if (r.aborted && r.dates.length < 2) {
+    return {
+      ok: false,
+      rule: text,
+      description: null,
+      dates: r.dates,
+      message: "Berechnung zu aufwendig – der Folgetermin lässt sich nicht bestimmen",
+      exhausted: false,
     };
   }
   return {
@@ -404,30 +420,6 @@ export function previewForm(
     message: null,
     exhausted: r.exhausted,
   };
-}
-
-function completionPreview(
-  rule: Rule,
-  start: Temporal.PlainDate,
-  limit: number,
-): { dates: Temporal.PlainDate[]; exhausted: boolean; aborted: boolean } {
-  const dates = [start];
-  let exhausted = false;
-  let aborted = false;
-  while (dates.length < limit) {
-    const r = completionOccurrences({ rule, base: dates[dates.length - 1]!, limit: 1 });
-    if (!r.dates.length) {
-      exhausted = r.exhausted;
-      aborted = r.aborted;
-      break;
-    }
-    dates.push(r.dates[0]!);
-  }
-  if (rule.count !== null && dates.length >= rule.count) {
-    dates.splice(rule.count);
-    exhausted = true;
-  }
-  return { dates, exhausted, aborted };
 }
 
 export function specFromForm(f: RuleForm): SeriesSpec {

@@ -30,8 +30,8 @@ describe("Formular → Serie → Fortschreiben", () => {
     expect(task(created.text).data.inbox).toBe(true);
     const r = checkAdvance(created.text, "complete", ctxAt(`${s.instance}T18:00`), form.advanced);
     if (!r.ended) {
-      // Kalender: zweiter Termin der Vorschau; ab Erledigung: Abstand ab dem Erledigungstag
-      if (form.anchor === "calendar") expect(r.next).toBe(preview.dates[1]!.toString());
+      // Erledigt am Tag von K: Bei beiden Arten ist der Folgetermin der zweite Vorschautermin (5.2, 5.4).
+      expect(r.next).toBe(preview.dates[1]!.toString());
     } else expect(preview.exhausted && preview.dates.length === 1).toBe(true);
   });
 });

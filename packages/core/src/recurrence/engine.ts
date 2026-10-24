@@ -21,10 +21,12 @@ const FREQ = {
   YEARLY: RRule.YEARLY,
 } as const;
 
-/** Suchhorizont je Frequenz in Jahren über den Suchbeginn hinaus.
- *  rrule.js iteriert jeden Zeitraum einzeln; der Horizont begrenzt unmögliche Regeln. */
+/** Suchhorizont je Frequenz in Jahren über den Suchbeginn hinaus (Abschnitt 6).
+ *  rrule.js iteriert jeden Zeitraum einzeln; der Horizont begrenzt unmögliche Regeln.
+ *  DAILY muss die größte Lücke einer gültigen Tagesregel abdecken: Schalttag auf festem
+ *  Wochentag, 28 Jahre (Review 23.10.2026, R5). */
 export const HORIZON_YEARS: Record<Rule["freq"], number> = {
-  DAILY: 12,
+  DAILY: 30,
   WEEKLY: 30,
   MONTHLY: 100,
   YEARLY: 400,
@@ -106,6 +108,7 @@ export function queryOccurrences(q: EngineQuery): EngineResult {
   let exhausted = false;
   let aborted = false;
   let index = 0;
+  let last: Temporal.PlainDate | null = null;
   const time = q.time ?? null;
   rr.all((raw) => {
     if (q.deadline && q.deadline.now() > q.deadline.until) {
@@ -113,6 +116,10 @@ export function queryOccurrences(q: EngineQuery): EngineResult {
       return false;
     }
     const d = fromDate(raw);
+    // Ein doppelt gelieferter Termin (rrule dedupliziert BYSETPOS-Treffer erst seit unserem Patch
+    // nach Zeitwert) darf COUNT nicht verbrauchen; die Folge ist aufsteigend, Vergleich mit dem Vorgänger reicht.
+    if (last && d.equals(last)) return true;
+    last = d;
     index++;
     if (!q.ignoreCount && rule.count !== null && index > rule.count) {
       exhausted = true;
@@ -146,6 +153,21 @@ export function nextOccurrence(q: Omit<EngineQuery, "limit">): NextResult {
   if (r.dates.length) return { kind: "found", date: r.dates[0]! };
   if (r.aborted) return { kind: "aborted" };
   return { kind: "exhausted" };
+}
+
+/**
+ * Erster Termin eines neuen Serienabschnitts (5.4 „Serie anlegen“ / „Regel ändern“): der erste
+ * passende Regeltermin ab `from` einschließlich, mit der Serienuhrzeit für die UNTIL-Grenze.
+ * Gilt für beide Arten; bei „ab Erledigung“ wird dieser Termin direkt verwendet und nicht um ein
+ * Intervall verschoben. Anlegen (actions.ts) und Formularvorschau nutzen dieselbe Funktion, damit
+ * Vorschau und gespeicherter Stand nicht auseinanderlaufen (Review 23.10.2026, R3).
+ */
+export function firstOccurrence(
+  rule: Rule,
+  from: Temporal.PlainDate,
+  time: Temporal.PlainTime | null,
+): NextResult {
+  return nextOccurrence({ rule, start: from, from, time });
 }
 
 /** Prüft, ob ein Datum ein Regeltermin ist (für Diagnose „unpassender Start“). */

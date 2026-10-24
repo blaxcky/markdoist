@@ -233,6 +233,13 @@ describe("COUNT und Serienende (AK-32)", () => {
     expect(task(r.text).data.status).toBe("open");
     expect(task(r.text).data.due).toBe("2026-10-05");
   });
+  it("veraltete Beenden-Aktion ohne Erledigung trifft nicht das Folgevorkommen (R4)", () => {
+    const base = weekly("calendar", "FREQ=WEEKLY;BYDAY=MO", "2026-10-05");
+    const c = run(base, { type: "completeOccurrence", revision: "REV1", instance: "2026-10-05" }, ctxAt("2026-10-05T10:00"));
+    expect(task(c.text).data.recurrence_instance).toBe("2026-10-12");
+    const stale = run(c.text, { type: "endSeries", revision: "REV1", instance: "2026-10-05", completeCurrent: false }, ctxAt("2026-10-05T11:00"));
+    expect(stale.plan).toMatchObject({ kind: "blocked", message: "Vorkommen ist nicht mehr aktuell" });
+  });
 });
 
 describe("AK-29: COUNT-Neustart mit Archiv (Beispiel 3.4 d)", () => {

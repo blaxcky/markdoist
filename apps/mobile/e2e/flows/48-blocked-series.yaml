@@ -1,0 +1,14 @@
+# Gesperrte Serie (K bereits erledigt, Datei offen): Abhaken meldet den Grund, nichts wird geschrieben
+# (PLAN1 5.2; Datei byte-identisch, Prüfung in run.sh).
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-all
+- scrollUntilVisible:
+    element:
+      id: check-Audit Sperre
+- tapOn:
+    id: check-Audit Sperre
+- assertVisible: ".*Fortschreibung klären.*"
+- assertVisible: "Audit Sperre"

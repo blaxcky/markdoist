@@ -147,6 +147,14 @@ Ein vollständiger Abgleich von PLAN1.md (Abschnitte 1, 3–7, 9) mit dem Code h
 - Behoben: Fremddateien ohne `recurrence_start` zählten COUNT nach jedem Fortschreiben neu (Serie endete nie) – Start wird jetzt beim ersten Schreiben festgehalten; clarify-Vorschlag rechnete den Abstand in UTC; Tipp auf eine gesperrte Serie sprang stumm zurück, jetzt mit Grund.
 - Entschieden (Fragen-Tool, 23.10.2026): „ab Erledigung“ ohne BY-Teile rechnet als fester Abstand mit Klemmen ans Monatsende (31.10. + 1 Monat = 30.11., vorher 31.12.); Kalender-COUNT bei versäumten Terminen bleibt wie in PLAN1 5.2.
 
+**Korrekturen nach dem Review Wiederholungen (24.10.2026):** Befunde R1–R7 aus `docs/REVIEW-WIEDERHOLUNGEN-2026-10-23.md` behoben, Einzelheiten in `docs/TEST-WIEDERHOLUNGEN.md`.
+- `pnpm test:tz` mit 4.699 Tests grün in vier Zonen, `pnpm typecheck` und `pnpm lint` grün, `pnpm e2e:desktop` 28 Playwright-Tests grün. Die Original-Suite des Reviews (2.572 Tests, vorher 68 rot) läuft vollständig grün.
+- Neu im Repository: 1.357 dateutil-Vergleichsfälle und 1.200 Completion-Referenzfälle als eingefrorene Fixtures, Regressionssperren R1–R7, Android-Flows 46–48 mit Dateiprüfungen.
+- Gradle: Config-Plugin `withWorkspaceBundleInputs` registriert `packages/core/src`, `packages/app/src`, `patches/` und die Lockdatei als Inputs von `createBundle…JsAndAssets`. Lokal nachgewiesen: ohne Änderung UP-TO-DATE, nach Änderung in `packages/core` neu gebündelt.
+- Android (Emulator `Markdoist_API_36`, API 36): Release-Build x86_64, mit dem Debug-Keystore des Projekts signiert. **15 Maestro-Flows und 20 Dateiprüfungen grün** (`apps/mobile/e2e/run.sh`), darunter neu 46 Monatsende bei „ab Erledigung“ (31.10. → 30.11., Checkliste zurückgesetzt), 47 BYSETPOS mit COUNT (Serie bleibt offen, Folgetermin 02.11.) und 48 gesperrte Serie (Meldung, Datei byte-identisch). Die Seeds liegen im Jahr 2099, damit die Flows nicht vom Testtag abhängen.
+- Hinweis Emulator: Die fensterlose Variante (`-no-window`, `qemu-system-x86_64-headless`, Emulator 37.1.11) stürzt auf diesem Rechner beim Start mit SIGSEGV ab; mit Fenster läuft sie.
+- Nicht geprüft: echtes Gerät, Synchronisation zwischen mehreren Geräten.
+
 **[V]-Abweichungen:**
 - Ausnahmen werden nur bei Kalenderserien angeboten. Eine Serie „ab Erledigung“ hat kein festes künftiges Raster; ihr aktuelles Vorkommen wird mit „Überspringen“ bearbeitet.
 - Texte: Die gemeinsamen Begriffe (Ansichten, Felder, Aktionen, Speicherzustände, Vorschau) stehen in `packages/app/src/texts.ts`; einzelne bildschirmspezifische Beschriftungen stehen weiter im jeweiligen Oberflächencode.

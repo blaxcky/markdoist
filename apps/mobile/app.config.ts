@@ -23,7 +23,11 @@ const config: ExpoConfig = {
     },
     predictiveBackGestureEnabled: false,
   },
-  plugins: ["./plugins/withReleaseSigning.js", "./plugins/withCaptureShortcut.js"],
+  plugins: [
+    "./plugins/withReleaseSigning.js",
+    "./plugins/withCaptureShortcut.js",
+    "./plugins/withWorkspaceBundleInputs.js",
+  ],
 };
 
 export default config;

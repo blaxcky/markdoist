@@ -101,3 +101,32 @@ describe("Grenzen", () => {
     expect(Date.now() - t0).toBeLessThan(1500);
   });
 });
+
+describe("BYSETPOS-Grenzfälle (Review 23.10.2026, R1/R2)", () => {
+  it("überlappende Positionen liefern jeden Termin einmal und verbrauchen COUNT nicht doppelt", () => {
+    const r = queryOccurrences({ rule: rule("FREQ=MONTHLY;BYDAY=1MO;BYSETPOS=1,-1;COUNT=2"), start: D("2026-10-05"), limit: 5 });
+    expect(r.dates.map(String)).toEqual(["2026-10-05", "2026-11-02"]);
+    expect(r.exhausted).toBe(true);
+  });
+  it("negative Position jenseits der Kandidatenliste erzeugt keinen Termin", () => {
+    const r = queryOccurrences({ rule: rule("FREQ=MONTHLY;BYDAY=1MO;BYSETPOS=-2;UNTIL=20261231"), start: D("2026-10-01"), limit: 5 });
+    expect(r.dates).toEqual([]);
+    expect(r.exhausted).toBe(true);
+  });
+  it("Schalttag am Montag liegt im Tageshorizont (R5)", () => {
+    const n = nextOccurrence({ rule: rule("FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO"), start: D("2016-02-29"), after: D("2016-02-29") });
+    expect(n).toEqual({ kind: "found", date: D("2044-02-29") });
+  });
+});
+
+describe("INTERVAL und COUNT als sichere Ganzzahlen (R6)", () => {
+  it.each(["INTERVAL", "COUNT"])("%s mit 400 Ziffern ist ungültig", (key) => {
+    expect(parseRule(`FREQ=DAILY;${key}=${"9".repeat(400)}`).status).toBe("invalid");
+  });
+  it("Obergrenzen gelten, Werte darunter bleiben gültig", () => {
+    expect(parseRule("FREQ=DAILY;INTERVAL=1000").status).toBe("ok");
+    expect(parseRule("FREQ=DAILY;INTERVAL=1001").status).toBe("invalid");
+    expect(parseRule("FREQ=DAILY;COUNT=10000").status).toBe("ok");
+    expect(parseRule("FREQ=DAILY;COUNT=10001").status).toBe("invalid");
+  });
+});

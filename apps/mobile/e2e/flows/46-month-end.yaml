@@ -1,0 +1,17 @@
+# Ab Erledigung, monatlich: Überspringen am 31. klemmt ans Monatsende (PLAN1 5.2, Entscheidung 23.10.2026).
+# Vorkommen Sa 31.10.2099 → Mo 30.11.2099 um 09:00, anderes Feld −1 Tag, Checkliste zurückgesetzt (Dateiprüfung in run.sh).
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-all
+- scrollUntilVisible:
+    element: "Audit Monatsende"
+- tapOn: "Audit Monatsende"
+- scrollUntilVisible:
+    element:
+      id: series-skip
+- tapOn:
+    id: series-skip
+- assertVisible: "Aktuelles Vorkommen: Mo 30.11.2099"
+- back

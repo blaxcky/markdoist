@@ -4,8 +4,14 @@ import { planAction, type ActionContext, type TaskAction } from "../actions";
 import { datePart, parseDateValue } from "../dates";
 import type { YamlValue } from "../frontmatter";
 import type { Task } from "../task";
-import { completionOccurrences, queryOccurrences } from "./engine";
-import { parseKey, readSeries, type RefField } from "./series";
+import {
+  completionOccurrences,
+  firstOccurrence,
+  queryOccurrences,
+  type EngineResult,
+} from "./engine";
+import type { Rule } from "./rule";
+import { parseKey, readSeries, type Anchor, type RefField } from "./series";
 
 export interface DateChange {
   field: RefField;
@@ -142,4 +148,46 @@ export function previewSeriesAction(
 export function previewDate(v: string | null, timeZone: string): Temporal.PlainDate | null {
   const d = v === null ? null : parseDateValue(v);
   return d ? datePart(d, timeZone) : null;
+}
+
+/**
+ * Vorschau der nächsten höchstens `limit` Termine eines neuen Abschnitts ab `from`, auf derselben
+ * Grundlage wie das Anlegen: erster Termin über `firstOccurrence`, danach bei Kalender das feste
+ * Raster ab diesem Termin, bei „ab Erledigung“ der Abstand ab dem jeweils vorigen Termin (5.2,
+ * ohne Erledigungshistorie). Leere `dates` mit `aborted` heißt „Berechnung zu aufwendig“, mit
+ * `exhausted` „keine Termine ab dem Start“.
+ */
+export function previewNewSection(
+  rule: Rule,
+  anchor: Anchor,
+  from: Temporal.PlainDate,
+  time: Temporal.PlainTime | null,
+  limit: number,
+): EngineResult {
+  const first = firstOccurrence(rule, from, time);
+  if (first.kind !== "found") {
+    return { dates: [], exhausted: first.kind === "exhausted", aborted: first.kind === "aborted" };
+  }
+  if (anchor === "calendar") {
+    return queryOccurrences({ rule, start: first.date, from: first.date, time, limit });
+  }
+  const dates = [first.date];
+  let exhausted = false;
+  let aborted = false;
+  while (dates.length < limit) {
+    const r = completionOccurrences({ rule, base: dates[dates.length - 1]!, time, limit: 1 });
+    if (!r.dates.length) {
+      exhausted = r.exhausted;
+      aborted = r.aborted;
+      break;
+    }
+    dates.push(r.dates[0]!);
+  }
+  // COUNT zählt bei „ab Erledigung“ Erledigungen (5.2); in der Vorschau entspricht das der Terminzahl.
+  if (rule.count !== null && dates.length >= rule.count) {
+    dates.splice(rule.count);
+    exhausted = true;
+    aborted = false;
+  }
+  return { dates, exhausted, aborted };
 }

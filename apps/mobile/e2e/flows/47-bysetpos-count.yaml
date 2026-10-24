@@ -1,0 +1,17 @@
+# Überlappendes BYSETPOS mit COUNT=2: Erledigen des ersten Termins beendet die Serie nicht
+# (Review Wiederholungen 23.10.2026, R1). Folgetermin Mo 02.11.2099.
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-all
+- scrollUntilVisible:
+    element: "Audit Positionsregel"
+- tapOn: "Audit Positionsregel"
+- scrollUntilVisible:
+    element:
+      id: series-complete
+- tapOn:
+    id: series-complete
+- assertVisible: "Aktuelles Vorkommen: Mo 02.11.2099"
+- back

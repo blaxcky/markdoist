@@ -367,7 +367,6 @@ describe("AK-32: Serienende, Fortsetzen, Berechnungsabbruch", () => {
     for (const [anchor, rule] of [
       ["calendar", "FREQ=YEARLY;BYMONTH=1;BYYEARDAY=200"],
       ["calendar", "FREQ=YEARLY;BYMONTH=1;BYYEARDAY=200;COUNT=3"],
-      ["calendar", "FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO"],
       ["completion", "FREQ=YEARLY;BYMONTH=1;BYYEARDAY=200"],
     ] as const) {
       const base = series(anchor, rule, "2026-10-12");
@@ -379,6 +378,12 @@ describe("AK-32: Serienende, Fortsetzen, Berechnungsabbruch", () => {
       }
     }
   });
+  it("seltene gültige Tagesregel liegt im Suchhorizont (Review 23.10.2026, R5)", () => {
+    // Schalttag am Montag: größte Lücke einer gültigen Tagesregel, 28 Jahre (2016 → 2044).
+    const base = series("calendar", "FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO", "2016-02-29");
+    const p = planAction(task(base), { type: "completeOccurrence", revision: "REV1", instance: "2016-02-29" }, ctxAt("2016-02-29T10:00"));
+    expect(p).toMatchObject({ kind: "edit", set: { recurrence_instance: "2044-02-29" } });
+  });
 });
 
 describe("AK-38: unmögliche und ungültige Regeln", () => {
@@ -387,7 +392,6 @@ describe("AK-38: unmögliche und ungültige Regeln", () => {
     for (const [rule, msg] of [
       ["FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30", /keine Termine/],
       ["FREQ=YEARLY;BYMONTH=1;BYYEARDAY=200", /aufwendig/],
-      ["FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO", /aufwendig/],
     ] as const) {
       const spec = { rule, anchor: "calendar" as const, field: "due" as const, start: "2026-10-12", offsetDays: null };
       const p = planAction(task(plain), { type: "createSeries", spec }, ctxAt("2026-10-12T10:00"));
@@ -400,6 +404,12 @@ describe("AK-38: unmögliche und ungültige Regeln", () => {
       );
       expect(c.kind, rule).toBe("blocked");
     }
+    // Schalttag am Montag ist gültig und liegt seit dem 30-Jahres-Horizont im Suchbereich (R5).
+    const leap = { rule: "FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO", anchor: "calendar" as const, field: "due" as const, start: "2026-10-12", offsetDays: null };
+    expect(planAction(task(plain), { type: "createSeries", spec: leap }, ctxAt("2026-10-12T10:00"))).toMatchObject({
+      kind: "edit",
+      set: { recurrence_instance: "2044-02-29" },
+    });
   });
   it("gespeicherte unmögliche bzw. aufwendige Regel: Diagnose, kein Serienende", () => {
     for (const rule of ["FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30", "FREQ=YEARLY;BYMONTH=1;BYYEARDAY=200"]) {

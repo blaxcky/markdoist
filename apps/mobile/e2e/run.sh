@@ -59,9 +59,19 @@ if [ $fail = 0 ]; then
   check "Kaputt.md" "title: ["
   check "Zahnarzt.md" "COUNT=5"
   check "Zahnarzt.md" "recurrence_anchor: calendar"
-  # AK-12: Serienaktionen legen keine Dateien an – 3 Seed-Dateien + 2 Erfassungen.
+  # Review Wiederholungen 23.10.2026: Monatsende, BYSETPOS mit COUNT, gesperrte Serie.
+  check "Audit-Monatsende.md" "due: 2099-11-30T09:00"
+  check "Audit-Monatsende.md" "scheduled: 2099-11-29T08:00"
+  check "Audit-Monatsende.md" "recurrence_instance: 2099-11-30"
+  check "Audit-Monatsende.md" "- [ ] Test"
+  check "Audit-Positionsregel.md" "recurrence_instance: 2099-11-02"
+  check "Audit-Positionsregel.md" "status: open"
+  if [ "$(adb shell "cat '$DIR/Audit-Sperre.md'" | tr -d '\r' | md5sum)" = "$(md5sum < seed/Audit-Sperre.md)" ]; then
+    echo "OK   Audit-Sperre.md byte-identisch"
+  else echo "FEHL Audit-Sperre.md wurde verändert"; fail=1; fi
+  # AK-12: Serienaktionen legen keine Dateien an – 6 Seed-Dateien + 2 Erfassungen.
   n=$(adb shell ls "$DIR" | grep -c '\.md' || true)
-  if [ "$n" = 5 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 5)"; fail=1; fi
+  if [ "$n" = 8 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 8)"; fail=1; fi
   adb shell ls -a "$DIR" | grep -q 'todo-tmp' && { echo "FEHL Temp-Datei übrig"; fail=1; } || true
 fi
 exit $fail
