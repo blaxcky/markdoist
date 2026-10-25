@@ -18,11 +18,13 @@ adb shell rm -rf "$DIR"
 adb shell mkdir -p "$DIR"
 for f in seed/*.md; do adb push "$f" "$DIR/" >/dev/null; done
 # Serie relativ zu heute: K = letzter Montag (heute, falls Montag), Start eine Woche davor.
-K=$(date -d "$(( ($(date +%u) - 1) )) days ago" +%F)
-START=$(date -d "$K -7 days" +%F)
-NEXT=$(date -d "$K +7 days" +%F)
+# K von 12 Uhr aus, die Folgedaten in UTC: Am Tag der Zeitumstellung verschiebt die fehlende oder doppelte Stunde
+# sonst abends das Datum (25.10.2026, 23 Uhr: „6 days ago“ ergab Dienstag statt Montag).
+K=$(date -d "12:00 $(( ($(date +%u) - 1) )) days ago" +%F)
+START=$(date -u -d "$K -7 days" +%F)
+NEXT=$(date -u -d "$K +7 days" +%F)
 NEXT_LABEL="Mo $(date -d "$NEXT" +%d.%m.%Y)"
-SKIP_KEY=$(date -d "$K +14 days" +%F)   # nach Flow 40 ist NEXT aktuell; der Termin danach wird übersprungen
+SKIP_KEY=$(date -u -d "$K +14 days" +%F)   # nach Flow 40 ist NEXT aktuell; der Termin danach wird übersprungen
 TMP=$(mktemp -d)
 cat > "$TMP/Wochenrueckblick.md" <<SEED
 ---
