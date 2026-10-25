@@ -2,7 +2,7 @@
 // Vorher-/Nachher-Inhalt, Hash-Prüfung vor dem Kürzen, Zurücklesen nach dem Schreiben.
 import type { FileMeta, KeyValueStore, ReadResult, RecoveryCase, Scope, StorageAdapter, WriteResult } from "@markdoist/app";
 import { hashText } from "@markdoist/core";
-import type { ChildDoc, SafNative } from "../../modules/saf-storage/src/SafStorage.types";
+import type { ChildDoc, ReadDoc, SafNative } from "../../modules/saf-storage/src/SafStorage.types";
 
 export const TRASH_DIR = ".todo-trash";
 const FILE_MIME = "application/octet-stream";
@@ -95,11 +95,45 @@ export class SafAdapter implements StorageAdapter {
     return { scope, name };
   }
 
-  /** Aktuelle URI zu einer Referenz; nach Umbenennen nie eine alte URI weiterbenutzen. */
-  private async uriOf(ref: string, refresh = false): Promise<string | null> {
+  /** Bekannte URI zu einer Referenz; nach Umbenennen nie eine alte URI weiterbenutzen. */
+  private async uriOf(ref: string): Promise<string | null> {
     const { scope, name } = this.split(ref);
-    if (refresh || !this.docs[scope].has(name)) await this.list(scope);
+    if (!this.docs[scope].has(name)) await this.list(scope);
     return this.docs[scope].get(name)?.uri ?? null;
+  }
+
+  /**
+   * Datei vor einer Änderung frisch lesen. Jede Auflistung fragt beim Anbieter jede Datei einzeln ab
+   * und kostet bei großen Ordnern Sekunden; darum zuerst die bekannte URI, und nur wenn sie fehlt oder
+   * nicht mehr zu dieser Datei gehört, einmal neu auflisten.
+   */
+  private async current(ref: string): Promise<{ uri: string; cur: ReadDoc } | null> {
+    const { scope, name } = this.split(ref);
+    const attempt = async (uri: string) => {
+      try {
+        const cur = await this.native.readFile(uri);
+        return cur.name === undefined || cur.name === name ? { uri, cur } : null;
+      } catch (e) {
+        if (code(e) === "ERR_MISSING") return null;
+        throw e;
+      }
+    };
+    const known = this.docs[scope].get(name);
+    const hit = known ? await attempt(known.uri) : null;
+    if (hit) return hit;
+    await this.list(scope);
+    const fresh = this.docs[scope].get(name);
+    return fresh ? attempt(fresh.uri) : null;
+  }
+
+  /** Eigene Änderung im bekannten Stand nachführen, statt den Ordner neu aufzulisten. */
+  private remember(scope: Scope, name: string, doc: { uri: string; docId: string }) {
+    this.docs[scope].set(name, { docId: doc.docId, uri: doc.uri, name, isDir: false, mtime: null, size: null, flags: 0 });
+  }
+
+  /** Belegt der Anbieter den Namen schon? Gezielte Abfrage, case-insensitiv wie der gemeinsame Speicher. */
+  private async taken(parentDocId: string, name: string): Promise<boolean> {
+    return (await this.native.findChild(this.treeUri, parentDocId, name)) !== null;
   }
 
   async read(ref: string): Promise<ReadResult> {
@@ -173,9 +207,9 @@ export class SafAdapter implements StorageAdapter {
   async write(ref: string, text: string, expectedHash: string): Promise<WriteResult> {
     let j: Journal | null = null;
     try {
-      const uri = await this.uriOf(ref, true);
-      if (!uri) return { status: "missing", message: ref };
-      const cur = await this.native.readFile(uri);
+      const found = await this.current(ref);
+      if (!found) return { status: "missing", message: ref };
+      const { uri, cur } = found;
       if (cur.hash !== expectedHash) return { status: "conflict", currentHash: cur.hash };
       j = await this.begin("write", ref, ref, { text: cur.text, hash: cur.hash }, text, uri, uri);
       // Ziel erneut prüfen, unmittelbar vor dem Kürzen.
@@ -215,17 +249,11 @@ export class SafAdapter implements StorageAdapter {
     return recovery ? { ...r, recovery } : r;
   }
 
-  private exists(scope: Scope, name: string): boolean {
-    const lower = name.toLowerCase();
-    return [...this.docs[scope].keys()].some((k) => k.toLowerCase() === lower);
-  }
-
   /** Neuanlage: exklusiver Name, MIME application/octet-stream, tatsächlichen Namen übernehmen. */
   async create(name: string, text: string): Promise<WriteResult> {
     let j: Journal | null = null;
     try {
-      await this.list("tasks");
-      if (this.exists("tasks", name)) return { status: "exists", message: name };
+      if (await this.taken(this.rootDocId, name)) return { status: "exists", message: name };
       const ref = `tasks/${name}`;
       j = await this.begin("create", ref, ref, null, text, null);
       const doc = await this.createChecked(this.rootDocId, name, j);
@@ -235,7 +263,7 @@ export class SafAdapter implements StorageAdapter {
       if (after !== j.desiredHash) return this.unclear(j, { status: "unknown", message: "Neuanlage nicht vollständig geschrieben" });
       j.phase = "written";
       await this.finish(j);
-      await this.list("tasks");
+      this.remember("tasks", name, doc);
       return { status: "ok", ref, name, hash: after };
     } catch (e) {
       return this.failure(e, j);
@@ -247,7 +275,7 @@ export class SafAdapter implements StorageAdapter {
     parentDocId: string,
     name: string,
     j: Journal,
-  ): Promise<{ status: "ok"; uri: string } | { status: "fail"; result: WriteResult }> {
+  ): Promise<{ status: "ok"; uri: string; docId: string } | { status: "fail"; result: WriteResult }> {
     let doc = await this.native.createFile(this.treeUri, parentDocId, name, FILE_MIME);
     j.dstUri = doc.uri;
     j.phase = "created";
@@ -266,23 +294,27 @@ export class SafAdapter implements StorageAdapter {
         return { status: "fail", result: { status: "exists", message: `Anbieter vergab ${doc.name}` } };
       }
     }
-    return { status: "ok", uri: doc.uri };
+    return { status: "ok", uri: doc.uri, docId: doc.docId };
   }
 
   private async ensureTrash(): Promise<string> {
-    await this.children("tasks");
     if (this.trashDocId) return this.trashDocId;
+    const found = await this.native.findChild(this.treeUri, this.rootDocId, TRASH_DIR);
+    if (found?.isDir) {
+      this.trashDocId = found.docId;
+      return found.docId;
+    }
     const d = await this.native.createFile(this.treeUri, this.rootDocId, TRASH_DIR, DIR_MIME);
     this.trashDocId = d.docId;
     return d.docId;
   }
 
-  private freeName(scope: Scope, name: string): string {
-    if (!this.exists(scope, name)) return name;
+  private async freeName(parentDocId: string, name: string): Promise<string> {
+    if (!(await this.taken(parentDocId, name))) return name;
     const m = /^(.*?)(\.md)?$/i.exec(name)!;
     for (let n = 2; n < 10000; n++) {
       const c = `${m[1]} ${n}${m[2] ?? ""}`;
-      if (!this.exists(scope, c)) return c;
+      if (!(await this.taken(parentDocId, c))) return c;
     }
     throw new Error("Kein freier Name");
   }
@@ -291,14 +323,13 @@ export class SafAdapter implements StorageAdapter {
   private async copyMove(kind: OpKind, ref: string, to: Scope, expectedHash: string): Promise<WriteResult> {
     let j: Journal | null = null;
     try {
-      const { scope } = this.split(ref);
-      const srcUri = await this.uriOf(ref, true);
-      if (!srcUri) return { status: "missing", message: ref };
-      const cur = await this.native.readFile(srcUri);
+      const { scope, name: srcName } = this.split(ref);
+      const found = await this.current(ref);
+      if (!found) return { status: "missing", message: ref };
+      const { uri: srcUri, cur } = found;
       if (cur.hash !== expectedHash) return { status: "conflict", currentHash: cur.hash };
       const parent = to === "trash" ? await this.ensureTrash() : this.rootDocId;
-      await this.list(to);
-      const name = this.freeName(to, this.split(ref).name);
+      const name = await this.freeName(parent, srcName);
       const dstRef = `${to}/${name}`;
       j = await this.begin(kind, ref, dstRef, { text: cur.text, hash: cur.hash }, cur.text, srcUri);
       const doc = await this.createChecked(parent, name, j);
@@ -321,8 +352,8 @@ export class SafAdapter implements StorageAdapter {
       await this.native.deleteDocument(srcUri);
       this.hook(kind, "after-delete");
       await this.finish(j);
-      await this.list(scope);
-      await this.list(to);
+      this.docs[scope].delete(srcName);
+      this.remember(to, name, doc);
       return { status: "ok", ref: dstRef, name, hash: after };
     } catch (e) {
       return this.failure(e, j);
@@ -340,10 +371,10 @@ export class SafAdapter implements StorageAdapter {
   async rename(ref: string, newName: string, expectedHash: string): Promise<WriteResult> {
     let j: Journal | null = null;
     try {
-      const uri = await this.uriOf(ref, true);
-      if (!uri) return { status: "missing", message: ref };
-      if (this.exists("tasks", newName)) return { status: "exists", message: newName };
-      const cur = await this.native.readFile(uri);
+      const found = await this.current(ref);
+      if (!found) return { status: "missing", message: ref };
+      if (await this.taken(this.rootDocId, newName)) return { status: "exists", message: newName };
+      const { uri, cur } = found;
       if (cur.hash !== expectedHash) return { status: "conflict", currentHash: cur.hash };
       const started = await this.begin("rename", ref, `tasks/${newName}`, { text: cur.text, hash: cur.hash }, null, uri);
       j = started;
@@ -361,7 +392,8 @@ export class SafAdapter implements StorageAdapter {
       started.dstUri = r.uri;
       if (r.name !== newName) return this.unclear(started, { status: "unknown", message: `Anbieter vergab ${r.name}` });
       await this.finish(started);
-      await this.list("tasks");
+      this.docs.tasks.delete(this.split(ref).name);
+      this.remember("tasks", newName, r);
       return { status: "ok", ref: `tasks/${newName}`, name: newName, hash: expectedHash };
     } catch (e) {
       return this.failure(e, j);
@@ -371,15 +403,16 @@ export class SafAdapter implements StorageAdapter {
   async deletePermanently(ref: string, expectedHash: string): Promise<WriteResult> {
     let j: Journal | null = null;
     try {
-      const uri = await this.uriOf(ref, true);
-      if (!uri) return { status: "missing", message: ref };
-      const cur = await this.native.readFile(uri);
+      const found = await this.current(ref);
+      if (!found) return { status: "missing", message: ref };
+      const { uri, cur } = found;
       if (cur.hash !== expectedHash) return { status: "conflict", currentHash: cur.hash };
       j = await this.begin("delete", ref, ref, { text: cur.text, hash: cur.hash }, null, uri);
       await this.native.deleteDocument(uri);
       await this.finish(j);
-      await this.list(this.split(ref).scope);
-      return { status: "ok", ref, name: this.split(ref).name, hash: expectedHash };
+      const { scope, name } = this.split(ref);
+      this.docs[scope].delete(name);
+      return { status: "ok", ref, name, hash: expectedHash };
     } catch (e) {
       return this.failure(e, j);
     }

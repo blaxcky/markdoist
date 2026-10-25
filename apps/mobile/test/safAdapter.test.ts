@@ -347,3 +347,77 @@ describe("Unklarer Ausgang zur Laufzeit (7.3)", () => {
     expect(n.text("A.md")).toBe(T("extern"));
   });
 });
+
+describe("Keine Ordnerauflistung je Vorgang (Leistung auf Android)", () => {
+  const listed = (n: FakeSaf) => n.calls.listChildren ?? 0;
+  it("Neuanlage, Schreiben und Löschen listen nach dem Abgleich nicht neu auf", async () => {
+    const n = new FakeSaf();
+    n.put("A.md", T("A"));
+    const trash = n.put(TRASH_DIR, "");
+    n.docs.get(trash)!.isDir = true;
+    const a = adapter(n);
+    await a.list("tasks");
+    await a.list("trash");
+    const before = listed(n);
+    const c = await a.create("Neu.md", T("Neu"));
+    expect(c.status).toBe("ok");
+    const w = await a.write("tasks/Neu.md", T("Neu2"), hashText(T("Neu")));
+    expect(w.status).toBe("ok");
+    expect((await a.moveToTrash("tasks/Neu.md", hashText(T("Neu2")))).status).toBe("ok");
+    expect((await a.moveToTrash("tasks/A.md", hashText(T("A")))).status).toBe("ok");
+    expect(listed(n)).toBe(before);
+    expect(n.files()).toEqual([]);
+    expect(n.files(trash)).toEqual(["A.md", "Neu.md"]);
+    // Der nachgeführte Stand trägt: Wiederherstellen und endgültiges Löschen ohne neue Auflistung.
+    expect((await a.restoreFromTrash("trash/A.md", hashText(T("A")))).status).toBe("ok");
+    expect((await a.deletePermanently("trash/Neu.md", hashText(T("Neu2")))).status).toBe("ok");
+    expect((await a.rename("tasks/A.md", "B.md", hashText(T("A")))).status).toBe("ok");
+    expect((await a.write("tasks/B.md", T("B"), hashText(T("A")))).status).toBe("ok");
+    expect(listed(n)).toBe(before);
+    expect(n.files()).toEqual(["B.md"]);
+    expect(n.files(trash)).toEqual([]);
+  });
+  it("extern gelöscht und neu angelegt: Schreiben findet die neue Datei über eine Auflistung", async () => {
+    const n = new FakeSaf();
+    const id = n.put("A.md", T("A"));
+    const a = adapter(n);
+    await a.list("tasks");
+    n.docs.delete(id);
+    n.put("A.md", T("A2"));
+    const before = listed(n);
+    expect((await a.write("tasks/A.md", T("neu"), hashText(T("A2")))).status).toBe("ok");
+    expect(listed(n)).toBe(before + 1);
+    expect(n.text("A.md")).toBe(T("neu"));
+  });
+  it("extern umbenannt: Schreiben trifft nicht die umbenannte Datei", async () => {
+    const n = new FakeSaf();
+    const id = n.put("A.md", T("A"));
+    const a = adapter(n);
+    await a.list("tasks");
+    n.docs.get(id)!.name = "Z.md";
+    expect((await a.write("tasks/A.md", T("neu"), hashText(T("A")))).status).toBe("missing");
+    expect(n.text("Z.md")).toBe(T("A"));
+  });
+  it("extern angelegte gleichnamige Datei, noch nicht im Stand: Neuanlage ersetzt sie nicht", async () => {
+    const n = new FakeSaf();
+    const a = adapter(n);
+    await a.list("tasks");
+    n.put("Neu.md", T("extern"));
+    expect((await a.create("neu.md", T("X"))).status).toBe("exists");
+    expect(n.files()).toEqual(["Neu.md"]);
+    expect(n.text("Neu.md")).toBe(T("extern"));
+  });
+  it("Kollision im Papierkorb, noch nicht im Stand: Suffix statt Überschreiben", async () => {
+    const n = new FakeSaf();
+    n.put("A.md", T("A"));
+    const trash = n.put(TRASH_DIR, "");
+    n.docs.get(trash)!.isDir = true;
+    const a = adapter(n);
+    await a.list("tasks");
+    await a.list("trash");
+    n.put("A.md", T("alt im Papierkorb"), trash);
+    expect((await a.moveToTrash("tasks/A.md", hashText(T("A")))).status).toBe("ok");
+    expect(n.files(trash)).toEqual(["A 2.md", "A.md"]);
+    expect(n.text("A.md", trash)).toBe(T("alt im Papierkorb"));
+  });
+});

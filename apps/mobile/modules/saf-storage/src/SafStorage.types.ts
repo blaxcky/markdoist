@@ -20,6 +20,8 @@ export interface ReadDoc {
   invalidUtf8: boolean;
   mtime: number | null;
   size: number | null;
+  /** Anzeigename laut Anbieter (nur readFile) */
+  name?: string;
 }
 
 export interface CreatedDoc {
@@ -33,6 +35,8 @@ export interface SafNative {
   pickFolder(initialUri: string | null): Promise<PickedFolder | null>;
   hasPermission(treeUri: string): boolean;
   listChildren(treeUri: string, parentDocId: string): Promise<ChildDoc[]>;
+  /** Ein Kind gezielt nachsehen (case-insensitiv wie der gemeinsame Speicher); null, wenn es fehlt. */
+  findChild(treeUri: string, parentDocId: string, name: string): Promise<ChildDoc | null>;
   readFile(uri: string): Promise<ReadDoc>;
   /** Mehrere Dateien lesen; null je Datei bei Fehler; mtime ist hier null (kommt aus der Auflistung). */
   readFiles(uris: string[]): Promise<(ReadDoc | null)[]>;

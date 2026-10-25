@@ -23,6 +23,8 @@ export class FakeSaf implements SafNative {
   appendTxt = false;
   /** wirft vor dem Aufruf dieser Methode einmal */
   failOnce: Record<string, string> = {};
+  /** Aufrufe je Methode (Leistung: Auflistungen zählen) */
+  calls: Record<string, number> = {};
   private seq = 0;
   private clock = 1;
   readonly tree = "content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FAufgaben";
@@ -40,6 +42,7 @@ export class FakeSaf implements SafNative {
     return id;
   }
   private maybeFail(name: string) {
+    this.calls[name] = (this.calls[name] ?? 0) + 1;
     const c = this.failOnce[name];
     if (c) {
       delete this.failOnce[name];
@@ -83,6 +86,12 @@ export class FakeSaf implements SafNative {
       .filter((d) => d.parent === parent)
       .map((d) => ({ docId: d.id, uri: this.uri(d.id), name: d.name, isDir: d.isDir, mtime: d.mtime, size: d.bytes.length, flags: 0 }));
   }
+  async findChild(_t: string, parent: string, name: string): Promise<ChildDoc | null> {
+    this.maybeFail("findChild");
+    // Der gemeinsame Speicher unterscheidet Groß-/Kleinschreibung nicht.
+    const d = [...this.docs.values()].find((x) => x.parent === parent && x.name.toLowerCase() === name.toLowerCase());
+    return d ? { docId: d.id, uri: this.uri(d.id), name: d.name, isDir: d.isDir, mtime: d.mtime, size: d.bytes.length, flags: 0 } : null;
+  }
   async readFile(uri: string): Promise<ReadDoc> {
     this.maybeFail("readFile");
     const d = this.docs.get(this.idOf(uri))!;
@@ -94,7 +103,7 @@ export class FakeSaf implements SafNative {
       invalid = true;
       text = d.bytes.toString("utf8");
     }
-    return { text, hash: sha(d.bytes), invalidUtf8: invalid, mtime: d.mtime, size: d.bytes.length };
+    return { text, hash: sha(d.bytes), invalidUtf8: invalid, mtime: d.mtime, size: d.bytes.length, name: d.name };
   }
   async readFiles(uris: string[]) {
     return Promise.all(uris.map((u) => this.readFile(u).then((r) => ({ ...r, mtime: null })).catch(() => null)));

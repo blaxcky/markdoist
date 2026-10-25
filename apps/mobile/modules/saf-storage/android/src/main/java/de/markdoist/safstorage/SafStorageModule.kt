@@ -211,6 +211,50 @@ class SafStorageModule : Module() {
       }
     }
 
+    // Ein Kind gezielt nachsehen statt den ganzen Ordner aufzulisten. Der lokale Speicheranbieter
+    // vergibt docIds nach Pfad; auf dem gemeinsamen Speicher ist die Suche case-insensitiv.
+    AsyncFunction("findChild") { treeUri: String, parentDocId: String, name: String ->
+      mapped {
+        val tree = Uri.parse(treeUri)
+        val id = "$parentDocId/$name"
+        val uri = DocumentsContract.buildDocumentUriUsingTree(tree, id)
+        try {
+          resolver.query(
+            uri,
+            arrayOf(
+              Document.COLUMN_DOCUMENT_ID,
+              Document.COLUMN_DISPLAY_NAME,
+              Document.COLUMN_MIME_TYPE,
+              Document.COLUMN_LAST_MODIFIED,
+              Document.COLUMN_SIZE,
+              Document.COLUMN_FLAGS,
+            ),
+            null,
+            null,
+            null,
+          )?.use { c ->
+            if (!c.moveToFirst()) return@use null
+            val docId = c.getString(0) ?: id
+            mapOf(
+              "docId" to docId,
+              "uri" to DocumentsContract.buildDocumentUriUsingTree(tree, docId).toString(),
+              "name" to c.getString(1),
+              "isDir" to (c.getString(2) == Document.MIME_TYPE_DIR),
+              "mtime" to if (c.isNull(3)) null else c.getLong(3).toDouble(),
+              "size" to if (c.isNull(4)) null else c.getLong(4).toDouble(),
+              "flags" to c.getInt(5),
+            )
+          }
+        } catch (e: FileNotFoundException) {
+          null
+        } catch (e: IllegalArgumentException) {
+          null
+        } catch (e: IllegalStateException) {
+          null
+        }
+      }
+    }
+
     AsyncFunction("readFile") { uri: String ->
       mapped {
         val u = Uri.parse(uri)
@@ -226,7 +270,7 @@ class SafStorageModule : Module() {
           invalid = true
           String(bytes, Charsets.UTF_8)
         }
-        mapOf("text" to text, "hash" to sha256(bytes), "invalidUtf8" to invalid, "mtime" to m["mtime"], "size" to m["size"])
+        mapOf("text" to text, "hash" to sha256(bytes), "invalidUtf8" to invalid, "mtime" to m["mtime"], "size" to m["size"], "name" to m["name"])
       }
     }
 

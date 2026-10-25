@@ -837,7 +837,7 @@ export class Repository {
       this.dropFile(ref);
       this.bump(ref);
       await this.pushUndo({ id: this.newId(), kind: "trash", label: "Gelöscht", ref: res.ref, afterHash: res.hash });
-      await this.refreshTrash();
+      this.trashed(res.ref, res.name);
       this.emit();
       return { status: "ok", ref: res.ref, undoable: true };
     }) as Promise<Outcome>;
@@ -856,7 +856,7 @@ export class Repository {
     if (res.status !== "ok") return this.failed(res);
     this.setFile(res.ref, res.name, read.text, res.hash, read.invalidUtf8);
     await this.pushUndo({ id: this.newId(), kind: "restore", label: "Wiederhergestellt", ref: res.ref, afterHash: res.hash });
-    await this.refreshTrash();
+    this.trash = this.trash.filter((m) => m.ref !== trashRef);
     this.emit();
     return { status: "ok", ref: res.ref, undoable: true };
   }
@@ -891,6 +891,12 @@ export class Repository {
       }
     }
     return out;
+  }
+
+  /** Eigenes Verschieben in den Papierkorb nachführen; neu auflisten kostet auf Android Sekunden. */
+  private trashed(ref: string, name: string) {
+    if (!name.toLowerCase().endsWith(".md")) return;
+    this.trash = [...this.trash.filter((m) => m.ref !== ref), { name, ref, mtime: null, size: null }];
   }
 
   private async refreshTrash() {
