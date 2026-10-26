@@ -1,7 +1,15 @@
 // Aktionen auf Aufgaben (4.4, 5.3, 5.4). Rein funktional: liefert einen Änderungsplan,
 // der anschließend chirurgisch auf den Dateitext angewandt wird (7.2).
 import { Temporal } from "temporal-polyfill";
-import { resetCheckboxes, toggleCheckbox } from "./checklist";
+import {
+  appendItem,
+  moveItem,
+  removeCheckedItems,
+  removeItem,
+  resetCheckboxes,
+  setItemText,
+  toggleCheckbox,
+} from "./checklist";
 import { datePart, formatTimestamp, parseDateValue, type DateValue } from "./dates";
 import { createFileText, deepEqual, editFrontmatter, type YamlValue } from "./frontmatter";
 import {
@@ -48,6 +56,12 @@ export type TaskAction =
   | { type: "setDate"; field: "due" | "scheduled"; value: string | null }
   | { type: "setBody"; body: string }
   | { type: "toggleCheckbox"; line: number }
+  | { type: "addItem"; text: string }
+  | { type: "editItem"; line: number; text: string }
+  | { type: "removeItem"; line: number }
+  | { type: "moveItem"; line: number; before: number | null }
+  | { type: "removeCheckedItems" }
+  | { type: "resetItems" }
   | { type: "assignNewId" }
   | { type: "completeOccurrence"; revision: string; instance: string }
   | { type: "skipOccurrence"; revision: string; instance: string }
@@ -149,6 +163,12 @@ export function actionDependencies(
       break;
     case "setBody":
     case "toggleCheckbox":
+    case "addItem":
+    case "editItem":
+    case "removeItem":
+    case "moveItem":
+    case "removeCheckedItems":
+    case "resetItems":
       body = true;
       break;
     case "setDate":
@@ -325,6 +345,30 @@ function planInner(
       if (b === null) return blocked("Keine Checkbox in dieser Zeile");
       return { kind: "edit", set: {}, remove: [], body: b };
     }
+    case "addItem": {
+      const b = appendItem(task.body, action.text);
+      if (b === null) return blocked("Eintrag darf nicht leer sein");
+      return { kind: "edit", set: {}, remove: [], body: b };
+    }
+    case "editItem": {
+      const b = setItemText(task.body, action.line, action.text);
+      if (b === null) return blocked("Eintrag nicht gefunden oder leer");
+      return { kind: "edit", set: {}, remove: [], body: b };
+    }
+    case "removeItem": {
+      const b = removeItem(task.body, action.line);
+      if (b === null) return blocked("Eintrag nicht gefunden");
+      return { kind: "edit", set: {}, remove: [], body: b };
+    }
+    case "moveItem": {
+      const b = moveItem(task.body, action.line, action.before);
+      if (b === null) return blocked("Eintrag nicht gefunden");
+      return { kind: "edit", set: {}, remove: [], body: b };
+    }
+    case "removeCheckedItems":
+      return { kind: "edit", set: {}, remove: [], body: removeCheckedItems(task.body) };
+    case "resetItems":
+      return { kind: "edit", set: {}, remove: [], body: resetCheckboxes(task.body) };
     case "assignNewId":
       return { kind: "edit", set: { id: ctx.newId() }, remove: [] };
     case "setDate":
@@ -743,14 +787,36 @@ export interface NewTaskInput {
   note?: string;
   due?: string | null;
   scheduled?: string | null;
+  /** neue Liste (4.6) statt Aufgabe; Termine werden dann ignoriert */
+  kind?: "list";
 }
 
-/** Text einer neuen Eingangsaufgabe (4.1, 3.2 Feldreihenfolge). */
+/** Felder, die eine neue Liste über die Aufgabenstandards hinaus bzw. abweichend erhält (4.6). */
+export const NEW_LIST_DATA = { kind: "list", inbox: false } as const;
+
+/** Text einer neuen Eingangsaufgabe (4.1, 3.2 Feldreihenfolge) bzw. Liste (4.6). */
 export function newTaskText(input: NewTaskInput, ctx: ActionContext): { id: string; text: string } {
   const id = ctx.newId();
   const now = formatTimestamp(ctx.at, ctx.timeZone);
   const note = input.note ?? "";
   const body = note === "" ? "" : note.endsWith("\n") ? note : `${note}\n`;
+  if (input.kind === "list") {
+    // `status` und `inbox: false` stehen nur für ältere App-Stände da, die `kind` nicht kennen.
+    const text = createFileText(
+      [
+        ["id", id],
+        ["format_version", SUPPORTED_FORMAT_VERSION],
+        ["title", input.title.trim()],
+        ["kind", "list"],
+        ["status", "open"],
+        ["inbox", false],
+        ["dateCreated", now],
+        ["dateModified", now],
+      ],
+      body,
+    );
+    return { id, text };
+  }
   const text = createFileText(
     [
       ["id", id],

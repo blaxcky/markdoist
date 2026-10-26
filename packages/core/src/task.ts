@@ -63,6 +63,8 @@ export interface TaskFields {
   dateModified: string | null;
   completedDate: string | null;
   recurrence: string | null;
+  /** einfache Liste (`kind: list`, 4.6) statt Aufgabe */
+  isList: boolean;
 }
 
 export interface Task extends FileRef {
@@ -285,6 +287,7 @@ export function readTaskFile(input: ReadInput): IndexedFile {
     dateModified: str("dateModified"),
     completedDate: str("completedDate"),
     recurrence: "recurrence" in data && data.recurrence !== null ? String(data.recurrence) : null,
+    isList: data.kind === "list",
   };
 
   return {

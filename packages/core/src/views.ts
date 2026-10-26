@@ -271,7 +271,9 @@ export function compareBy(
 // ---------------------------------------------------------------------------
 // Ansichten
 
-const isOpen = (v: TaskView) => v.task.fields.status !== "done";
+const isList = (v: TaskView) => v.task.fields.isList;
+/** offene Aufgabe; Listen (4.6) erscheinen in keiner Aufgabenansicht */
+const isOpen = (v: TaskView) => v.task.fields.status !== "done" && !isList(v);
 
 export function inboxView(idx: Index, tz: string, newestFirst = true): TaskView[] {
   return idx.tasks
@@ -322,7 +324,7 @@ export interface DoneOccurrence {
 
 export function doneView(idx: Index): { tasks: TaskView[]; occurrences: DoneOccurrence[] } {
   const tasks = idx.tasks
-    .filter((v) => !isOpen(v))
+    .filter((v) => !isList(v) && v.task.fields.status === "done")
     .sort((a, b) => {
       const ka = completedKey(a);
       const kb = completedKey(b);
@@ -336,6 +338,7 @@ export function doneView(idx: Index): { tasks: TaskView[]; occurrences: DoneOccu
   const inRange = (d: Temporal.PlainDate) =>
     Temporal.PlainDate.compare(d, from) >= 0 && Temporal.PlainDate.compare(d, idx.today) <= 0;
   for (const v of idx.tasks) {
+    if (isList(v)) continue;
     const s = v.series;
     if (s) {
       for (const k of s.C) {
@@ -489,7 +492,7 @@ export function search(
   const title: TaskView[] = [];
   const content: TaskView[] = [];
   for (const v of idx.tasks) {
-    if (!opts.includeDone && !isOpen(v)) continue;
+    if (!opts.includeDone && !isOpen(v) && !isList(v)) continue;
     const all = words.every((w) => v.searchTitle.includes(w) || v.searchBody.includes(w));
     if (!all) continue;
     if (words.some((w) => v.searchTitle.includes(w))) title.push(v);
@@ -498,6 +501,31 @@ export function search(
   const byTitle = (a: TaskView, b: TaskView) =>
     collator.compare(a.task.fields.title, b.task.fields.title);
   return [...title.sort(byTitle), ...content.sort(byTitle)];
+}
+
+// ---------------------------------------------------------------------------
+// Listen (4.6)
+
+function modifiedKey(v: TaskView): number | null {
+  const raw = v.task.fields.dateModified;
+  if (raw) {
+    try {
+      return Temporal.Instant.from(raw).epochMilliseconds;
+    } catch {
+      /* Rückfall auf mtime */
+    }
+  }
+  return v.task.mtime;
+}
+
+/** Alle Listen, zuletzt geänderte zuerst; der Status spielt keine Rolle. */
+export function listsView(idx: Index): TaskView[] {
+  return idx.tasks.filter(isList).sort((a, b) => {
+    const ka = modifiedKey(a);
+    const kb = modifiedKey(b);
+    const c = ka === null || kb === null ? cmpKey(ka, kb) : kb - ka;
+    return c !== 0 ? c : collator.compare(a.task.fields.title, b.task.fields.title);
+  });
 }
 
 // ---------------------------------------------------------------------------

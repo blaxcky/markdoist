@@ -9,6 +9,7 @@ import {
   freeName,
   hashText,
   newTaskText,
+  NEW_LIST_DATA,
   planAction,
   readTaskFile,
   sanitizeTitle,
@@ -757,7 +758,7 @@ export class Repository {
     this.touchedDuringScan?.add(ref);
   }
 
-  /** Neue Eingangsaufgabe (4.1). Übernimmt keinen Termin aus der Ansicht. */
+  /** Neue Eingangsaufgabe (4.1) bzw. Liste (4.6). Übernimmt keinen Termin aus der Ansicht. */
   async create(input: NewTaskInput): Promise<Outcome> {
     const block = this.writeBlock();
     if (block) return block;
@@ -769,7 +770,10 @@ export class Repository {
       id,
       title: input.title.trim(),
       body: note === "" ? "" : note.endsWith("\n") ? note : `${note}\n`,
-      data: { due: input.due ?? undefined, scheduled: input.scheduled ?? undefined },
+      data:
+        input.kind === "list"
+          ? { ...NEW_LIST_DATA, priority: undefined, due: undefined, scheduled: undefined }
+          : { due: input.due ?? undefined, scheduled: input.scheduled ?? undefined },
     });
     if (problem) return { status: "error", message: `Selbstprüfung fehlgeschlagen: ${problem} – nichts geschrieben` };
     const names = new Set([...this.files.values()].map((f) => f.name.toLowerCase()));
@@ -780,7 +784,7 @@ export class Repository {
       const res = await this.adapter.create(name, text);
       if (res.status === "ok") {
         this.setFile(res.ref, res.name, text, res.hash);
-        await this.pushUndo({ id: this.newId(), kind: "create", label: "Neue Aufgabe", ref: res.ref, afterHash: res.hash });
+        await this.pushUndo({ id: this.newId(), kind: "create", label: input.kind === "list" ? "Neue Liste" : "Neue Aufgabe", ref: res.ref, afterHash: res.hash });
         this.emit();
         return { status: "ok", ref: res.ref, undoable: true };
       }
