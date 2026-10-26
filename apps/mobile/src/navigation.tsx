@@ -1,9 +1,10 @@
 // Navigation (Plan 4.5): untere Leiste Eingang/Heute/Alle/Erledigt, Stack für Detail und Dialoge.
 // Kopfzeilen der Listen zeichnet die Liste selbst (components/list-header).
-import type { ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createBottomTabNavigator, type BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
+import { PlatformPressable } from "@react-navigation/elements";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { LinkingOptions, NavigatorScreenParams } from "@react-navigation/native";
 import { T } from "@markdoist/app";
@@ -42,11 +43,30 @@ export const linking: LinkingOptions<RootStack> = {
   config: { screens: { Capture: "capture" } },
 };
 
+const TabPressedContext = createContext(false);
+
+/** Tab-Knopf ohne den randlosen Standard-Ripple (wurde von der Leiste unförmig abgeschnitten);
+ *  der Druckzustand färbt stattdessen die Pille hinter dem Symbol. */
+function TabButton({ children, onPressIn, onPressOut, ...rest }: BottomTabBarButtonProps) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <PlatformPressable
+      {...rest}
+      pressColor="transparent"
+      onPressIn={(e) => { setPressed(true); onPressIn?.(e); }}
+      onPressOut={(e) => { setPressed(false); onPressOut?.(e); }}
+    >
+      <TabPressedContext.Provider value={pressed}>{children}</TabPressedContext.Provider>
+    </PlatformPressable>
+  );
+}
+
 /** Symbol der unteren Leiste; aktiv mit hinterlegter Pille wie in der Vorlage. */
 function TabIcon({ focused, children }: { focused: boolean; children: ReactNode }) {
   const c = useTheme();
+  const pressed = useContext(TabPressedContext);
   return (
-    <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={{ width: 56, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: focused ? c.primaryContainer : "transparent" }}>
+    <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden style={{ width: 56, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: focused ? c.primaryContainer : pressed ? c.surfaceHigh : "transparent" }}>
       {children}
     </View>
   );
@@ -68,6 +88,7 @@ function TabsNav() {
         tabBarInactiveTintColor: c.fg,
         tabBarLabelStyle: { fontSize: 12, marginTop: 2, fontWeight: "400" },
         tabBarIconStyle: { width: 56 },
+        tabBarButton: (props) => <TabButton {...props} />,
       }}
     >
       <Tab.Screen
