@@ -217,3 +217,20 @@ export const IconStop = (p: P) => (
     <rect x="9.5" y="9.5" width="5" height="5" rx="0.8" fill="currentColor" stroke="none" />
   </Svg>
 );
+export const IconList = (p: P) => (
+  <Svg {...p}>
+    <rect x="5" y="4.5" width="14" height="16" rx="2" />
+    <path d="M9 4.5V3.5h6v1" />
+    <path d="M8.5 10l1 1 2-2M8.5 15l1 1 2-2M13.5 10.5h2.5M13.5 15.5h2.5" />
+  </Svg>
+);
+export const IconGrip = (p: P) => (
+  <svg width={p.size ?? 24} height={p.size ?? 24} viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+    {[8, 12, 16].map((y) => (
+      <g key={y}>
+        <circle cx="9.5" cy={y} r="1.2" />
+        <circle cx="14.5" cy={y} r="1.2" />
+      </g>
+    ))}
+  </svg>
+);

@@ -42,6 +42,7 @@ import {
   IconFlag,
   IconFolder,
   IconInbox,
+  IconList,
   IconPencil,
   IconRepeat,
   IconSkip,
@@ -322,8 +323,8 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
       <div ref={dialogRef} className="detail" role="dialog" aria-modal="true" data-detail aria-label={f.title || T.fields.title} data-testid="detail" tabIndex={-1}>
         <header className="detail-head">
           <div className="crumb">
-            {f.inbox ? <IconInbox size={16} /> : <IconFolder size={16} />}
-            <span>{f.inbox ? T.views.inbox : folderName}</span>
+            {f.isList ? <IconList size={16} /> : f.inbox ? <IconInbox size={16} /> : <IconFolder size={16} />}
+            <span>{f.isList ? T.views.lists : f.inbox ? T.views.inbox : folderName}</span>
           </div>
           <div className="detail-tools">
             <button className="icon-btn" onClick={onPrev} disabled={!onPrev} title="Vorherige Aufgabe (↑)" aria-label="Vorherige Aufgabe">
@@ -338,7 +339,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
               </button>
               {menu === "task" && (
                 <Menu label="Aufgabenaktionen" onClose={() => setMenu(false)}>
-                  {!s && (
+                  {!s && !f.isList && (
                     <MenuItem icon={<IconDone size={20} />} disabled={ro} onClick={() => (setMenu(false), onToggle())}>
                       {f.status === "done" ? T.actions.reopen : T.actions.complete}
                     </MenuItem>
@@ -361,6 +362,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
         <div className="detail-body">
           <div className="detail-main">
             <div className="detail-title">
+              {!f.isList && (
               <button
                 className={`check big prio-${f.priority}${f.status === "done" ? " checked" : ""}`}
                 role="checkbox"
@@ -375,6 +377,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                   <path d="M7.5 12.3l3 3 6-6.3" />
                 </svg>
               </button>
+              )}
               <input
                 ref={titleRef}
                 className={`titleinput${f.status === "done" ? " done" : ""}`}
@@ -725,6 +728,8 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
               <div className="preview" data-testid="preview" onClick={onPreviewClick} dangerouslySetInnerHTML={{ __html: html }} />
             )}
           </div>
+          {/* Listen haben keine Termine, Priorität oder Eingang (4.6). */}
+          {!f.isList && (
           <aside className="detail-side" aria-label="Eigenschaften">
             <div className="side-field">
               <div className="side-label">{T.fields.inbox}</div>
@@ -800,6 +805,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
               </button>
             </div>
           </aside>
+          )}
         </div>
         {editRule && (
           <RecurrenceEditor

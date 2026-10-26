@@ -1,4 +1,4 @@
-// Navigation (Plan 4.5): untere Leiste Eingang/Heute/Alle/Erledigt, Stack für Detail und Dialoge.
+// Navigation (Plan 4.5, 4.6): untere Leiste Eingang/Heute/Alle/Erledigt/Listen, Stack für Detail und Dialoge.
 // Kopfzeilen der Listen zeichnet die Liste selbst (components/list-header).
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { View } from "react-native";
@@ -9,6 +9,8 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { LinkingOptions, NavigatorScreenParams } from "@react-navigation/native";
 import { T } from "@markdoist/app";
 import { ListScreen } from "./screens/list-screen";
+import { ListsScreen } from "./screens/lists-screen";
+import { ChecklistScreen } from "./screens/checklist-screen";
 import { DetailScreen } from "./screens/detail-screen";
 import { CaptureScreen } from "./screens/capture-screen";
 import { SearchScreen } from "./screens/search-screen";
@@ -20,12 +22,13 @@ import { SeriesHistoryScreen } from "./screens/series-history-screen";
 import { useRepoState } from "./repo";
 import { useTheme } from "./theme";
 import { FilterProvider, FilterSheet } from "./filter";
-import { CalendarIcon, CheckCircleIcon, GridIcon, InboxIcon } from "./components/icons";
+import { CalendarIcon, CheckCircleIcon, ChecklistIcon, GridIcon, InboxIcon } from "./components/icons";
 
-export type Tabs = { Inbox: undefined; Today: undefined; All: undefined; Done: undefined };
+export type Tabs = { Inbox: undefined; Today: undefined; All: undefined; Done: undefined; Lists: undefined };
 export type RootStack = {
   Main: NavigatorScreenParams<Tabs> | undefined;
   Detail: { ref: string };
+  Checklist: { ref: string };
   Capture: undefined;
   Search: undefined;
   Problems: undefined;
@@ -115,6 +118,11 @@ function TabsNav() {
       >
         {() => <ListScreen kind="done" />}
       </Tab.Screen>
+      <Tab.Screen
+        name="Lists"
+        component={ListsScreen}
+        options={{ title: T.views.lists, tabBarIcon: ({ color, focused }) => <TabIcon focused={focused}><ChecklistIcon color={color} size={18} /></TabIcon>, tabBarButtonTestID: "tab-lists" }}
+      />
     </Tab.Navigator>
   );
 }
@@ -143,6 +151,7 @@ function RootStackNavigator() {
       {/* Detail und Erfassung als Blatt über der Liste (Vorlage) */}
       <Stack.Screen name="Detail" component={DetailScreen} options={sheet} />
       <Stack.Screen name="Capture" component={CaptureScreen} options={sheet} />
+      <Stack.Screen name="Checklist" component={ChecklistScreen} options={{ title: T.views.lists }} />
       <Stack.Screen name="Search" component={SearchScreen} options={{ title: T.views.search }} />
       <Stack.Screen name="Problems" component={ProblemsScreen} options={{ title: T.views.problems }} />
       <Stack.Screen name="Trash" component={TrashScreen} options={{ title: T.views.trash }} />

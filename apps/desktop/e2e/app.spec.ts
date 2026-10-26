@@ -42,6 +42,10 @@ async function seed() {
       "complete_instances: [2026-10-05]",
     ]),
   );
+  await writeFile(
+    join(folder, "Packliste.md"),
+    fm(["id: 01K7LISTE0000000000000000P", "format_version: 1", "title: Packliste Urlaub", "kind: list", "status: open", "inbox: false", "dateModified: 2026-10-11T08:00:00+02:00"], "- [ ] Zahnbürste\n- [x] Pass\n- [ ] Ladekabel\n"),
+  );
   await writeFile(join(folder, "Kaputt.md"), "---\ntitle: [\n---\n");
   await writeFile(join(folder, "Notiz ohne Frontmatter.md"), "# Nur Text\n");
   await mkdir(join(folder, "Unterordner"));
@@ -450,4 +454,48 @@ test("Menü einer anderen Aufgabe: Leertaste trifft die Menüaufgabe, nicht die 
   await expect.poll(() => file("Bettwäsche.md")).toContain("status: done");
   await expect(menu).toHaveCount(0);
   expect(await file("Zahnarzt.md")).toContain("status: open");
+});
+
+test("Listen: anlegen, Einträge hinzufügen, abhaken, Abgehakte entfernen (4.6)", async () => {
+  await page.getByTestId("nav-lists").click();
+  await page.getByTestId("new-list").click();
+  await page.getByTestId("new-list-title").fill("Einkauf Samstag");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("list-title")).toHaveText("Einkauf Samstag");
+  const add = page.getByTestId("add-item");
+  await expect(add).toBeFocused();
+  await add.fill("Milch");
+  await add.press("Enter");
+  await expect(page.locator('[data-testid="item-row"][data-text="Milch"]')).toBeVisible();
+  await add.fill("Brot");
+  await add.press("Enter");
+  await expect.poll(() => file("Einkauf Samstag.md")).toMatch(/kind: list\n[\s\S]*---\n- \[ \] Milch\n- \[ \] Brot\n$/);
+  await page.locator('[data-testid="item-row"][data-text="Milch"]').getByTestId("item-check").click();
+  await expect.poll(() => file("Einkauf Samstag.md")).toContain("- [x] Milch\n- [ ] Brot\n");
+  await expect(page.getByTestId("checked-toggle")).toContainText("1");
+  await page.getByTestId("list-menu").click();
+  await page.getByTestId("remove-checked").click();
+  await expect.poll(() => file("Einkauf Samstag.md")).not.toContain("Milch");
+  // Listen erscheinen nicht zwischen den Aufgaben
+  await page.getByTestId("nav-all").click();
+  await expect(row("Einkauf Samstag")).toHaveCount(0);
+  await expect(row("Packliste Urlaub")).toHaveCount(0);
+});
+
+test("Listen: Reihenfolge ziehen, Haken zurücksetzen, Text ändern, Suche öffnet Liste (4.6)", async () => {
+  await page.getByTestId("search").fill("packliste");
+  await page.locator('[data-testid="list-row"][data-title="Packliste Urlaub"]').click();
+  await expect(page.getByTestId("list-title")).toHaveText("Packliste Urlaub");
+  const item = (t: string) => page.locator(`[data-testid="item-row"][data-text="${t}"]`);
+  await item("Ladekabel").dragTo(item("Zahnbürste"));
+  await expect.poll(() => file("Packliste.md")).toMatch(/---\n- \[ \] Ladekabel\n- \[ \] Zahnbürste\n- \[x\] Pass\n$/);
+  await page.getByTestId("list-menu").click();
+  await page.getByTestId("reset-items").click();
+  await expect.poll(() => file("Packliste.md")).toContain("- [ ] Pass\n");
+  await item("Pass").locator(".title").click();
+  await page.getByTestId("item-input").fill("Reisepass");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => file("Packliste.md")).toContain("- [ ] Reisepass\n");
+  await page.keyboard.press("Escape");
+  await expect(page.locator('[data-testid="list-row"][data-title="Packliste Urlaub"]')).toContainText("0/3");
 });

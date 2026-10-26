@@ -1,0 +1,48 @@
+# Listen (4.6): anlegen, Einträge hinzufügen, Reihenfolge ziehen, abhaken, Haken zurücksetzen.
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-lists
+- tapOn:
+    id: fab-new-list
+- inputText: "Einkauf"
+- tapOn:
+    id: new-list-create
+- tapOn:
+    id: add-item
+- inputText: "Milch"
+- pressKey: Enter
+- inputText: "Brot"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: "check-Brot"
+    timeout: 3000
+- hideKeyboard
+# Brot am Griff über Milch ziehen
+- swipe:
+    from:
+      id: "grip-Brot"
+    direction: UP
+    duration: 1500
+- tapOn:
+    id: "check-Milch"
+- extendedWaitUntil:
+    visible:
+      id: checked-toggle
+    timeout: 3000
+- assertVisible: "1 von 2 abgehakt"
+- tapOn:
+    id: list-menu
+- tapOn:
+    id: reset-items
+- assertVisible: "0 von 2 abgehakt"
+- pressKey: back
+- assertVisible:
+    id: "progress-Einkauf"
+    text: "0/2"
+# Listen erscheinen nicht zwischen den Aufgaben
+- tapOn:
+    id: tab-all
+- assertNotVisible: "Einkauf"

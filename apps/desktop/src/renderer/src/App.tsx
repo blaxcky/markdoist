@@ -23,6 +23,7 @@ import { Detail } from "./components/Detail";
 import { Capture } from "./components/Capture";
 import { Problems } from "./components/Problems";
 import { Trash } from "./components/Trash";
+import { ListRow, Lists } from "./components/Lists";
 import { Menu, MenuItem } from "./components/Menu";
 import { useDialog } from "./dialog";
 import {
@@ -34,6 +35,7 @@ import {
   IconFolder,
   IconHelp,
   IconInbox,
+  IconList,
   IconPlus,
   IconPlusCircle,
   IconRefresh,
@@ -48,7 +50,7 @@ import {
   IconWarning,
 } from "./components/Icons";
 
-type ViewName = "inbox" | "today" | "all" | "done" | "problems" | "trash";
+type ViewName = "inbox" | "today" | "all" | "done" | "lists" | "problems" | "trash";
 type FocusField = "due" | "scheduled" | "priority" | "title" | "note";
 
 interface Toast {
@@ -138,6 +140,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const [inboxNewest, setInboxNewest] = useState(true);
   const [sort, setSort] = useState<SortChoice>("default");
   const [selected, setSelected] = useState<string | null>(null);
+  /** geöffnete Liste in der Ansicht „Listen“ (4.6) */
+  const [openList, setOpenList] = useState<string | null>(null);
   /** Detaildialog zur ausgewählten Aufgabe offen */
   const [open, setOpen] = useState(false);
   const [capture, setCapture] = useState(false);
@@ -220,8 +224,15 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
       setSelected(v.task.ref);
     }
   };
-  /** Aufgabe auswählen und im Detaildialog öffnen, optional mit Fokus auf ein Feld */
+  /** Aufgabe auswählen und im Detaildialog öffnen, optional mit Fokus auf ein Feld; eine Liste öffnet die Listenansicht */
   const openTask = (ref: string, field?: FocusField) => {
+    if (idx.tasks.find((v) => v.task.ref === ref)?.task.fields.isList) {
+      setQuery("");
+      setOpen(false);
+      setView("lists");
+      setOpenList(ref);
+      return;
+    }
     setSelected(ref);
     setFocusField(field ? { field, nonce: Date.now() } : null);
     setOpen(true);
@@ -261,11 +272,13 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         searchRef.current?.focus();
         return;
       }
-      if (ctrl && ["1", "2", "3", "4"].includes(e.key)) {
+      if (ctrl && ["1", "2", "3", "4", "5"].includes(e.key)) {
         e.preventDefault();
         setOpen(false);
         setQuery("");
-        setView((["inbox", "today", "all", "done"] as ViewName[])[Number(e.key) - 1]!);
+        const next = (["inbox", "today", "all", "done", "lists"] as ViewName[])[Number(e.key) - 1]!;
+        if (next === "lists") setOpenList(null);
+        setView(next);
         return;
       }
       if (e.key === "F5") {
@@ -283,6 +296,17 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         if (e.key === "Escape") (el as HTMLElement).blur();
         return;
       }
+      // In der Listenansicht wirken keine Aufgabenkürzel; Escape führt zur Übersicht zurück.
+      if (view === "lists" && !query && !detailOpen) {
+        if (e.key === "Escape" && openList) setOpenList(null);
+        if (e.key === "n" || e.key === "N") {
+          e.preventDefault();
+          setCapture(true);
+        }
+        return;
+      }
+      // Listen in Suchergebnissen: Enter öffnet, Aufgabenaktionen gelten nicht.
+      if (selectedView?.task.fields.isList && !["ArrowDown", "ArrowUp", "j", "k", "Enter", "/", "n", "N"].includes(e.key)) return;
       const cur = selectedView;
       const i = selIndex;
       switch (e.key) {
@@ -357,7 +381,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
 
   const viewTitle = query.trim() ? `${T.views.search}: „${query.trim()}“` : T.views[view];
   const activeDisplay = Object.keys(filter).length + (sort !== "default" ? 1 : 0);
-  const listView = !((view === "problems" || view === "trash") && !query);
+  const listsPage = view === "lists" && !query;
+  const listView = !((view === "problems" || view === "trash" || view === "lists") && !query);
 
   const nav = (name: ViewName, label: string, icon: React.ReactNode, count?: number, testid?: string) => (
     <button
@@ -365,6 +390,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
       onClick={() => {
         setQuery("");
         setOpen(false);
+        if (name === "lists") setOpenList(null);
         setView(name);
       }}
       data-testid={testid ?? `nav-${name}`}
@@ -483,6 +509,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           {nav("today", T.views.today, view === "today" && !query ? <IconToday size={24} day={day} /> : <IconTodayOutline size={24} day={day} />, counts.today)}
           {nav("all", T.views.all, <IconUpcoming size={24} />)}
           {nav("done", T.views.done, <IconDone size={24} />)}
+          {nav("lists", T.views.lists, <IconList size={24} />)}
           <div className="side-section" title={repo.folder}>
             {folderName}
           </div>
@@ -631,7 +658,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         </header>
         <div className="scroll">
           <div className="page">
-            <h1 className="page-title">{viewTitle}</h1>
+            {!listsPage && <h1 className="page-title">{viewTitle}</h1>}
             {listView && (
               <div className="page-count">
                 <IconTasks size={16} />
@@ -653,7 +680,20 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                 {state.stale && " – letzter bekannter Stand, schreibgeschützt bis zum nächsten erfolgreichen Abgleich"}
               </div>
             )}
-            {view === "problems" && !query ? (
+            {listsPage ? (
+              <Lists
+                repo={repo}
+                idx={idx}
+                openRef={openList}
+                onOpen={setOpenList}
+                onOutcome={notify}
+                onEditMarkdown={(ref) => {
+                  setSelected(ref);
+                  setFocusField(null);
+                  setOpen(true);
+                }}
+              />
+            ) : view === "problems" && !query ? (
               <Problems repo={repo} state={state} onSelect={(r) => openTask(r)} onOutcome={notify} />
             ) : view === "trash" && !query ? (
               <Trash repo={repo} state={state} onOutcome={notify} />
@@ -668,7 +708,10 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                           <span className="section-count">{s.items.length}</span>
                         </div>
                       )}
-                      {s.items.map((v) => (
+                      {s.items.map((v) =>
+                        v.task.fields.isList ? (
+                          <ListRow key={v.task.ref} view={v} selected={v.task.ref === selected} onOpen={() => openTask(v.task.ref)} />
+                        ) : (
                         <TaskRow
                           key={v.task.ref}
                           view={v}
@@ -688,7 +731,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                           }
                           onDelete={() => void repo.moveToTrash(v.task.ref).then((o) => notify(o, "Gelöscht"))}
                         />
-                      ))}
+                        ),
+                      )}
                     </div>
                   ) : null,
                 )}
@@ -788,7 +832,7 @@ const SHORTCUTS: [string, string][] = [
   ["P", "Priorität setzen"],
   ["Entf", "Löschen"],
   ["Ctrl+Z", "Rückgängig"],
-  ["Ctrl+1 … 4", "Eingang, Heute, Alle offenen, Erledigt"],
+  ["Ctrl+1 … 5", "Eingang, Heute, Alle offenen, Erledigt, Listen"],
   ["F5", "Neu einlesen"],
 ];
 

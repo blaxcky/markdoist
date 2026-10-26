@@ -3,6 +3,7 @@
 import { Temporal } from "temporal-polyfill";
 import {
   appendItem,
+  findCheckboxes,
   moveItem,
   removeCheckedItems,
   removeItem,
@@ -55,11 +56,12 @@ export type TaskAction =
   | { type: "setTitle"; title: string }
   | { type: "setDate"; field: "due" | "scheduled"; value: string | null }
   | { type: "setBody"; body: string }
-  | { type: "toggleCheckbox"; line: number }
+  /** `expect`: angezeigter Eintragstext; weicht die Zeile inzwischen ab, wird nichts geschrieben (4.6). */
+  | { type: "toggleCheckbox"; line: number; expect?: string }
   | { type: "addItem"; text: string }
-  | { type: "editItem"; line: number; text: string }
-  | { type: "removeItem"; line: number }
-  | { type: "moveItem"; line: number; before: number | null }
+  | { type: "editItem"; line: number; text: string; expect?: string }
+  | { type: "removeItem"; line: number; expect?: string }
+  | { type: "moveItem"; line: number; before: number | null; expect?: string; expectBefore?: string }
   | { type: "removeCheckedItems" }
   | { type: "resetItems" }
   | { type: "assignNewId" }
@@ -93,6 +95,13 @@ export type Plan =
     };
 
 const noop: Plan = { kind: "noop" };
+const LIST_CHANGED = "Die Liste hat sich inzwischen geändert – bitte erneut versuchen";
+
+/** Steht in `line` ein Eintrag mit dem erwarteten Text (ohne Erwartung: irgendein Eintrag)? */
+function itemMatches(body: string, line: number, expect: string | undefined): boolean {
+  if (expect === undefined) return true;
+  return findCheckboxes(body).some((c) => c.line === line && c.text === expect);
+}
 const blocked = (message: string): Plan => ({ kind: "blocked", message });
 
 function isSeriesAction(a: TaskAction): boolean {
@@ -341,6 +350,7 @@ function planInner(
     case "setBody":
       return { kind: "edit", set: {}, remove: [], body: action.body };
     case "toggleCheckbox": {
+      if (!itemMatches(task.body, action.line, action.expect)) return blocked(LIST_CHANGED);
       const b = toggleCheckbox(task.body, action.line);
       if (b === null) return blocked("Keine Checkbox in dieser Zeile");
       return { kind: "edit", set: {}, remove: [], body: b };
@@ -351,16 +361,23 @@ function planInner(
       return { kind: "edit", set: {}, remove: [], body: b };
     }
     case "editItem": {
+      if (!itemMatches(task.body, action.line, action.expect)) return blocked(LIST_CHANGED);
       const b = setItemText(task.body, action.line, action.text);
       if (b === null) return blocked("Eintrag nicht gefunden oder leer");
       return { kind: "edit", set: {}, remove: [], body: b };
     }
     case "removeItem": {
+      if (!itemMatches(task.body, action.line, action.expect)) return blocked(LIST_CHANGED);
       const b = removeItem(task.body, action.line);
       if (b === null) return blocked("Eintrag nicht gefunden");
       return { kind: "edit", set: {}, remove: [], body: b };
     }
     case "moveItem": {
+      if (
+        !itemMatches(task.body, action.line, action.expect) ||
+        (action.before !== null && !itemMatches(task.body, action.before, action.expectBefore))
+      )
+        return blocked(LIST_CHANGED);
       const b = moveItem(task.body, action.line, action.before);
       if (b === null) return blocked("Eintrag nicht gefunden");
       return { kind: "edit", set: {}, remove: [], body: b };

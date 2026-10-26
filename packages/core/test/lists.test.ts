@@ -104,3 +104,14 @@ describe("Listen: Einträge bearbeiten (4.6)", () => {
     expect(run(text.replace("[x]", "[ ]"), { type: "resetItems" }, ctx).plan.kind).toBe("noop");
   });
 });
+
+describe("Listen: Schutz vor verschobenen Zeilen (4.6)", () => {
+  it("abweichender Eintragstext → blockiert, nichts geschrieben", () => {
+    const text = fm(["id: 01LISTE0000000000000000000", "title: E", "kind: list"], "- [ ] Brot\n- [ ] Milch\n");
+    const ctx = ctxAt("2026-10-12T10:00");
+    expect(run(text, { type: "toggleCheckbox", line: 0, expect: "Milch" }, ctx).plan.kind).toBe("blocked");
+    expect(run(text, { type: "removeItem", line: 1, expect: "Milch" }, ctx).text).not.toContain("Milch");
+    expect(run(text, { type: "moveItem", line: 1, before: 0, expect: "Milch", expectBefore: "Eier" }, ctx).plan.kind).toBe("blocked");
+    expect(run(text, { type: "moveItem", line: 1, before: 0, expect: "Milch", expectBefore: "Brot" }, ctx).text).toContain("- [ ] Milch\n- [ ] Brot\n");
+  });
+});

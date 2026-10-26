@@ -13,7 +13,7 @@ import type { RootStack } from "../navigation";
 import { Menu } from "./menu";
 import { DotsIcon, Glyph, SearchIcon, ViewOptionsIcon } from "./icons";
 
-export function ListHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+export function ListHeader({ title, subtitle, filter = true }: { title: string; subtitle?: string; filter?: boolean }) {
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
   const state = useRepoState();
   const repo = useRepo();
@@ -46,7 +46,7 @@ export function ListHeader({ title, subtitle }: { title: string; subtitle?: stri
         </Pressable>
       )}
       {iconBtn(<SearchIcon color={c.fg} size={19} />, () => nav.navigate("Search"), "nav-search", T.views.search)}
-      {iconBtn(<ViewOptionsIcon color={c.fg} size={21} dot={active ? c.primary : undefined} />, () => f.setOpen(true), "nav-filter", "Filter und Sortierung")}
+      {filter && iconBtn(<ViewOptionsIcon color={c.fg} size={21} dot={active ? c.primary : undefined} />, () => f.setOpen(true), "nav-filter", "Filter und Sortierung")}
       {iconBtn(<DotsIcon color={c.fg} size={18} />, () => setMenu(true), "nav-menu", "Weitere Optionen")}
       <Menu
         open={menu}
@@ -54,7 +54,7 @@ export function ListHeader({ title, subtitle }: { title: string; subtitle?: stri
         placement="top"
         top={52}
         items={[
-          { label: "Filter und Sortierung", onPress: () => f.setOpen(true) },
+          filter && { label: "Filter und Sortierung", onPress: () => f.setOpen(true) },
           { label: T.actions.rescan, onPress: () => void repo.scan({ full: true }) },
           { label: problems > 0 ? `${T.views.problems} (${problems})` : T.views.problems, onPress: () => nav.navigate("Problems") },
           { label: T.views.trash, onPress: () => nav.navigate("Trash") },

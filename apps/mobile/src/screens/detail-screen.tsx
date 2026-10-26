@@ -32,6 +32,7 @@ import {
   CalendarIcon,
   CheckCircleIcon,
   CheckIcon,
+  ChecklistIcon,
   ChevronIcon,
   ClockIcon,
   DotsIcon,
@@ -377,6 +378,12 @@ export function DetailScreen() {
     <Sheet onClose={() => nav.goBack()}>
       {/* Kopf des Blatts: Eingang/Einsortiert links, ⋮-Menü rechts */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 12, paddingRight: 6, paddingTop: 4, paddingBottom: 8 }}>
+        {f.isList ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 40, paddingLeft: 12, paddingRight: 12, borderRadius: 20, backgroundColor: c.surfaceHigh }}>
+            <ChecklistIcon color={c.muted} size={14} />
+            <Text style={{ color: c.fg, fontSize: 14, fontWeight: "500" }}>{T.lists.badge}</Text>
+          </View>
+        ) : (
         <Pressable
           onPress={ro ? undefined : () => setMenu("inbox")}
           testID="field-inbox"
@@ -387,6 +394,7 @@ export function DetailScreen() {
           <Text style={{ color: c.fg, fontSize: 14, fontWeight: "500" }}>{f.inbox ? T.views.inbox : "Einsortiert"}</Text>
           {!ro && <ChevronIcon color={c.muted} size={12} dir="down" />}
         </Pressable>
+        )}
         <View style={{ flex: 1 }} />
         <Pressable onPress={() => setMenu("more")} testID="detail-menu" accessibilityLabel="Weitere Aktionen" style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" }}>
           <DotsIcon color={c.fg} size={18} />
@@ -396,6 +404,7 @@ export function DetailScreen() {
         {/* Eigenschaftskarte */}
         <View style={card}>
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, paddingLeft: 8, paddingRight: 16, paddingTop: 10, paddingBottom: 10 }}>
+            {f.isList ? <View style={{ width: 8 }} /> : (
             <Pressable
               onPress={ro ? undefined : onCheck}
               testID={s ? (s.phase === "active" ? "series-complete" : undefined) : "toggle-done"}
@@ -408,6 +417,7 @@ export function DetailScreen() {
                 {done && <CheckIcon color="#fff" size={14} weight={2} />}
               </View>
             </Pressable>
+            )}
             <TextInput
               value={title}
               editable={!ro}
@@ -425,8 +435,9 @@ export function DetailScreen() {
               {d.message}
             </Text>
           ))}
-          {dateRow("due")}
-          {dateRow("scheduled")}
+          {/* Listen haben keine Termine, Priorität oder Wiederholung (4.6). */}
+          {!f.isList && dateRow("due")}
+          {!f.isList && dateRow("scheduled")}
           {s && (
             <>
               {divider()}
@@ -460,12 +471,13 @@ export function DetailScreen() {
           )}
           {/* Fehlende Eigenschaften als Chips */}
           {(() => {
+            const list = f.isList;
             const chips = [
-              f.status === "in-progress" && <AddChip key="status" c={c} disabled={ro} active icon={<Glyph color={c.p3} size={12}>▶</Glyph>} label={T.status["in-progress"]} onPress={() => act({ type: "setStatus", status: "open" }, "Status geändert")} testID="status-open" />,
-              f.priority === "none" && <AddChip key="prio" c={c} disabled={ro} icon={<FlagIcon color={c.muted} size={14} />} label={T.fields.priority} onPress={() => setMenu("priority")} testID="field-priority" />,
-              !due.date && !due.raw && <AddChip key="due" c={c} disabled={ro} icon={<CalendarIcon color={c.muted} size={14} />} label={T.fields.due} onPress={() => pickDate(null, (d) => due.set(d, ""))} testID="field-due" />,
-              !sch.date && !sch.raw && <AddChip key="sch" c={c} disabled={ro} icon={<ClockIcon color={c.muted} size={14} />} label={T.fields.scheduled} onPress={() => pickDate(null, (d) => sch.set(d, ""))} testID="field-scheduled" />,
-              !s && <AddChip key="rec" c={c} disabled={ro} icon={<RepeatIcon color={c.muted} size={14} />} label="Wiederholen" onPress={() => nav.navigate("Recurrence", { ref })} testID="edit-recurrence" />,
+              !list && f.status === "in-progress" && <AddChip key="status" c={c} disabled={ro} active icon={<Glyph color={c.p3} size={12}>▶</Glyph>} label={T.status["in-progress"]} onPress={() => act({ type: "setStatus", status: "open" }, "Status geändert")} testID="status-open" />,
+              !list && f.priority === "none" && <AddChip key="prio" c={c} disabled={ro} icon={<FlagIcon color={c.muted} size={14} />} label={T.fields.priority} onPress={() => setMenu("priority")} testID="field-priority" />,
+              !list && !due.date && !due.raw && <AddChip key="due" c={c} disabled={ro} icon={<CalendarIcon color={c.muted} size={14} />} label={T.fields.due} onPress={() => pickDate(null, (d) => due.set(d, ""))} testID="field-due" />,
+              !list && !sch.date && !sch.raw && <AddChip key="sch" c={c} disabled={ro} icon={<ClockIcon color={c.muted} size={14} />} label={T.fields.scheduled} onPress={() => pickDate(null, (d) => sch.set(d, ""))} testID="field-scheduled" />,
+              !list && !s && <AddChip key="rec" c={c} disabled={ro} icon={<RepeatIcon color={c.muted} size={14} />} label="Wiederholen" onPress={() => nav.navigate("Recurrence", { ref })} testID="edit-recurrence" />,
               !noteVisible && <AddChip key="note" c={c} icon={<LinesIcon color={c.muted} size={13} />} label="Beschreibung" onPress={() => { setShowNote(true); setTimeout(() => editor.current?.focus(), 50); }} testID="show-note" />,
               !noteVisible && !ro && <AddChip key="check" c={c} icon={<PlusIcon color={c.muted} size={11} />} label="Checkliste" onPress={addChecklistItem} testID="add-checklist" />,
             ].filter(Boolean);
@@ -704,9 +716,9 @@ export function DetailScreen() {
         title={f.title}
         items={[
           // Bei Serien kein „Erledigt“: Erledigen und Beenden nur über die Serienaktionen (Entscheidung 18.10.2026).
-          !ro && f.status !== "in-progress" && !done && { label: `Status: ${T.status["in-progress"]}`, testID: "status-in-progress", icon: <Glyph color={c.p3} size={14}>▶</Glyph>, onPress: () => act({ type: "setStatus", status: "in-progress" }, "Status geändert") },
-          !ro && f.status === "in-progress" && { label: `Status: ${T.status.open}`, testID: "status-open-menu", icon: <Glyph color={c.muted} size={14}>○</Glyph>, onPress: () => act({ type: "setStatus", status: "open" }, "Status geändert") },
-          !ro && !s && { label: "Wiederholung …", icon: <RepeatIcon color={c.muted} size={15} />, onPress: () => nav.navigate("Recurrence", { ref }) },
+          !ro && !f.isList && f.status !== "in-progress" && !done && { label: `Status: ${T.status["in-progress"]}`, testID: "status-in-progress", icon: <Glyph color={c.p3} size={14}>▶</Glyph>, onPress: () => act({ type: "setStatus", status: "in-progress" }, "Status geändert") },
+          !ro && !f.isList && f.status === "in-progress" && { label: `Status: ${T.status.open}`, testID: "status-open-menu", icon: <Glyph color={c.muted} size={14}>○</Glyph>, onPress: () => act({ type: "setStatus", status: "open" }, "Status geändert") },
+          !ro && !s && !f.isList && { label: "Wiederholung …", icon: <RepeatIcon color={c.muted} size={15} />, onPress: () => nav.navigate("Recurrence", { ref }) },
           !ro && { label: T.actions.renameToTitle, icon: <Glyph color={c.muted} size={15}>✎</Glyph>, onPress: () => void repo.renameToTitle(ref).then((o) => notify(o, "Umbenannt")) },
           !ro && {
             label: T.actions.delete,

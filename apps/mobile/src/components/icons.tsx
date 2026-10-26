@@ -246,3 +246,31 @@ export function StopIcon({ color, size = 14 }: P) {
     </View>
   );
 }
+
+/** Zettel mit Haken und Zeilen (Listen). */
+export function ChecklistIcon({ color, size = 14 }: P) {
+  const b = stroke(size);
+  const box = size * 0.22;
+  return (
+    <View style={{ width: size, height: size, justifyContent: "space-around", paddingVertical: size * 0.04 }}>
+      {[0, 1, 2].map((i) => (
+        <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: size * 0.12 }}>
+          <View style={{ width: box, height: box, borderWidth: b, borderColor: color, borderRadius: box * 0.25 }} />
+          <View style={{ flex: 1, height: b, borderRadius: b, backgroundColor: color }} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** Griff zum Ziehen (zwei Spalten Punkte). */
+export function GripIcon({ color, size = 18 }: P) {
+  const d = Math.max(3, size * 0.17);
+  return (
+    <View style={{ width: size * 0.6, height: size, flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignContent: "space-around" }}>
+      {Array.from({ length: 6 }, (_, i) => (
+        <View key={i} style={{ width: d, height: d, borderRadius: d / 2, backgroundColor: color }} />
+      ))}
+    </View>
+  );
+}

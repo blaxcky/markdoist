@@ -76,9 +76,15 @@ if [ $fail = 0 ]; then
   if [ "$(adb shell "cat '$DIR/Audit-Sperre.md'" | tr -d '\r' | md5sum)" = "$(md5sum < seed/Audit-Sperre.md)" ]; then
     echo "OK   Audit-Sperre.md byte-identisch"
   else echo "FEHL Audit-Sperre.md wurde verändert"; fail=1; fi
-  # AK-12: Serienaktionen legen keine Dateien an – 6 Seed-Dateien + 2 Erfassungen.
+  # Listen (4.6): Datei mit kind: list, Reihenfolge nach dem Ziehen, Haken zurückgesetzt.
+  check "Einkauf.md" "kind: list"
+  check "Einkauf.md" "inbox: false"
+  if adb shell "cat '$DIR/Einkauf.md'" | tr -d '\r' | grep -A1 -xF -- "- [ ] Brot" | grep -qxF -- "- [ ] Milch"; then
+    echo "OK   Einkauf.md: Brot vor Milch, beide offen"
+  else echo "FEHL Einkauf.md: Reihenfolge oder Haken falsch"; fail=1; fi
+  # AK-12: Serienaktionen legen keine Dateien an – 6 Seed-Dateien + 2 Erfassungen + 1 Liste.
   n=$(adb shell ls "$DIR" | grep -c '\.md' || true)
-  if [ "$n" = 8 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 8)"; fail=1; fi
+  if [ "$n" = 9 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 9)"; fail=1; fi
   adb shell ls -a "$DIR" | grep -q 'todo-tmp' && { echo "FEHL Temp-Datei übrig"; fail=1; } || true
 fi
 exit $fail

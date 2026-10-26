@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { matchesFilter, search, sortViews, type TaskView } from "@markdoist/core";
 import { useFilter } from "../filter";
 import { TaskRow } from "../components/task-row";
+import { ListRow } from "../components/list-row";
 import { ActionsSheet } from "../components/actions-sheet";
 import { useRepo, useRepoState, systemClock } from "../repo";
 import { useNotify } from "../notify";
@@ -53,7 +54,10 @@ export function SearchScreen() {
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={q.trim() ? <Text style={{ color: c.muted, textAlign: "center", padding: 30 }}>Keine Treffer.</Text> : null}
           contentContainerStyle={{ paddingBottom: 40 }}
-          renderItem={({ item, index }) => (
+          renderItem={({ item, index }) =>
+            item.task.fields.isList ? (
+              <ListRow view={item} first={index === 0} last={index === shown.length - 1} onOpen={() => nav.navigate("Checklist", { ref: item.task.ref })} />
+            ) : (
             <TaskRow
               view={item}
               first={index === 0}
@@ -66,7 +70,8 @@ export function SearchScreen() {
               onToggle={() => completion.start(item)}
               onActions={() => setActions(item)}
             />
-          )}
+            )
+          }
         />
       </CollapseProvider>
       <ActionsSheet view={actions} today={state.index.today} onClose={() => setActions(null)} />
