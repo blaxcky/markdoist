@@ -209,11 +209,8 @@ export function ChecklistScreen() {
             danger: true,
             disabled: ro,
             testID: "delete-list",
-            onPress: () =>
-              void repo.moveToTrash(ref).then((o) => {
-                notify(o, "Liste gelöscht");
-                if (o.status === "ok") nav.goBack();
-              }),
+            // Zurück zur Übersicht führt der Effekt oben, sobald die Liste aus dem Index fehlt.
+            onPress: () => void repo.moveToTrash(ref).then((o) => notify(o, "Liste gelöscht")),
           },
         ]}
       />

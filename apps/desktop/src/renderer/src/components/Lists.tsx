@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { T, type Outcome, type Repository } from "@markdoist/app";
 import { findCheckboxes, listsView, type Checkbox, type Index, type TaskAction, type TaskView } from "@markdoist/core";
 import { Menu, MenuItem } from "./Menu";
-import { IconChevronDown, IconChevronUp, IconClose, IconDots, IconGrip, IconList, IconPencil, IconPlus, IconTrash, IconUndo } from "./Icons";
+import { IconChevronDown, IconClose, IconDots, IconGrip, IconList, IconPencil, IconPlus, IconTrash, IconUndo } from "./Icons";
 
 interface Props {
   repo: Repository;
@@ -283,7 +283,7 @@ function ListDetail({ repo, view, onBack, onOutcome, onEditMarkdown }: { repo: R
         {checked.length > 0 && (
           <div className="group checked-group">
             <button className="section checked-toggle" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed} data-testid="checked-toggle">
-              {collapsed ? <IconChevronDown size={16} /> : <IconChevronUp size={16} />}
+              {collapsed ? <IconChevronDown size={16} className="chevron-closed" /> : <IconChevronDown size={16} />}
               <span>{T.lists.checked}</span>
               <span className="section-count">{checked.length}</span>
             </button>

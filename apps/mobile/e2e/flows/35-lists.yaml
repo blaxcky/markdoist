@@ -19,7 +19,6 @@ appId: de.markdoist.aufgaben
     visible:
       id: "check-Brot"
     timeout: 3000
-- hideKeyboard
 # Brot am Griff über Milch ziehen
 - swipe:
     from:

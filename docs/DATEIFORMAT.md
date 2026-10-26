@@ -38,12 +38,32 @@ Reihenfolge beim Neuanlegen: `id`, `format_version`, `title`, `status`, `priorit
 | `dateCreated` | Zeitstempel | Erstellung | unbekannt (Sortierung nach mtime) |
 | `dateModified` | Zeitstempel | letzte Änderung durch die App | unbekannt |
 | `completedDate` | Zeitstempel | Abschluss bzw. Serienende | `dateModified`, sonst mtime |
+| `kind` | `list` | einfache Abhakliste statt Aufgabe (siehe „Listen“) | Aufgabe; ein anderer Wert bleibt erhalten und wird ignoriert |
 
 **Datums- und Zeitwerte:**
 - Datum `2026-10-14`: Kalendertag ohne Zeitzone. Fällig bis Tagesende, überfällig ab dem Folgetag.
 - Lokale Datumszeit `2026-10-14T17:00`: Wanduhrzeit des Geräts („floating“). Nicht existierende Uhrzeiten (Frühjahrs-Zeitumstellung) gelten ab dem ersten gültigen Zeitpunkt nach der Lücke; in der doppelten Herbststunde gilt der frühere Zeitpunkt.
 - Werte mit Offset oder `Z` (von anderen Werkzeugen) werden gelesen, für die Anzeige umgerechnet und unverändert gelassen.
 - Zeitstempel `2026-10-12T08:14:03+02:00`: Instant mit lokalem Offset zum Schreibzeitpunkt.
+
+## Listen
+
+Eine Datei mit `kind: list` ist eine einfache Abhakliste ohne Termine. Sie erscheint nur in der Ansicht „Listen“ und in der Suche, nie in Eingang, Heute, Alle offenen oder Erledigt. Die Einträge sind die Markdown-Checklistenelemente im Body; anderer Text bleibt unverändert. Beim Anlegen schreibt Markdoist zusätzlich `status: open` und `inbox: false`, damit ältere Versionen die Liste nicht im Eingang zeigen.
+
+```markdown
+---
+id: 01K8F3QZ7M2D9W4X6B1N5R8T0V
+format_version: 1
+title: Einkauf Samstag
+kind: list
+status: open
+inbox: false
+dateCreated: 2026-10-26T23:10:00+01:00
+dateModified: 2026-10-26T23:12:41+01:00
+---
+- [ ] Milch
+- [x] Brot
+```
 
 ## Wiederholungen
 

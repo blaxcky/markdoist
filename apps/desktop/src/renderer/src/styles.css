@@ -2107,3 +2107,6 @@ button.strip-day:hover:not(:disabled) .strip-dot {
   color: var(--fg-muted);
   font-size: 12px;
 }
+.chevron-closed {
+  transform: rotate(-90deg);
+}

@@ -53,6 +53,14 @@ Du willst eine persönliche, lokal arbeitende Todo-App mit einer Markdown-Datei 
 
 **Zusätzliche Entscheidung (Chat, 12.10.2026) [F]:** Wird eine Wiederholung auf „noch fünfmal“ geändert, gelten **ab der Änderung fünf weitere Vorkommen**. Frühere Erledigungen werden nicht angerechnet; die alte Historie bleibt in derselben Datei erhalten (3.2, 5.1, 5.4).
 
+**Entscheidungen aus `.fragen/2026-10-26-2303-listen.md` (26.10.2026, neue Funktion „Listen“, Abschnitt 4.6):**
+- Einfache Abhaklisten ohne Termine (Einkauf, Packliste, Gesprächsthemen) ergänzen die Aufgaben. Sie erscheinen in keiner Aufgabenansicht.
+- Abgehakte Einträge wandern in einen einklappbaren Bereich „Abgehakt (n)“ am Listenende.
+- Eine nicht mehr gebrauchte Liste wird gelöscht (Papierkorb, Undo); es gibt kein „Abschließen“.
+- Android: fünfter Reiter „Listen“; kein Eintrag „Neue Liste“ in der App-Verknüpfung.
+- Sammelaktionen: „Abgehakte entfernen“, „Alle Haken zurücksetzen“, Reihenfolge per Ziehen. Kein Duplizieren.
+- Übersicht: zuletzt geänderte Liste zuerst.
+
 **Entscheidungen aus `.fragen/2026-10-23-2320-wiederholungen.md` (23.10.2026, Testrunde Wiederholungen, Bericht `docs/TEST-WIEDERHOLUNGEN.md`):**
 - „Ab Erledigung“ mit Regel ohne BY-Teile rechnet als fester Abstand ab dem Erledigungstag mit Klemmen ans Monatsende (31.10. + 1 Monat = 30.11.); rrule-Verhalten gilt nur noch für Completion-Regeln mit BY-Teilen (5.2).
 - Kalenderserien mit COUNT bleiben wie in 5.2: versäumte Termine verlängern die Serie nicht.
@@ -458,7 +466,7 @@ Zwei Bereiche auf einer Seite. Jede Aufgabe erscheint höchstens einmal [F-Start
 - `scheduled` (egal / keine / früher eingeplant / heute / nächste 7 Tage / Zeitraum); die Option heißt ausdrücklich nicht „überfällig“
 - Wiederholung (egal / keine / Kalender / ab Erledigung / fehlerhaft)
 
-Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen sind nicht Teil von v1, lassen sich aber später ohne Umbau ergänzen.
+Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (gespeicherte Filter) sind nicht Teil von v1, lassen sich aber später ohne Umbau ergänzen. Sie sind nicht dasselbe wie die Abhaklisten aus 4.6.
 
 **Sortierung:** Fälligkeit, Planung, Priorität (high > normal > low > none), Titel (deutsche Sortierfolge), Erstelldatum. Leere Werte stehen immer zuletzt.
 
@@ -495,22 +503,35 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen sin
 ### 4.5 Bedienung [V]
 
 - **Desktop:**
-  - Aufbau: Seitenleiste (Erfassen, Suche, Eingang mit Zähler, Heute mit Zähler, Alle offenen, Erledigt, Probleme, Papierkorb), zentrierte Liste, Details als Dialog über der Liste (Klick oder Enter öffnet, Escape schließt, ↑/↓ blättert). Gestaltung nach den Vorlage-Screenshots vom 18.10.2026 (Todoist-ähnlich): warme Seitenleiste, große Ansichtsüberschrift mit Aufgabenzahl, runde Haken in Prioritätsfarbe, Sortierung und Filter im Menü „Anzeige“.
+  - Aufbau: Seitenleiste (Erfassen, Suche, Eingang mit Zähler, Heute mit Zähler, Alle offenen, Erledigt, Listen, Probleme, Papierkorb), zentrierte Liste, Details als Dialog über der Liste (Klick oder Enter öffnet, Escape schließt, ↑/↓ blättert). Gestaltung nach den Vorlage-Screenshots vom 18.10.2026 (Todoist-ähnlich): warme Seitenleiste, große Ansichtsüberschrift mit Aufgabenzahl, runde Haken in Prioritätsfarbe, Sortierung und Filter im Menü „Anzeige“.
   - Tasten:
-    - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…4 für Eingang, Heute, Alle offenen und Erledigt; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
+    - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…5 für Eingang, Heute, Alle offenen, Erledigt und Listen; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
     - Aufgabenaktionen: Leertaste erledigt/öffnet wieder, `E` sortiert ein, `D` setzt die Frist, `S` plant ein, `P` setzt die Priorität, Entf löscht.
     - Sonstiges: Ctrl+Z macht rückgängig, F5 liest neu ein.
   - In Eingabefeldern/Editoren sind Buchstaben-, Leertasten- und Entf-Aktionen deaktiviert. Ctrl+Z wirkt dort auf die Texteingabe; Aufgaben-Undo bleibt als eigener Befehl erreichbar. Fokus, Tastaturbedienung und Screenreader-Beschriftungen werden auch für Konflikt- und Wiederholungsdialoge geprüft.
   - Hell/dunkel folgt dem System, mit manueller Umschaltung.
   - Keine systemweite Schnellerfassung [F, F008]. Erfasst wird im App-Fenster (`N`/Ctrl+N).
 - **Android:**
-  - Untere Navigation (Eingang, Heute, Alle, Erledigt), Suche in der Kopfzeile, Plus-Button zum Erfassen, Ziehen nach unten zum Neueinlesen.
+  - Untere Navigation (Eingang, Heute, Alle, Erledigt, Listen), Suche in der Kopfzeile, Plus-Button zum Erfassen, Ziehen nach unten zum Neueinlesen.
   - Gestaltung nach den Vorlage-Screenshots vom 19.10.2026 (Todoist-ähnlich, wie der Desktop): warmer Grund, Aufgaben als weiße Karten, runde Haken in Prioritätsfarbe, Datum mit Kalendersymbol in Farbstufe, „Eingang“ rechts in der Zeile; Kopfzeile mit großer Überschrift und Aufgabenzahl, Suche, Anzeige (Filter/Sortierung) und ⋮-Menü (Neu einlesen, Probleme, Papierkorb, Einstellungen); aktive Ansicht in der unteren Leiste mit hinterlegter Pille; roter Plus-Button.
   - Details und Erfassung als Blatt von unten über der Liste: Detail mit Eingang/Einsortiert und ⋮-Menü (Status, Wiederholung, Dateiname, Löschen), Titelkarte mit Haken, Terminzeilen, fehlende Eigenschaften als Chips (Beschreibung, Priorität, Frist, Geplant, Wiederholung), „Checklistenpunkt hinzufügen“; Erfassung mit Titelzeile, Chips und rotem Senden-Knopf über der Tastatur.
   - Wischgesten: nach rechts erledigt, nach links öffnet Aktionen (Einsortieren, Termin, Löschen).
   - Native Datums- und Zeitwahl. Die Uhrzeit bleibt hinter „Uhrzeit hinzufügen“ verborgen, bis man sie braucht (F005).
   - **App-Verknüpfung [F, F009]:** Langes Drücken auf das App-Symbol zeigt „Neue Aufgabe“. Das öffnet direkt den Erfassungsdialog; die Aufgabe landet wie jede Erfassung im Eingang. „Teilen an Markdoist“ kommt erst später, wenn gewünscht.
 - **Sprache und Darstellung:** Oberfläche nur auf Deutsch, Texte zentral in `packages/app`. Hell/dunkel per Systemvorgabe oder manuell; die Einstellung ist gerätelokal.
+
+### 4.6 Listen [F]/[V]
+
+Entscheidungen vom 26.10.2026 (`.fragen/2026-10-26-2303-listen.md`) [F]; Umsetzung [V].
+
+- **Zweck:** einmalige Abhaklisten ohne Termine, Priorität, Eingang oder Wiederholung, z. B. Einkaufsliste, Packliste, „mit Mama besprechen“.
+- **Datei:** eine Markdown-Datei pro Liste in der obersten Ordnerebene wie eine Aufgabe, erkennbar an `kind: list`. Beim Anlegen werden zusätzlich `status: open` und `inbox: false` geschrieben, damit ältere App-Stände eine Liste höchstens unter „Alle offenen“ zeigen und nicht im Eingang. Felder beim Anlegen: `id`, `format_version`, `title`, `kind`, `status`, `inbox`, `dateCreated`, `dateModified`. Journal, Konfliktprüfung, Papierkorb, Undo und formaterhaltendes Schreiben gelten unverändert (7.2–7.4).
+- **Einträge** sind Markdown-Checklistenelemente (`- [ ] Milch`). Neue Einträge werden hinter dem letzten Eintrag der obersten Ebene eingefügt. Anderer Inhalt im Body (Notizen, Überschriften) bleibt byte-genau erhalten und ist über „Als Markdown bearbeiten“ erreichbar; die Listenansicht weist darauf hin. Verschachtelte Einträge werden eingerückt angezeigt und bewegen sich mit ihrem Obereintrag.
+- **Ansichten:** Listen erscheinen nicht in Eingang, Heute, Alle offenen oder Erledigt, unabhängig vom Status. Die Ansicht „Listen“ zeigt alle Listen, zuletzt geänderte zuerst, mit Fortschritt „abgehakt/gesamt“. Die Suche findet Listen (auch ohne „inkl. erledigt“) und öffnet die Listenansicht. Probleme und Konflikte gelten wie bei Aufgaben.
+- **Geöffnete Liste:** offene Einträge oben, darunter eine Eingabezeile, die nach jedem Eintrag offen bleibt. Abgehakte Einträge stehen durchgestrichen im einklappbaren Bereich „Abgehakt (n)“. Antippen des Kreises hakt ab oder wieder auf, Antippen des Texts bearbeitet ihn; ein geleerter Text löscht den Eintrag. Offene Einträge der obersten Ebene lassen sich am Griff verschieben.
+- **Aktionen der Liste:** Umbenennen, „Abgehakte entfernen“, „Alle Haken zurücksetzen“, „Als Markdown bearbeiten“, „Liste löschen“ (Papierkorb). Jede Eintragsaktion ist ein eigener Schreibvorgang mit Undo; sie trägt den angezeigten Eintragstext mit. Steht in der Zeile inzwischen etwas anderes, wird nichts geschrieben (Meldung „Die Liste hat sich inzwischen geändert“).
+- **Bedienung:** Desktop: Seitenleiste „Listen“, Ctrl+5, Escape führt von der Liste zur Übersicht zurück. Android: fünfter Reiter „Listen“, Plus-Button legt eine Liste an, ⋮ in der Kopfzeile der Liste für die Listenaktionen, langes Drücken auf einen Eintrag für Bearbeiten/Löschen.
+- **Nicht vorgesehen:** Liste abschließen, Liste duplizieren, „Neue Liste“ in der App-Verknüpfung, Termine an Listen.
 
 ## 5. Wiederholungen
 
@@ -834,6 +855,7 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | AK-41 | Wiederholung entfernen behält alle Historiendaten im Archiv. Späte Historienkorrektur: nach 1.0. |
 | AK-42 | Ungültiges due plus gültiges heutiges scheduled bleibt in Geplant und Probleme sichtbar. Erstes Einzelverschieben ohne expliziten Abstand hält den bisherigen Abstand für spätere Termine fest. |
 | AK-43 | Tastaturaktionen lösen beim Schreiben keinen Aufgabenabschluss aus; Text-Undo und Aufgaben-Undo sind getrennt. Unicode-Dateinamen, leer bereinigter Titel und Kollisionssuffix bleiben innerhalb des Byte-Limits. |
+| AK-44 | Listen (4.6): Eine neue Liste hat `kind: list`, `inbox: false` und keine Termine. Sie erscheint in keiner Aufgabenansicht, aber in „Listen“ und in der Suche. Anfügen, Abhaken, Text ändern, Entfernen, Verschieben, „Abgehakte entfernen“ und „Alle Haken zurücksetzen“ ändern nur die betroffenen Body-Zeilen und sind rückgängig zu machen; eine extern verschobene Zeile führt zu keinem Schreiben. |
 
 ## 10. Build-Plan
 
