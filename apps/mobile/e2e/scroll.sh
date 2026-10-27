@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export PATH="$PATH:$HOME/Android/Sdk/platform-tools:$HOME/.local/opt/maestro/bin:$HOME/.maestro/bin"
 if [ -z "${JAVA_HOME:-}" ]; then
-  for j in /usr/lib/jvm/java-21-openjdk "$HOME/.local/opt/jdk-21"; do [ -d "$j" ] && export JAVA_HOME="$j" && break; done
+  for j in /usr/lib/jvm/java-21-openjdk "$HOME/.local/opt/jdk-21" /usr/lib/jvm/java-25-openjdk; do [ -x "$j/bin/java" ] && export JAVA_HOME="$j" && break; done
 fi
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
