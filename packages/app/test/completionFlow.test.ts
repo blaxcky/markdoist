@@ -111,4 +111,25 @@ describe("createCompletionFlow", () => {
     await flush();
     expect(notify).toHaveBeenCalledWith(expect.anything(), "Wiederöffnet");
   });
+
+  it("Listeneintrag (startAction): Haken sofort, still bei Erfolg, Ablauf endet ohne Ausblenden", async () => {
+    const { flow, present, notify } = setup();
+    present.add("3:Milch");
+    const run = vi.fn(async (): Promise<Outcome> => ({ status: "ok", undoable: true }));
+    expect(flow.startAction("3:Milch", "Eintrag ändern", run, { quiet: true })).toBe(true);
+    expect(flow.startAction("3:Milch", "Eintrag ändern", run, { quiet: true })).toBe(false);
+    expect(flow.getState().pending.get("3:Milch")).toBe("checked");
+    await flush();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(notify).not.toHaveBeenCalled();
+    expect(flow.getState()).toEqual({ pending: new Map(), frozen: false });
+  });
+
+  it("Listeneintrag (startAction): Fehlschlag wird auch mit quiet gemeldet", async () => {
+    const { flow, notify } = setup();
+    flow.startAction("3:Milch", "Eintrag ändern", async () => ({ status: "error", message: "Schreibschutz" }), { quiet: true });
+    await flush();
+    expect(notify).toHaveBeenCalledWith({ status: "error", message: "Schreibschutz" }, "Eintrag ändern");
+    expect(flow.getState().pending.size).toBe(0);
+  });
 });

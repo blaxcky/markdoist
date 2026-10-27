@@ -5,7 +5,7 @@ import type { FlashListRef } from "@shopify/flash-list";
 import { COMPLETE_COLLAPSE_MS, COMPLETE_HOLD_MS, createCompletionFlow, type CompletionPhase, type Outcome, type Repository } from "@markdoist/app";
 import type { TaskView } from "@markdoist/core";
 
-const COLLAPSE = LinearTransition.duration(COMPLETE_COLLAPSE_MS).easing(Easing.bezier(0.77, 0, 0.175, 1));
+export const COLLAPSE = LinearTransition.duration(COMPLETE_COLLAPSE_MS).easing(Easing.bezier(0.77, 0, 0.175, 1));
 const CollapseCtx = createContext(false);
 
 /**
@@ -23,7 +23,8 @@ interface Args<T> {
   /** aktuell berechnete Liste; während des Ablaufs bleibt der Stand vom ersten Tipp stehen */
   live: T[];
   refs: readonly string[];
-  list: RefObject<FlashListRef<T> | null>;
+  /** FlashList: vor dem Einklappen auf Layout-Animation vorbereiten (ScrollView braucht das nicht) */
+  list?: RefObject<FlashListRef<T> | null>;
 }
 
 export function useCompletionFlow<T>({ repo, notify, live, refs, list }: Args<T>) {
@@ -46,10 +47,17 @@ export function useCompletionFlow<T>({ repo, notify, live, refs, list }: Args<T>
   // im nächsten Bild die Liste freigeben (collapsing), danach wieder ohne Übergang (idle).
   const [stage, setStage] = useState<"idle" | "arming" | "collapsing">("idle");
   const [, rerender] = useReducer((n: number) => n + 1, 0);
+  // Zeilen, die nach dem Schreiben stehen bleiben (Serie, Listeneintrag): Bis die Liste freigegeben ist,
+  // zeigen sie weiter den Zielzustand, sonst blitzte im eingefrorenen Stand kurz der alte Haken auf.
+  const settled = useRef(new Set<string>());
   useEffect(() => {
     let frozen = false;
+    let pending = flow.getState().pending;
     return flow.subscribe(() => {
-      const next = flow.getState().frozen;
+      const s = flow.getState();
+      for (const [k, p] of pending) if (p === "checked" && !s.pending.has(k)) settled.current.add(k);
+      pending = s.pending;
+      const next = s.frozen;
       if (frozen && !next && !cur.current.reduced) setStage("arming");
       frozen = next;
       rerender();
@@ -58,7 +66,7 @@ export function useCompletionFlow<T>({ repo, notify, live, refs, list }: Args<T>
   useEffect(() => {
     if (stage === "arming") {
       const f = requestAnimationFrame(() => {
-        list.current?.prepareForLayoutAnimationRender();
+        list?.current?.prepareForLayoutAnimationRender();
         setStage("collapsing");
       });
       return () => cancelAnimationFrame(f);
@@ -76,14 +84,20 @@ export function useCompletionFlow<T>({ repo, notify, live, refs, list }: Args<T>
   if (!hold) {
     snap.current = null;
     gone.current.clear();
+    settled.current.clear();
   }
   return {
     shown: hold && snap.current ? snap.current : live,
     collapsing: stage !== "idle",
-    phase: (ref: string): CompletionPhase | undefined => state.pending.get(ref) ?? (gone.current.has(ref) ? "leaving" : undefined),
+    phase: (ref: string): CompletionPhase | undefined => state.pending.get(ref) ?? (gone.current.has(ref) ? "leaving" : settled.current.has(ref) ? "checked" : undefined),
     start: (v: TaskView) => {
       if (!snap.current) snap.current = cur.current.live;
       flow.start(v);
+    },
+    /** Listeneintrag (4.6): gleicher Ablauf, still bei Erfolg */
+    startAction: (key: string, label: string, run: () => Promise<Outcome>) => {
+      if (!snap.current) snap.current = cur.current.live;
+      flow.startAction(key, label, run, { quiet: true });
     },
     left: (ref: string) => {
       gone.current.add(ref);

@@ -4,13 +4,14 @@ import { Text, View } from "react-native";
 import { Pressable as GesturePressable } from "react-native-gesture-handler";
 import { useCallback, useEffect, useRef } from "react";
 import ReanimatedSwipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
-import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
+import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { COMPLETE_FADE_MS, T, type CompletionPhase } from "@markdoist/app";
 import type { Temporal, TaskView } from "@markdoist/core";
 import { dateLabel, toneColor } from "../format";
 import { prioColor, useTheme } from "../theme";
 import { CalendarIcon, ClockIcon, Glyph, InboxIcon } from "./icons";
+import { CheckCircle } from "./check-circle";
 
 interface Props {
   view: TaskView;
@@ -44,7 +45,6 @@ export function TaskRow({ view, today, tz, scheduledHint, first = true, last = t
   // Während des Ablaufs zeigt der Haken den Zielzustand (gesetzt bzw. beim Wiederöffnen entfernt).
   const checked = done !== (phase !== undefined);
   const reduced = useReducedMotion();
-  const pop = useSharedValue(1);
   const fade = useSharedValue(1);
   const leftRef = useRef(onLeft);
   useEffect(() => {
@@ -53,7 +53,6 @@ export function TaskRow({ view, today, tz, scheduledHint, first = true, last = t
   const left = useCallback(() => leftRef.current?.(), []);
   // Zustand hängt am phase-Prop, nicht an der Zeile: FlashList verwendet Zeilen wieder.
   useEffect(() => {
-    if (phase === "checked" && !reduced) pop.set(withSequence(withTiming(1.15, { duration: 80, easing: EASE_OUT }), withTiming(1, { duration: 70, easing: EASE_OUT })));
     if (phase === "leaving")
       fade.set(
         withTiming(0, { duration: reduced ? 0 : COMPLETE_FADE_MS, easing: EASE_OUT }, (finished) => {
@@ -61,8 +60,7 @@ export function TaskRow({ view, today, tz, scheduledHint, first = true, last = t
         }),
       );
     else fade.set(1);
-  }, [phase, view.task.ref, reduced, pop, fade, left]);
-  const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.get() }] }));
+  }, [phase, view.task.ref, reduced, fade, left]);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.get() }));
   const warn = view.diagnostics.some((d) => d.severity !== "info");
   const ring = prioColor(c, f.priority);
@@ -111,24 +109,7 @@ export function TaskRow({ view, today, tz, scheduledHint, first = true, last = t
             testID={`check-${f.title}`}
             style={{ paddingLeft: 16, paddingRight: 14, paddingVertical: 12 }}
           >
-            <Animated.View
-              style={[
-                {
-                  width: 22,
-                  height: 22,
-                  borderRadius: 11,
-                  borderWidth: f.priority === "none" ? 1.2 : 2,
-                  borderColor: checked ? c.p4 : ring,
-                  backgroundColor: checked ? c.p4 : f.priority === "none" ? "transparent" : `${ring}1A`,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginTop: 1,
-                },
-                popStyle,
-              ]}
-            >
-              {checked && <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>✓</Text>}
-            </Animated.View>
+            <CheckCircle checked={checked} phase={phase} ring={ring} strong={f.priority !== "none"} id={view.task.ref} />
           </GesturePressable>
           <GesturePressable
             onPress={onOpen}

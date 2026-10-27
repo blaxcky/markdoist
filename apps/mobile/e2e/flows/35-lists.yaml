@@ -9,12 +9,17 @@ appId: de.markdoist.aufgaben
 - inputText: "Einkauf"
 - tapOn:
     id: new-list-create
+# Einträge über das Eingabeblatt der Erfassung; es bleibt nach jedem Eintrag offen.
 - tapOn:
-    id: add-item
+    id: fab-add-item
 - inputText: "Milch"
 - pressKey: Enter
+- assertVisible:
+    id: add-item
 - inputText: "Brot"
 - pressKey: Enter
+- tapOn:
+    id: sheet-close
 - extendedWaitUntil:
     visible:
       id: "check-Brot"

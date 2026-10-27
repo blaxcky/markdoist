@@ -1,8 +1,9 @@
 // Listen (4.6): einfache Abhaklisten ohne Termine. Übersicht und geöffnete Liste.
-import { useEffect, useRef, useState } from "react";
-import { T, type Outcome, type Repository } from "@markdoist/app";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { COMPLETE_COLLAPSE_MS, T, type CompletionPhase, type Outcome, type Repository } from "@markdoist/app";
 import { findCheckboxes, listsView, type Checkbox, type Index, type TaskAction, type TaskView } from "@markdoist/core";
 import { Menu, MenuItem } from "./Menu";
+import { reducedMotion, useCompletionFlow } from "../completion";
 import { IconChevronDown, IconClose, IconDots, IconGrip, IconList, IconPencil, IconPlus, IconTrash, IconUndo } from "./Icons";
 
 interface Props {
@@ -114,9 +115,14 @@ function ListDetail({ repo, view, onBack, onOutcome, onEditMarkdown }: { repo: R
   const ref = view.task.ref;
   const f = view.task.fields;
   const ro = view.readOnly;
-  const items = findCheckboxes(view.task.body);
+  const live = useMemo(() => findCheckboxes(view.task.body), [view.task.body]);
+  // Abhaken wie bei Aufgaben: Haken sofort, Liste steht während der Haltezeit, danach gleitet der Eintrag.
+  const completion = useCompletionFlow({ repo, notify: onOutcome, live, refs: live.map(itemKey), key: ref });
+  const items = completion.shown;
   const open = items.filter((c) => !c.checked);
   const checked = items.filter((c) => c.checked);
+  const listRef = useRef<HTMLDivElement>(null);
+  useFlip(listRef, completion.frozen);
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(f.title);
@@ -155,13 +161,14 @@ function ListDetail({ repo, view, onBack, onOutcome, onEditMarkdown }: { repo: R
 
   const row = (c: Checkbox) => (
     <ItemRow
-      key={`${c.line}:${c.text}`}
+      key={itemKey(c)}
       item={c}
+      phase={completion.phase(itemKey(c))}
       readOnly={ro}
       draggable={!ro && !c.checked && c.depth === 0}
       dragging={dragLine === c.line}
       dropHere={dropBefore === c.line}
-      onToggle={() => void act({ type: "toggleCheckbox", line: c.line, expect: c.text })}
+      onToggle={() => completion.startAction(itemKey(c), T.lists.editItem, () => repo.perform(ref, { type: "toggleCheckbox", line: c.line, expect: c.text }, T.lists.editItem))}
       onEdit={(t) => void act({ type: "editItem", line: c.line, text: t, expect: c.text })}
       onRemove={() => void act({ type: "removeItem", line: c.line, expect: c.text }, "Eintrag gelöscht")}
       onDragStart={() => setDragLine(c.line)}
@@ -255,11 +262,12 @@ function ListDetail({ repo, view, onBack, onOutcome, onEditMarkdown }: { repo: R
             {d.message}
           </div>
         ))}
-      <div className="list checklist" data-testid="checklist">
+      <div className="list checklist" ref={listRef} data-testid="checklist">
         {open.map(row)}
         {!ro && (
           <form
             className={`item-add${dropBefore === "end" ? " drop-here" : ""}`}
+            data-flip="add"
             onSubmit={(e) => {
               e.preventDefault();
               add();
@@ -282,7 +290,7 @@ function ListDetail({ repo, view, onBack, onOutcome, onEditMarkdown }: { repo: R
         )}
         {checked.length > 0 && (
           <div className="group checked-group">
-            <button className="section checked-toggle" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed} data-testid="checked-toggle">
+            <button className="section checked-toggle" data-flip="checked-toggle" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed} data-testid="checked-toggle">
               {collapsed ? <IconChevronDown size={16} className="chevron-closed" /> : <IconChevronDown size={16} />}
               <span>{T.lists.checked}</span>
               <span className="section-count">{checked.length}</span>
@@ -298,6 +306,7 @@ function ListDetail({ repo, view, onBack, onOutcome, onEditMarkdown }: { repo: R
 
 function ItemRow({
   item,
+  phase,
   readOnly,
   draggable,
   dragging,
@@ -311,6 +320,7 @@ function ItemRow({
   onDragEnd,
 }: {
   item: Checkbox;
+  phase?: CompletionPhase;
   readOnly: boolean;
   draggable: boolean;
   dragging: boolean;
@@ -324,6 +334,8 @@ function ItemRow({
   onDragEnd(): void;
 }) {
   const [editing, setEditing] = useState(false);
+  // Während des Ablaufs zeigt der Haken den Zielzustand.
+  const checked = item.checked !== (phase !== undefined);
   const [text, setText] = useState(item.text);
   useEffect(() => setText(item.text), [item.text]);
   const save = () => {
@@ -353,13 +365,14 @@ function ItemRow({
       onDragEnd={onDragEnd}
       data-testid="item-row"
       data-text={item.text}
+      data-flip={itemKey(item)}
     >
       {draggable && (
         <span className="grip" title={T.lists.dragHandle} aria-hidden="true">
           <IconGrip size={18} />
         </span>
       )}
-      <button className={`check prio-none${item.checked ? " checked" : ""}`} role="checkbox" aria-checked={item.checked} aria-label={item.text} onClick={onToggle} disabled={readOnly} data-testid="item-check">
+      <button className={`check prio-none${checked ? " checked" : ""}${phase ? " animate" : ""}`} role="checkbox" aria-checked={checked} aria-label={item.text} onClick={onToggle} disabled={readOnly} data-testid="item-check">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M7.5 12.3l3 3 6-6.3" />
         </svg>
@@ -397,4 +410,36 @@ function ItemRow({
       )}
     </div>
   );
+}
+
+/** Schlüssel eines Eintrags: Abhaken ändert nur das Zeichen in derselben Zeile, der Schlüssel bleibt. */
+const itemKey = (c: Checkbox) => `${c.line}:${c.text}`;
+
+/**
+ * Nach dem Abhaken gleiten die Zeilen an ihre neue Stelle (FLIP): Lage im eingefrorenen Stand merken,
+ * nach der Freigabe vom alten zum neuen Platz animieren. Sonst (Tippen, Ziehen) bewegt sich nichts.
+ */
+function useFlip(list: RefObject<HTMLDivElement | null>, frozen: boolean) {
+  const before = useRef(new Map<string, number>());
+  const wasFrozen = useRef(false);
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    const measure = () => new Map(Array.from(el.querySelectorAll<HTMLElement>("[data-flip]"), (n) => [n.dataset.flip!, n.getBoundingClientRect().top - top]));
+    if (frozen) {
+      before.current = measure();
+      wasFrozen.current = true;
+      return;
+    }
+    if (!wasFrozen.current) return;
+    wasFrozen.current = false;
+    if (reducedMotion()) return;
+    for (const n of el.querySelectorAll<HTMLElement>("[data-flip]")) {
+      const from = before.current.get(n.dataset.flip!);
+      const dy = from === undefined ? 0 : from - (n.getBoundingClientRect().top - top);
+      if (from === undefined) n.animate([{ opacity: 0 }, { opacity: 1 }], { duration: COMPLETE_COLLAPSE_MS, easing: "ease-out" });
+      else if (dy) n.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: COMPLETE_COLLAPSE_MS, easing: "cubic-bezier(0.77, 0, 0.175, 1)" });
+    }
+  });
 }

@@ -1,21 +1,43 @@
 // Geöffnete Liste (4.6): offene Einträge oben, abgehakte im einklappbaren Bereich „Abgehakt“.
-// Unten eine Eingabezeile, die nach jedem Eintrag offen bleibt. Ziehen am Griff ändert die Reihenfolge.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+// Der Plus-Knopf öffnet das Eingabeblatt der Erfassung, das nach jedem Eintrag offen bleibt.
+// Abhaken läuft wie bei Aufgaben (Haken, Haltezeit), danach gleitet der Eintrag nach „Abgehakt“.
+// Ziehen am Griff ändert die Reihenfolge.
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { GestureDetector, usePanGesture } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { scheduleOnRN } from "react-native-worklets";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { T } from "@markdoist/app";
+import { COMPLETE_COLLAPSE_MS, T, type CompletionPhase } from "@markdoist/app";
 import { findCheckboxes, type Checkbox, type TaskAction } from "@markdoist/core";
 import { Menu } from "../components/menu";
 import { ChevronIcon, DotsIcon, GripIcon, PlusIcon } from "../components/icons";
+import { CheckCircle } from "../components/check-circle";
+import { COLLAPSE, useCompletionFlow } from "../completion";
 import { useRepo, useRepoState } from "../repo";
 import { useNotify, useSnackbarInset } from "../notify";
 import { useTheme } from "../theme";
 import type { RootStack } from "../navigation";
+
+type Row = { type: "item"; key: string; item: Checkbox; first: boolean; last: boolean } | { type: "header"; key: string; count: number };
+
+/** Schlüssel einer Zeile: Abhaken ändert nur das Zeichen in derselben Zeile, der Schlüssel bleibt. */
+const itemKey = (i: Checkbox) => `${i.line}:${i.text}`;
+
+/** Offene Einträge, Kopf „Abgehakt“, abgehakte Einträge – ein Array, damit eine Zeile den Gruppenwechsel überlebt. */
+function rows(items: Checkbox[], collapsed: boolean): Row[] {
+  const group = (list: Checkbox[]): Row[] => list.map((item, i) => ({ type: "item", key: itemKey(item), item, first: i === 0, last: i === list.length - 1 }));
+  const open = items.filter((i) => !i.checked);
+  const checked = items.filter((i) => i.checked);
+  if (!checked.length) return group(open);
+  return [...group(open), { type: "header", key: "h-checked", count: checked.length }, ...(collapsed ? [] : group(checked))];
+}
+
+const FADE_IN = FadeIn.duration(COMPLETE_COLLAPSE_MS);
+const FADE_OUT = FadeOut.duration(COMPLETE_COLLAPSE_MS);
 
 export function ChecklistScreen() {
   const { ref } = useRoute<RouteProp<RootStack, "Checklist">>().params;
@@ -29,18 +51,23 @@ export function ChecklistScreen() {
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(view?.task.fields.title ?? "");
-  const [text, setText] = useState("");
   const [collapsed, setCollapsed] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [itemMenu, setItemMenu] = useState<Checkbox | null>(null);
   /** Lage der offenen Einträge (Zeile → y, Höhe) für das Ziehen */
   const layouts = useRef(new Map<number, { y: number; h: number }>());
-  useSnackbarInset(64 + insets.bottom + 12);
+  const headerHeight = useHeaderHeight();
+  // Snackbar über dem Plus-Knopf: Abstand 20 + Knopf 56 + Luft 12.
+  useSnackbarInset(insets.bottom + 20 + 56 + 12);
 
   const ro = view?.readOnly ?? true;
-  const items = view ? findCheckboxes(view.task.body) : [];
+  const body = view?.task.body ?? "";
+  const items = useMemo(() => findCheckboxes(body), [body]);
   const open = items.filter((i) => !i.checked);
   const checked = items.filter((i) => i.checked);
+  const live = useMemo(() => rows(items, collapsed), [items, collapsed]);
+  // Abhaken wie bei Aufgaben: Haken sofort, Liste steht während der Haltezeit, danach gleitet der Eintrag.
+  const completion = useCompletionFlow({ repo, notify, live, refs: items.map(itemKey) });
 
   // Liste gelöscht oder verschoben: zurück zur Übersicht.
   useEffect(() => {
@@ -67,13 +94,6 @@ export function ChecklistScreen() {
       return o;
     });
 
-  const add = () => {
-    const t = text.trim();
-    if (!t) return;
-    setText("");
-    void act({ type: "addItem", text: t }).then((o) => o.status !== "ok" && setText((cur) => cur || t));
-  };
-
   /** Ziehen beendet: Ziel aus der Mitte des gezogenen Eintrags bestimmen. */
   const drop = (item: Checkbox, dy: number) => {
     const from = layouts.current.get(item.line);
@@ -91,17 +111,22 @@ export function ChecklistScreen() {
     void act({ type: "moveItem", line: item.line, before: target ? target.line : null, expect: item.text, expectBefore: target?.text });
   };
 
-  const row = (item: Checkbox, i: number, list: Checkbox[]) => (
+  const collapsing = completion.collapsing;
+  const row = (r: Extract<Row, { type: "item" }>) => {
+    const item = r.item;
+    return (
     <ItemRow
-      key={`${item.line}:${item.text}`}
+      key={r.key}
       item={item}
-      first={i === 0}
-      last={i === list.length - 1}
+      first={r.first}
+      last={r.last}
       readOnly={ro}
       draggable={!ro && !item.checked && item.depth === 0}
       editing={editing === item.line}
+      phase={completion.phase(r.key)}
+      collapsing={collapsing}
       onLayout={(y, h) => layouts.current.set(item.line, { y, h })}
-      onToggle={() => void act({ type: "toggleCheckbox", line: item.line, expect: item.text })}
+      onToggle={() => completion.startAction(r.key, T.lists.editItem, () => repo.perform(ref, { type: "toggleCheckbox", line: item.line, expect: item.text }, T.lists.editItem))}
       onStartEdit={() => setEditing(item.line)}
       onMenu={() => setItemMenu(item)}
       onEndEdit={(t) => {
@@ -112,14 +137,16 @@ export function ChecklistScreen() {
       }}
       onDrop={(dy) => drop(item, dy)}
     />
-  );
+    );
+  };
 
   const itemLines = new Set(items.flatMap((ci) => Array.from({ length: ci.end - ci.line }, (_, k) => ci.line + k)));
   const otherContent = view.task.body.split("\n").some((l, k) => !itemLines.has(k) && l.trim() !== "");
 
   return (
-    <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 4, paddingBottom: 24 }}>
+    // Für das Ändern eines Eintrags weiter unten: Die Kopfzeile liegt über dem Bereich und zählt mit.
+    <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={headerHeight} style={{ flex: 1, backgroundColor: c.bg }}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: 4, paddingBottom: ro ? 24 : insets.bottom + 20 + 56 + 24 }}>
         {renaming ? (
           <TextInput
             autoFocus
@@ -145,46 +172,38 @@ export function ChecklistScreen() {
               {d.message}
             </Text>
           ))}
-        {open.map(row)}
-        {checked.length > 0 && (
-          <>
-            <Pressable
-              onPress={() => setCollapsed((x) => !x)}
-              testID="checked-toggle"
-              accessibilityRole="button"
-              accessibilityState={{ expanded: !collapsed }}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingTop: 20, paddingBottom: 10 }}
-            >
-              <ChevronIcon color={c.muted} size={12} dir={collapsed ? "right" : "down"} />
-              <Text style={{ color: c.fg, fontWeight: "600", fontSize: 15 }}>
-                {T.lists.checked} <Text style={{ color: c.muted, fontWeight: "400", fontVariant: ["tabular-nums"] }}>{checked.length}</Text>
-              </Text>
-            </Pressable>
-            {!collapsed && checked.map(row)}
-          </>
+        {completion.shown.map((r) =>
+          r.type === "item" ? (
+            row(r)
+          ) : (
+            <Animated.View key={r.key} layout={collapsing ? COLLAPSE : undefined} entering={collapsing ? FADE_IN : undefined} exiting={collapsing ? FADE_OUT : undefined}>
+              <Pressable
+                onPress={() => setCollapsed((x) => !x)}
+                testID="checked-toggle"
+                accessibilityRole="button"
+                accessibilityState={{ expanded: !collapsed }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingTop: 20, paddingBottom: 10 }}
+              >
+                <ChevronIcon color={c.muted} size={12} dir={collapsed ? "right" : "down"} />
+                <Text style={{ color: c.fg, fontWeight: "600", fontSize: 15 }}>
+                  {T.lists.checked} <Text style={{ color: c.muted, fontWeight: "400", fontVariant: ["tabular-nums"] }}>{r.count}</Text>
+                </Text>
+              </Pressable>
+            </Animated.View>
+          ),
         )}
         {otherContent && <Text style={{ color: c.muted, fontSize: 12, marginHorizontal: 18, marginTop: 16 }}>{T.lists.otherContent}</Text>}
       </ScrollView>
       {!ro && (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 + insets.bottom, backgroundColor: c.surface, borderTopWidth: 1, borderColor: c.outline }}>
-          <PlusIcon color={c.primary} size={16} />
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            onSubmitEditing={add}
-            submitBehavior="submit"
-            returnKeyType="done"
-            placeholder={T.lists.addItem}
-            placeholderTextColor={c.muted}
-            style={{ flex: 1, color: c.fg, fontSize: 16, paddingVertical: 10 }}
-            testID="add-item"
-          />
-          {text.trim() !== "" && (
-            <Pressable onPress={add} testID="add-item-send" accessibilityLabel={T.lists.addItem} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: c.primary, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: c.onPrimary, fontSize: 18, fontWeight: "700" }}>↑</Text>
-            </Pressable>
-          )}
-        </View>
+        <Pressable
+          onPress={() => nav.navigate("AddItem", { ref })}
+          testID="fab-add-item"
+          accessibilityLabel={T.lists.addItem}
+          android_ripple={{ color: "rgba(255,255,255,0.25)", borderless: false }}
+          style={{ position: "absolute", right: 16, bottom: insets.bottom + 20, width: 56, height: 56, borderRadius: 16, backgroundColor: c.primary, alignItems: "center", justifyContent: "center", boxShadow: "0 3px 10px rgba(0,0,0,0.28)", overflow: "hidden" }}
+        >
+          <PlusIcon color={c.onPrimary} size={20} weight={2.4} />
+        </Pressable>
       )}
       <Menu
         open={!!itemMenu}
@@ -225,6 +244,8 @@ function ItemRow({
   readOnly,
   draggable,
   editing,
+  phase,
+  collapsing,
   onLayout,
   onToggle,
   onStartEdit,
@@ -238,6 +259,9 @@ function ItemRow({
   readOnly: boolean;
   draggable: boolean;
   editing: boolean;
+  phase?: CompletionPhase;
+  /** Nach dem Abhaken: Zeile gleitet an ihre neue Stelle bzw. blendet im eingeklappten Bereich aus. */
+  collapsing: boolean;
   onLayout(y: number, h: number): void;
   onToggle(): void;
   onStartEdit(): void;
@@ -252,7 +276,8 @@ function ItemRow({
   const lifted = useSharedValue(0);
   // Ziehen am Griff: Die Zeile folgt dem Finger auf dem UI-Thread; erst beim Loslassen wird geschrieben.
   const pan = usePanGesture({
-    enabled: draggable,
+    // Während des Gleitens kein Ziehen: Die Zeile stünde sonst gegen den Übergang.
+    enabled: draggable && !collapsing,
     minDistance: 2,
     onActivate: () => {
       "worklet";
@@ -277,9 +302,13 @@ function ItemRow({
     zIndex: lifted.get() ? 10 : 0,
     boxShadow: lifted.get() ? "0 4px 12px rgba(0,0,0,0.22)" : "0 0 0 rgba(0,0,0,0)",
   }));
+  // Während des Ablaufs zeigt der Haken den Zielzustand.
+  const checked = item.checked !== (phase !== undefined);
   const radius = { borderTopLeftRadius: first ? 12 : 0, borderTopRightRadius: first ? 12 : 0, borderBottomLeftRadius: last ? 12 : 0, borderBottomRightRadius: last ? 12 : 0 };
   return (
     <Animated.View
+      layout={collapsing ? COLLAPSE : undefined}
+      exiting={collapsing ? FADE_OUT : undefined}
       onLayout={(e) => onLayout(e.nativeEvent.layout.y, e.nativeEvent.layout.height)}
       style={[{ marginHorizontal: 8, marginBottom: last ? 0 : 2, flexDirection: "row", alignItems: "center", backgroundColor: c.surface, ...radius }, style]}
       testID={`item-${item.text}`}
@@ -287,14 +316,12 @@ function ItemRow({
       <Pressable
         onPress={readOnly ? undefined : onToggle}
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: item.checked, disabled: readOnly }}
+        accessibilityState={{ checked, disabled: readOnly }}
         accessibilityLabel={item.text}
         testID={`check-${item.text}`}
         style={{ paddingLeft: 16 + item.depth * 24, paddingRight: 14, paddingVertical: 12 }}
       >
-        <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.2, borderColor: c.p4, backgroundColor: item.checked ? c.p4 : "transparent", alignItems: "center", justifyContent: "center" }}>
-          {item.checked && <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>✓</Text>}
-        </View>
+        <CheckCircle checked={checked} phase={phase} id={`${item.line}:${item.text}`} />
       </Pressable>
       {editing ? (
         <TextInput

@@ -39,6 +39,11 @@ export interface CompletionFlow {
   subscribe(fn: () => void): () => void;
   /** Gibt false zurück, wenn die Aufgabe schon im Ablauf ist (Doppeltipp). */
   start(view: TaskView): boolean;
+  /**
+   * Derselbe Ablauf für eine beliebige Zeile, z. B. einen Listeneintrag (4.6): key benennt die Zeile,
+   * run schreibt. Mit quiet meldet nur ein Fehlschlag, ein Erfolg bleibt still.
+   */
+  startAction(key: string, label: string, run: () => Promise<Outcome>, opts?: { quiet?: boolean }): boolean;
   /** Die Zeile hat Ausblenden und Einklappen beendet. */
   left(ref: string): void;
 }
@@ -62,6 +67,26 @@ export function createCompletionFlow(opts: CompletionFlowOptions): CompletionFlo
     if (state.pending.get(ref) === "leaving") set(ref, null);
   };
 
+  const startAction: CompletionFlow["startAction"] = (ref, label, run, o) => {
+    if (state.pending.has(ref)) return false;
+    set(ref, "checked");
+    // Schreiben sofort starten; die Meldung erscheint nach der Haltezeit zusammen mit dem Ausblenden.
+    // Die Extrarunde wait(0) lässt die Oberfläche den Stand nach emit() erst übernehmen, bevor isPresent fragt.
+    void Promise.all([run(), wait(opts.holdMs())]).then(
+      async ([out]) => {
+        await wait(0);
+        if (out.status !== "ok" || !o?.quiet) opts.notify(out, label);
+        // Fehlschlag: Zeile springt zurück und verschwindet nicht wie erledigt (PLAN1 7.6).
+        // Bleibt die Zeile in der Liste (Serie, Listeneintrag), endet der Ablauf ohne Ausblenden.
+        if (out.status !== "ok" || opts.isPresent(ref)) return set(ref, null);
+        set(ref, "leaving");
+        void wait(opts.leaveTimeoutMs ?? 1500).then(() => left(ref));
+      },
+      () => set(ref, null),
+    );
+    return true;
+  };
+
   return {
     getState: () => state,
     subscribe(fn) {
@@ -83,22 +108,9 @@ export function createCompletionFlow(opts: CompletionFlowOptions): CompletionFlo
         opts.notify({ status: "blocked", message: why }, label);
         return false;
       }
-      set(ref, "checked");
-      // Schreiben sofort starten; die Meldung erscheint nach der Haltezeit zusammen mit dem Ausblenden.
-      // Die Extrarunde wait(0) lässt die Oberfläche den Stand nach emit() erst übernehmen, bevor isPresent fragt.
-      void Promise.all([opts.perform(ref, action, label), wait(opts.holdMs())]).then(
-        async ([o]) => {
-          await wait(0);
-          opts.notify(o, label);
-          // Fehlschlag: Zeile springt zurück und verschwindet nicht wie erledigt (PLAN1 7.6).
-          if (o.status !== "ok" || opts.isPresent(ref)) return set(ref, null);
-          set(ref, "leaving");
-          void wait(opts.leaveTimeoutMs ?? 1500).then(() => left(ref));
-        },
-        () => set(ref, null),
-      );
-      return true;
+      return startAction(ref, label, () => opts.perform(ref, action, label));
     },
+    startAction,
     left,
   };
 }

@@ -35,10 +35,16 @@ export function useCompletionFlow<T>({ repo, notify, live, refs, key }: Args<T>)
   if (!state.frozen) snap.current = null;
   return {
     shown: state.frozen && snap.current?.key === key ? snap.current.value : live,
+    frozen: state.frozen,
     phase: (ref: string): CompletionPhase | undefined => state.pending.get(ref),
     start: (v: TaskView) => {
       if (!flow.getState().frozen) snap.current = { key: cur.current.key, value: cur.current.live };
       flow.start(v);
+    },
+    /** Listeneintrag (4.6): gleicher Ablauf, still bei Erfolg */
+    startAction: (key: string, label: string, run: () => Promise<Outcome>) => {
+      if (!flow.getState().frozen) snap.current = { key: cur.current.key, value: cur.current.live };
+      flow.startAction(key, label, run, { quiet: true });
     },
     left: flow.left,
   };

@@ -13,6 +13,8 @@ import { ListsScreen } from "./screens/lists-screen";
 import { ChecklistScreen } from "./screens/checklist-screen";
 import { DetailScreen } from "./screens/detail-screen";
 import { CaptureScreen } from "./screens/capture-screen";
+import { AddItemScreen } from "./screens/add-item-screen";
+import { NewListScreen } from "./screens/new-list-screen";
 import { SearchScreen } from "./screens/search-screen";
 import { ProblemsScreen } from "./screens/problems-screen";
 import { TrashScreen } from "./screens/trash-screen";
@@ -30,6 +32,8 @@ export type RootStack = {
   Detail: { ref: string };
   Checklist: { ref: string };
   Capture: undefined;
+  AddItem: { ref: string };
+  NewList: undefined;
   Search: undefined;
   Problems: undefined;
   Trash: undefined;
@@ -151,6 +155,9 @@ function RootStackNavigator() {
       {/* Detail und Erfassung als Blatt über der Liste (Vorlage) */}
       <Stack.Screen name="Detail" component={DetailScreen} options={sheet} />
       <Stack.Screen name="Capture" component={CaptureScreen} options={sheet} />
+      {/* Listen nutzen dasselbe Eingabeblatt */}
+      <Stack.Screen name="AddItem" component={AddItemScreen} options={sheet} />
+      <Stack.Screen name="NewList" component={NewListScreen} options={sheet} />
       <Stack.Screen name="Checklist" component={ChecklistScreen} options={{ title: T.views.lists }} />
       <Stack.Screen name="Search" component={SearchScreen} options={{ title: T.views.search }} />
       <Stack.Screen name="Problems" component={ProblemsScreen} options={{ title: T.views.problems }} />
