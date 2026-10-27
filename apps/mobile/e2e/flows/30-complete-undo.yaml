@@ -11,13 +11,18 @@ appId: de.markdoist.aufgaben
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 3000
-- swipe:
-    from:
-      id: "row-Zahnarzttermin vereinbaren"
-    direction: RIGHT
-    duration: 250
-- assertVisible:
-    id: snackbar
+# Im Gesamtlauf kommt die erste Wischgeste nach dem Start teils nicht an (auch vor 28.10.2026 reproduzierbar):
+# dann erneut wischen. Eine angekommene Geste zeigt die Snackbar, die Wiederholung entfällt.
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe:
+          from:
+            id: "row-Zahnarzttermin vereinbaren"
+          direction: RIGHT
+          duration: 250
+      - assertVisible:
+          id: snackbar
 # Zeile blendet aus und klappt ein; erst danach Rückgängig, sonst wäre der Titel ohnehin noch sichtbar.
 - extendedWaitUntil:
     notVisible: "Zahnarzttermin vereinbaren"

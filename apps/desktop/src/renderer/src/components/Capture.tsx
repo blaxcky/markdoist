@@ -4,13 +4,15 @@ import { T } from "@markdoist/app";
 import { IconInbox } from "./Icons";
 
 interface Props {
+  /** Startwerte, wenn eine Erfassung im Hintergrund scheiterte (7.6) */
+  initial?: { title: string; note: string } | null;
   onCancel(): void;
   onCapture(title: string, note: string, edit: boolean): void;
 }
 
-export function Capture({ onCancel, onCapture }: Props) {
-  const [title, setTitle] = useState("");
-  const [note, setNote] = useState("");
+export function Capture({ initial, onCancel, onCapture }: Props) {
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [note, setNote] = useState(initial?.note ?? "");
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => input.current?.focus(), []);
   const submit = (edit: boolean) => {

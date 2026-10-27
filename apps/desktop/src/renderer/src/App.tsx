@@ -145,6 +145,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   /** Detaildialog zur ausgewählten Aufgabe offen */
   const [open, setOpen] = useState(false);
   const [capture, setCapture] = useState(false);
+  const [captureAgain, setCaptureAgain] = useState<{ title: string; note: string } | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [focusField, setFocusField] = useState<{ field: FocusField; nonce: number } | null>(null);
   const [sidebar, setSidebar] = useState(true);
@@ -794,12 +795,18 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
       )}
       {capture && (
         <Capture
-          onCancel={() => setCapture(false)}
+          initial={captureAgain}
+          onCancel={() => (setCapture(false), setCaptureAgain(null))}
           onCapture={(title, note, edit) => {
             setCapture(false);
-            void repo.create({ title, note }).then((o) => {
+            setCaptureAgain(null);
+            // Die Aufgabe steht sofort in der Liste; geschrieben wird im Hintergrund (4.4).
+            void repo.create({ title, note }, (ref) => edit && openTask(ref)).then((o) => {
               notify(o, "Erfasst im Eingang");
-              if (o.status === "ok" && o.ref && edit) openTask(o.ref);
+              if (o.status !== "ok" && o.status !== "noop") {
+                setCaptureAgain({ title, note });
+                setCapture(true);
+              }
             });
           }}
         />

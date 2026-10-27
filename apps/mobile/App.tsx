@@ -9,7 +9,7 @@ import { T } from "@markdoist/app";
 import SafStorage from "./modules/saf-storage/src/SafStorageModule";
 import { createRepository, DOCUMENTS_URI, kv, loadFolder, RepoContext, saveFolder, systemClock, type Folder } from "./src/repo";
 import { NotifyProvider } from "./src/notify";
-import { RootNavigator, linking } from "./src/navigation";
+import { RootNavigator, linking, navigationRef } from "./src/navigation";
 import { FolderContext } from "./src/folder";
 import { dark, light, ThemeSettingContext, type ThemeSetting } from "./src/theme";
 
@@ -117,7 +117,7 @@ export default function App() {
       <RepoContext value={repo}>
         <FolderContext value={{ name: folder.name, choose }}>
           <NotifyProvider>
-            <NavigationContainer linking={linking} theme={navTheme}>
+            <NavigationContainer ref={navigationRef} linking={linking} theme={navTheme}>
               <RootNavigator />
             </NavigationContainer>
           </NotifyProvider>

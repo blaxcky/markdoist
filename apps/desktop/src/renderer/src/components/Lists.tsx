@@ -37,9 +37,9 @@ function ListOverview({ repo, lists, onOpen, onOutcome }: { repo: Repository; li
     if (!t) return setAdding(false);
     setTitle("");
     setAdding(false);
-    void repo.create({ title: t, kind: "list" }).then((o) => {
-      if (o.status === "ok" && o.ref) onOpen(o.ref);
-      else onOutcome(o);
+    // Die Liste öffnet sofort; geschrieben wird im Hintergrund (4.4).
+    void repo.create({ title: t, kind: "list" }, onOpen).then((o) => {
+      if (o.status !== "ok") onOutcome(o);
     });
   };
   return (
@@ -239,10 +239,8 @@ function ListDetail({ repo, view, onBack, onOutcome, onEditMarkdown }: { repo: R
                 testId="delete-list"
                 onClick={() => {
                   setMenu(false);
-                  void repo.moveToTrash(ref).then((o) => {
-                    onOutcome(o, "Liste gelöscht");
-                    if (o.status === "ok") onBack();
-                  });
+                  onBack();
+                  void repo.moveToTrash(ref).then((o) => onOutcome(o, "Liste gelöscht"));
                 }}
               >
                 {T.lists.deleteList}

@@ -132,8 +132,13 @@ export class Repository {
   private readonly progressDelayMs: number;
   private scanStartedAt = 0;
   private files = new TrackedMap<string, IndexedFile>();
-  private indexCache: { version: number; clockTick: number; index: Index } | null = null;
+  private indexCache: { version: number; clockTick: number; hiddenTick: number; index: Index } | null = null;
   private clockTick = 0;
+  /** schon ausgeblendet, Verschieben in den Papierkorb läuft noch (4.4) */
+  private hidden = new Set<string>();
+  private hiddenTick = 0;
+  /** eigene Neuanlage oder Löschung im Hintergrund: Ein Abgleich lässt diese Referenzen unangetastet */
+  private inflight = new Set<string>();
   private progressOnly = false;
   private metas = new Map<string, FileMeta>();
   private trash: FileMeta[] = [];
@@ -197,12 +202,37 @@ export class Repository {
 
   private currentIndex(): Index {
     const c = this.indexCache;
-    if (c && c.version === this.files.version && c.clockTick === this.clockTick) return c.index;
+    if (this.indexValid()) return c!.index;
     // Reine Fortschrittsmeldungen eines Abgleichs bauen den Index nicht neu auf.
     if (c && this.progressOnly) return c.index;
-    const index = buildIndex([...this.files.values()], this.clock());
-    this.indexCache = { version: this.files.version, clockTick: this.clockTick, index };
+    const files = [...this.files.values()].filter((f) => !this.hidden.has(f.ref));
+    const index = buildIndex(files, this.clock());
+    this.indexCache = { version: this.files.version, clockTick: this.clockTick, hiddenTick: this.hiddenTick, index };
     return index;
+  }
+
+  private indexValid(): boolean {
+    const c = this.indexCache;
+    return !!c && c.version === this.files.version && c.clockTick === this.clockTick && c.hiddenTick === this.hiddenTick;
+  }
+
+  private hide(ref: string) {
+    this.hidden.add(ref);
+    this.hiddenTick++;
+  }
+
+  private unhide(ref: string): boolean {
+    if (!this.hidden.delete(ref)) return false;
+    this.hiddenTick++;
+    return true;
+  }
+
+  /** Ausgeblendete Datei endgültig entfernen; der Index enthält sie schon nicht mehr und bleibt gültig. */
+  private dropHidden(ref: string) {
+    const valid = this.indexValid();
+    this.dropFile(ref);
+    this.unhide(ref);
+    if (valid) this.indexCache = { ...this.indexCache!, version: this.files.version, hiddenTick: this.hiddenTick };
   }
 
   private filesCache: { version: number; map: Map<string, IndexedFile> } | null = null;
@@ -338,8 +368,10 @@ export class Repository {
     // Unveränderten Stand nicht erneut serialisieren und schreiben.
     if (this.savedVersion === this.files.version && !this.metaDirty) return;
     const version = this.files.version;
-    this.metaDirty = false;
-    const entries = [...this.files.values()].map((f) => ({
+    // Laufende eigene Vorgänge erst nach ihrem Abschluss sichern (vorläufige Neuanlage).
+    const skipped = [...this.files.keys()].some((ref) => this.inflight.has(ref));
+    this.metaDirty = skipped;
+    const entries = [...this.files.values()].filter((f) => !this.inflight.has(f.ref)).map((f) => ({
       meta: this.metas.get(f.ref) ?? { name: f.name, ref: f.ref, mtime: f.mtime, size: null },
       text: f.text,
       hash: f.hash,
@@ -349,7 +381,7 @@ export class Repository {
     }));
     try {
       await this.kv.set(this.key("cache"), JSON.stringify(entries));
-      this.savedVersion = version;
+      if (!skipped) this.savedVersion = version;
     } catch {
       this.metaDirty = true;
       /* Cache ist nur eine Beschleunigung */
@@ -451,7 +483,7 @@ export class Repository {
       const toRead: FileMeta[] = [];
       for (const m of metas) {
         seen.add(m.ref);
-        if (touched.has(m.ref)) continue;
+        if (touched.has(m.ref) || this.inflight.has(m.ref)) continue;
         const old = this.metas.get(m.ref);
         const knownFile = this.files.get(m.ref);
         const changed =
@@ -481,7 +513,7 @@ export class Repository {
         const tParse = Date.now();
         batch.forEach((m, j) => {
           // Inzwischen lokal geändert: Das Leseergebnis kann älter sein und überschreibt nichts (R2).
-          if (touched.has(m.ref)) return;
+          if (touched.has(m.ref) || this.inflight.has(m.ref)) return;
           const r = results[j];
           if (!r) {
             readFailures++;
@@ -509,7 +541,7 @@ export class Repository {
       }
       // Die Verzeichnisliste stammt vom Beginn des Durchgangs: Lokal seither angelegte oder
       // umbenannte Dateien fehlen darin und sind nicht verschwunden (R2).
-      const gone = [...this.files.keys()].filter((ref) => !seen.has(ref) && !touched.has(ref));
+      const gone = [...this.files.keys()].filter((ref) => !seen.has(ref) && !touched.has(ref) && !this.inflight.has(ref));
       if (gone.length) await this.followRenames(gone, new Set([...known, ...touched]));
       for (const ref of gone) {
         if (touched.has(ref)) continue;
@@ -725,8 +757,9 @@ export class Repository {
       const res = await this.adapter.write(ref, applied.text, base.hash);
       if (res.status === "ok") {
         this.setFile(ref, base.name, applied.text, res.hash);
-        await this.pushUndo({ id: this.newId(), kind: "edit", label, ref, afterHash: res.hash, beforeText: base.text });
+        const saved = this.pushUndo({ id: this.newId(), kind: "edit", label, ref, afterHash: res.hash, beforeText: base.text });
         this.emit();
+        await saved;
         return { status: "ok", undoable: true, ...(plan.kind === "edit" && plan.note ? { message: plan.note } : {}) };
       }
       if (res.status === "conflict" && !res.recovery) continue; // erneut lesen und prüfen
@@ -758,8 +791,12 @@ export class Repository {
     this.touchedDuringScan?.add(ref);
   }
 
-  /** Neue Eingangsaufgabe (4.1) bzw. Liste (4.6). Übernimmt keinen Termin aus der Ansicht. */
-  async create(input: NewTaskInput): Promise<Outcome> {
+  /**
+   * Neue Eingangsaufgabe (4.1) bzw. Liste (4.6). Übernimmt keinen Termin aus der Ansicht.
+   * Die Aufgabe erscheint sofort; `shown` meldet ihre Referenz, bevor geschrieben wird (4.4).
+   * Schlägt das Schreiben fehl, verschwindet sie wieder und das Ergebnis nennt den Titel.
+   */
+  async create(input: NewTaskInput, shown?: (ref: string) => void): Promise<Outcome> {
     const block = this.writeBlock();
     if (block) return block;
     if (!input.title.trim()) return { status: "blocked", message: "Titel fehlt" };
@@ -779,22 +816,55 @@ export class Repository {
     const names = new Set([...this.files.values()].map((f) => f.name.toLowerCase()));
     // Namen offener Wiederherstellungsfälle nicht erneut vergeben (7.3).
     for (const r of this.recovery) if (r.ref.startsWith("tasks/")) names.add(r.name.toLowerCase());
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const name = fileNameForTitle(input.title, (n) => names.has(n.toLowerCase()), id.slice(-6));
-      const res = await this.adapter.create(name, text);
-      if (res.status === "ok") {
-        this.setFile(res.ref, res.name, text, res.hash);
-        await this.pushUndo({ id: this.newId(), kind: "create", label: input.kind === "list" ? "Neue Liste" : "Neue Aufgabe", ref: res.ref, afterHash: res.hash });
-        this.emit();
-        return { status: "ok", ref: res.ref, undoable: true };
-      }
-      if (res.status === "exists" && !res.recovery) {
-        names.add(name.toLowerCase());
-        continue;
-      }
-      return this.failed(res);
+    const pick = () => fileNameForTitle(input.title, (n) => names.has(n.toLowerCase()), id.slice(-6));
+    const first = pick();
+    const ref = `tasks/${first}`;
+    const hash = hashText(text);
+    // Vorläufig anzeigen; spätere Aktionen auf diese Aufgabe reihen sich hinter das Schreiben ein.
+    this.setFile(ref, first, text, hash);
+    this.inflight.add(ref);
+    this.emit();
+    shown?.(ref);
+    let out: Outcome;
+    try {
+      out = (await this.enqueue(ref, async (): Promise<Outcome> => {
+        const blocked = this.writeBlock();
+        if (blocked) return blocked;
+        let name = first;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const res = await this.adapter.create(name, text);
+          if (res.status === "ok") {
+            // Der vorläufige Eintrag gilt weiter, wenn Ort und Inhalt stimmen: kein zweiter Indexaufbau.
+            if (res.ref !== ref || res.name !== first || res.hash !== hash) {
+              this.dropFile(ref);
+              this.setFile(res.ref, res.name, text, res.hash);
+            }
+            // Ein laufender Abgleich hat die Datei noch nicht gelistet: nicht als verschwunden werten (R2).
+            this.touch(res.ref);
+            const label = input.kind === "list" ? "Neue Liste" : "Neue Aufgabe";
+            const saved = this.pushUndo({ id: this.newId(), kind: "create", label, ref: res.ref, afterHash: res.hash });
+            this.emit();
+            await saved;
+            return { status: "ok", ref: res.ref, undoable: true };
+          }
+          if (res.status === "exists" && !res.recovery) {
+            names.add(name.toLowerCase());
+            name = pick();
+            continue;
+          }
+          return this.failed(res);
+        }
+        return { status: "error", message: "Kein freier Dateiname" };
+      })) as Outcome;
+    } catch (e) {
+      out = { status: "error", message: errMessage(e) };
+    } finally {
+      this.inflight.delete(ref);
     }
-    return { status: "error", message: "Kein freier Dateiname" };
+    if (out.status === "ok" || out.status === "noop") return out;
+    this.dropFile(ref);
+    this.emit();
+    return { ...out, message: `„${input.title.trim()}“ nicht angelegt – ${out.message}` };
   }
 
   /** „Als Aufgabe übernehmen“ für eine Datei ohne Frontmatter (3.1). */
@@ -821,15 +891,25 @@ export class Repository {
         return this.failed(res);
       }
       this.setFile(ref, f.name, text, res.hash);
-      await this.pushUndo({ id: this.newId(), kind: "edit", label: "Als Aufgabe übernommen", ref, afterHash: res.hash, beforeText: f.text });
+      const saved = this.pushUndo({ id: this.newId(), kind: "edit", label: "Als Aufgabe übernommen", ref, afterHash: res.hash, beforeText: f.text });
       this.emit();
+      await saved;
       return { status: "ok", undoable: true };
     }) as Promise<Outcome>;
   }
 
-  /** Löschen = in den Papierkorb (4.4). */
+  /**
+   * Löschen = in den Papierkorb (4.4). Die Aufgabe verschwindet sofort aus den Ansichten; das
+   * Verschieben läuft im Hintergrund. Schlägt es fehl, erscheint sie wieder.
+   */
   moveToTrash(ref: string): Promise<Outcome> {
-    return this.enqueue(ref, async () => {
+    const early = this.files.has(ref) && !this.writeBlock(ref) && !this.hidden.has(ref);
+    if (early) {
+      this.hide(ref);
+      this.inflight.add(ref);
+      this.emit();
+    }
+    const run = this.enqueue(ref, async () => {
       const block = this.writeBlock(ref);
       if (block) return block;
       const f = this.files.get(ref);
@@ -838,13 +918,19 @@ export class Repository {
       if (res.status !== "ok") {
         return this.failed(res);
       }
-      this.dropFile(ref);
+      this.dropHidden(ref);
       this.bump(ref);
-      await this.pushUndo({ id: this.newId(), kind: "trash", label: "Gelöscht", ref: res.ref, afterHash: res.hash });
+      const saved = this.pushUndo({ id: this.newId(), kind: "trash", label: "Gelöscht", ref: res.ref, afterHash: res.hash });
       this.trashed(res.ref, res.name);
       this.emit();
+      await saved;
       return { status: "ok", ref: res.ref, undoable: true };
     }) as Promise<Outcome>;
+    if (!early) return run;
+    return run.finally(() => {
+      this.inflight.delete(ref);
+      if (this.unhide(ref)) this.emit();
+    });
   }
 
   async restoreFromTrash(trashRef: string): Promise<Outcome> {
@@ -859,9 +945,10 @@ export class Repository {
     const res = await this.adapter.restoreFromTrash(trashRef, read.hash);
     if (res.status !== "ok") return this.failed(res);
     this.setFile(res.ref, res.name, read.text, res.hash, read.invalidUtf8);
-    await this.pushUndo({ id: this.newId(), kind: "restore", label: "Wiederhergestellt", ref: res.ref, afterHash: res.hash });
+    const saved = this.pushUndo({ id: this.newId(), kind: "restore", label: "Wiederhergestellt", ref: res.ref, afterHash: res.hash });
     this.trash = this.trash.filter((m) => m.ref !== trashRef);
     this.emit();
+    await saved;
     return { status: "ok", ref: res.ref, undoable: true };
   }
 
@@ -932,9 +1019,11 @@ export class Repository {
       this.bump(ref);
       this.setFile(res.ref, res.name, f.text, res.hash);
       // Eigene Umbenennung: Undo-Einträge behalten ihren Ort, das Rückgängigmachen stellt ihn wieder her.
-      if (this.remapRef(ref, res.ref, false)) await this.saveDrafts();
-      await this.pushUndo({ id: this.newId(), kind: "rename", label: "Umbenannt", ref: res.ref, afterHash: res.hash, beforeName: f.name });
+      const drafts = this.remapRef(ref, res.ref, false) ? this.saveDrafts() : null;
+      const saved = this.pushUndo({ id: this.newId(), kind: "rename", label: "Umbenannt", ref: res.ref, afterHash: res.hash, beforeName: f.name });
       this.emit();
+      await drafts;
+      await saved;
       return { status: "ok", ref: res.ref, undoable: true };
     }) as Promise<Outcome>;
   }

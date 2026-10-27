@@ -1,8 +1,9 @@
 // Schnellerfassung (4.1, AK-26): Titel genügt; landet im Eingang ohne Termin.
 // Gestaltung nach Vorlage: Blatt über der Liste, Titelzeile, Chips und roter Senden-Knopf über der Tastatur (CaptureSheet).
-import { useState, type ReactNode } from "react";
+// Das Blatt schließt sofort, die Aufgabe steht schon in der Liste; geschrieben wird im Hintergrund (4.4).
+import { useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, TextInput } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { T } from "@markdoist/app";
 import { useRepo } from "../repo";
@@ -10,28 +11,36 @@ import { useNotify } from "../notify";
 import { useTheme } from "../theme";
 import { Glyph, InboxIcon, LinesIcon } from "../components/icons";
 import { CaptureSheet } from "../components/capture-sheet";
-import type { RootStack } from "../navigation";
+import { navigationRef, type RootStack } from "../navigation";
 
 export function CaptureScreen() {
   const repo = useRepo();
   const notify = useNotify();
   const c = useTheme();
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
-  const [title, setTitle] = useState("");
-  const [note, setNote] = useState("");
-  const [showNote, setShowNote] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const ready = !!title.trim() && !busy;
-  const submit = async (edit: boolean) => {
-    if (!title.trim() || busy) return;
-    setBusy(true);
-    const o = await repo.create({ title: title.trim(), note });
-    setBusy(false);
-    notify(o, "Erfasst im Eingang");
-    if (o.status === "ok") {
-      if (edit && o.ref) nav.replace("Detail", { ref: o.ref });
-      else nav.goBack();
-    }
+  const initial = useRoute<RouteProp<RootStack, "Capture">>().params;
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [note, setNote] = useState(initial?.note ?? "");
+  const [showNote, setShowNote] = useState(!!initial?.note);
+  const sent = useRef(false);
+  const ready = !!title.trim();
+  const submit = (edit: boolean) => {
+    if (!title.trim() || sent.current) return;
+    sent.current = true;
+    const input = { title: title.trim(), note };
+    let closed = false;
+    void repo
+      .create(input, (ref) => {
+        closed = true;
+        if (edit) nav.replace("Detail", { ref });
+        else nav.goBack();
+      })
+      .then((o) => {
+        notify(o, "Erfasst im Eingang");
+        if (!closed) sent.current = false;
+        // Scheitert das Schreiben nach dem Schließen, öffnet die Erfassung erneut mit dem Text (7.6).
+        else if (o.status !== "ok" && o.status !== "noop" && navigationRef.isReady()) navigationRef.navigate("Capture", input);
+      });
   };
   const chip = (label: string, icon: ReactNode, onPress: (() => void) | undefined, testID?: string, active = false) => (
     <Pressable
@@ -50,7 +59,7 @@ export function CaptureScreen() {
       value={title}
       onChangeText={setTitle}
       placeholder="Aufgabenname"
-      onSubmit={() => void submit(false)}
+      onSubmit={() => submit(false)}
       ready={ready}
       accessibilityLabel={T.fields.title}
       submitLabel="Erfassen (landet im Eingang, ohne Termin)"
@@ -74,7 +83,7 @@ export function CaptureScreen() {
         <>
           {chip(T.views.inbox, <InboxIcon color={c.muted} size={15} />, undefined)}
           {chip("Beschreibung", <LinesIcon color={c.muted} size={14} />, () => setShowNote((x) => !x), "capture-toggle-note", showNote)}
-          {chip("Bearbeiten", <Glyph color={c.muted} size={15}>✎</Glyph>, ready ? () => void submit(true) : undefined, "capture-edit")}
+          {chip("Bearbeiten", <Glyph color={c.muted} size={15}>✎</Glyph>, ready ? () => submit(true) : undefined, "capture-edit")}
         </>
       }
     />

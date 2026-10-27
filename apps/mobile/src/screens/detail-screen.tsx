@@ -185,7 +185,12 @@ export function DetailScreen() {
   const notify = useNotify();
   const c = useTheme();
   const ref = route.params.ref;
-  const view = state.index.tasks.find((v) => v.task.ref === ref) ?? null;
+  const found = state.index.tasks.find((v) => v.task.ref === ref) ?? null;
+  // Beim Löschen geht es sofort zurück: Während das Blatt hinausgleitet, zeigt es den letzten Stand.
+  const leaving = useRef(false);
+  const last = useRef(found);
+  if (found) last.current = found;
+  const view = found ?? (leaving.current ? last.current : null);
   const draft = state.drafts.find((d) => d.ref === ref)?.text ?? null;
   const [title, setTitle] = useState(view?.task.fields.title ?? "");
   const [body, setBody] = useState(draft ?? view?.task.body ?? "");
@@ -725,7 +730,12 @@ export function DetailScreen() {
             danger: true,
             testID: "delete",
             icon: <Glyph color={c.danger} size={16}>🗑</Glyph>,
-            onPress: () => void repo.moveToTrash(ref).then((o) => { notify(o, "Gelöscht"); if (o.status === "ok") nav.goBack(); }),
+            // Sofort zurück; das Verschieben läuft im Hintergrund, bei Fehler erscheint die Aufgabe wieder (4.4).
+            onPress: () => {
+              leaving.current = true;
+              nav.goBack();
+              void repo.moveToTrash(ref).then((o) => notify(o, "Gelöscht"));
+            },
           },
         ]}
       />

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createBottomTabNavigator, type BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
 import { PlatformPressable } from "@react-navigation/elements";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import type { LinkingOptions, NavigatorScreenParams } from "@react-navigation/native";
+import { createNavigationContainerRef, type LinkingOptions, type NavigatorScreenParams } from "@react-navigation/native";
 import { T } from "@markdoist/app";
 import { ListScreen } from "./screens/list-screen";
 import { ListsScreen } from "./screens/lists-screen";
@@ -31,9 +31,10 @@ export type RootStack = {
   Main: NavigatorScreenParams<Tabs> | undefined;
   Detail: { ref: string };
   Checklist: { ref: string };
-  Capture: undefined;
+  /** Startwerte: Erfassung erneut öffnen, wenn das Schreiben im Hintergrund scheiterte (7.6) */
+  Capture: { title?: string; note?: string } | undefined;
   AddItem: { ref: string };
-  NewList: undefined;
+  NewList: { title?: string } | undefined;
   Search: undefined;
   Problems: undefined;
   Trash: undefined;
@@ -41,6 +42,9 @@ export type RootStack = {
   Recurrence: { ref: string; continueSeries?: boolean };
   SeriesHistory: { ref: string };
 };
+
+/** Für Navigation nach dem Schließen eines Blatts, wenn dessen eigenes Navigationsobjekt nicht mehr gilt */
+export const navigationRef = createNavigationContainerRef<RootStack>();
 
 const Tab = createBottomTabNavigator<Tabs>();
 const Stack = createNativeStackNavigator<RootStack>();

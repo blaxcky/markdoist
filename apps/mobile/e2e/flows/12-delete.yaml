@@ -1,0 +1,54 @@
+# Löschen (4.4): Die Aufgabe verschwindet sofort, das Verschieben in den Papierkorb läuft im Hintergrund.
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-inbox
+- tapOn:
+    id: fab-capture
+- tapOn:
+    id: capture-title
+- inputText: "Wegwerfen"
+- tapOn:
+    id: capture-submit
+# Die Snackbar „Erfasst im Eingang“ liegt unten über den Menüs; erst danach weiter.
+- extendedWaitUntil:
+    notVisible:
+      id: snackbar
+    timeout: 8000
+- assertVisible:
+    id: row-Wegwerfen
+# Aus dem Detail: Es schließt sofort, die Zeile ist weg, danach meldet die Snackbar das Löschen.
+- tapOn:
+    id: row-Wegwerfen
+- tapOn:
+    id: detail-menu
+- tapOn:
+    id: delete
+- assertNotVisible:
+    id: row-Wegwerfen
+- assertVisible: "Gelöscht"
+- extendedWaitUntil:
+    notVisible:
+      id: snackbar
+    timeout: 8000
+- tapOn:
+    id: fab-capture
+- tapOn:
+    id: capture-title
+- inputText: "Auch weg"
+- tapOn:
+    id: capture-submit
+# Die Snackbar „Erfasst im Eingang“ liegt unten über den Menüs; erst danach weiter.
+- extendedWaitUntil:
+    notVisible:
+      id: snackbar
+    timeout: 8000
+# Über das Aktionsblatt (langes Drücken).
+- longPressOn:
+    id: row-Auch weg
+- tapOn:
+    id: act-delete
+- assertNotVisible:
+    id: row-Auch weg
+- assertVisible: "Gelöscht"

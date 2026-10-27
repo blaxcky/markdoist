@@ -498,6 +498,11 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (ge
   - Die Liste bleibt stehen, bis die Zeile fertig ist: Haken mindestens 250 ms halten, Zeile 150 ms ausblenden, Lücke 220 ms einklappen, die Zeilen darunter rücken nach. Die Snackbar erscheint mit dem Ausblenden.
   - Bleibt die Aufgabe nach dem Schreiben in der Ansicht (Serie in Alle oder Eingang), geht nur der Haken zurück. Schlägt das Schreiben fehl, springt die Zeile zurück und die Fehlermeldung erscheint (7.6).
   - Bei reduzierter Bewegung (System-Einstellung) entfallen Halten, Aufspringen und Einklappen.
+- **Rückmeldung beim Anlegen und Löschen** (Desktop und Android, im `Repository`; Entscheidung 28.10.2026):
+  - Eine neue Aufgabe oder Liste steht sofort in der Ansicht, das Erfassungsblatt schließt bzw. die Liste oder das Detail öffnet sich sofort; geschrieben wird im Hintergrund. Aktionen auf die neue Aufgabe warten, bis die Datei geschrieben ist.
+  - Gelöschte Aufgaben und Listen verschwinden sofort aus allen Ansichten, das Detail schließt sofort; das Verschieben in den Papierkorb läuft im Hintergrund.
+  - Snackbar und „Rückgängig“ erscheinen nach erfolgreichem Schreiben. Scheitert es, springt der Stand zurück und die Fehlermeldung erscheint; eine gescheiterte Erfassung öffnet sich erneut mit Titel und Beschreibung (7.6).
+  - Ein Abgleich während eines solchen Vorgangs lässt die betroffene Datei unangetastet, damit nichts kurz zurückspringt.
 - **Lage der Meldung:** Android: Die Snackbar steht über dem Plus-Button und der unteren Leiste, auf Bildschirmen ohne Plus-Button knapp über dem unteren Rand; eine neue Meldung blendet über die alte. Desktop: unten mittig, mit Ein- und Ausblenden.
 
 ### 4.5 Bedienung [V]
