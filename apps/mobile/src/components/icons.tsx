@@ -105,6 +105,18 @@ export function DotsIcon({ color, size = 18 }: P) {
   );
 }
 
+/** Drei waagrechte Punkte (⋯), Reiter „Mehr“. */
+export function MoreIcon({ color, size = 18 }: P) {
+  const d = Math.max(3, size * 0.2);
+  return (
+    <View style={{ width: size, height: size, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: size * 0.04 }}>
+      {[0, 1, 2].map((i) => (
+        <View key={i} style={{ width: d, height: d, borderRadius: d / 2, backgroundColor: color }} />
+      ))}
+    </View>
+  );
+}
+
 /** Blatt mit Zeilen (Anzeige: Filter und Sortierung); `dot` markiert aktive Einstellungen. */
 export function ViewOptionsIcon({ color, size = 20, dot }: P & { dot?: string }) {
   const b = stroke(size);

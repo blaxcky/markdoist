@@ -14,6 +14,7 @@ export const T = {
     history: "Verlauf",
     search: "Suche",
     lists: "Listen",
+    more: "Mehr",
   },
   lists: {
     newList: "Neue Liste",

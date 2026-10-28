@@ -1,9 +1,25 @@
 # Listen (4.6): anlegen, Einträge hinzufügen, Reihenfolge ziehen, abhaken, Haken zurücksetzen.
+# Untere Leiste (4.5, AK-47): Erledigt und Listen liegen hinter „⋯ Mehr“, Zurück führt zur letzten Hauptansicht.
 appId: de.markdoist.aufgaben
 ---
 - runFlow: ../launch.yaml
-- tapOn:
+- assertNotVisible:
     id: tab-lists
+- assertNotVisible:
+    id: tab-done
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: more-done
+- assertVisible: "Erledigt"
+- pressKey: back
+- assertVisible:
+    id: tab-today
+- assertNotVisible: "Erledigt"
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: more-lists
 - tapOn:
     id: fab-new-list
 - inputText: "Einkauf"
