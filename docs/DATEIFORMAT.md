@@ -182,7 +182,6 @@ waste_type: Restabfallbehaelter 120 l
 dateCreated: 2026-10-28T19:10:00+01:00
 dateModified: 2026-10-28T19:10:00+01:00
 ---
-Stellen Sie bitte die Muellsammelgefaesse am Abfuhrtag um 7.00 Uhr … bereit.
 ```
 
 ## Ablauf

@@ -196,7 +196,6 @@ describe("Neuanlage einer festen Terminliste (4.7)", () => {
     const r = newDateSeriesText(
       {
         title: "Restmüll",
-        note: "Bereitstellen am Abfuhrtag um 7.00 Uhr.",
         dates: ["2026-12-11", "2026-10-16", "2026-11-13", "2026-11-13"],
         offsetDays: -7,
         wasteType: "Restabfallbehaelter 120 l",
@@ -220,7 +219,7 @@ describe("Neuanlage einer festen Terminliste (4.7)", () => {
       recurrence_instance: "2026-11-13",
       waste_type: "Restabfallbehaelter 120 l",
     });
-    expect(t.body).toBe("Bereitstellen am Abfuhrtag um 7.00 Uhr.\n");
+    expect(t.body).toBe("");
     expect(readSeries(t)!.phase).toBe("active");
     expect(t.diagnostics).toEqual([]);
   });

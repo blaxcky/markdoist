@@ -862,11 +862,10 @@ export class Repository {
     const made = newDateSeriesText(input, this.ctx());
     if (!made) return { status: "blocked", message: `„${input.title.trim()}“: kein Termin ab heute` };
     const { id, text } = made;
-    const note = input.note ?? "";
     let problem = verifyGenerated(text, {
       id,
       title: input.title.trim(),
-      body: note === "" ? "" : note.endsWith("\n") ? note : `${note}\n`,
+      body: "",
       data: {
         format_version: DATE_LIST_FORMAT_VERSION,
         inbox: false,

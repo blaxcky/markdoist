@@ -33,8 +33,6 @@ export interface WasteGroup {
   key: string;
   /** aufsteigend, ohne Duplikate */
   dates: string[];
-  /** Beschreibung, wenn sie bei allen Terminen dieser Art gleich ist */
-  description: string | null;
 }
 
 export interface WasteFile {
@@ -48,22 +46,17 @@ export interface WasteFile {
 
 export function readWasteFile(text: string, timeZone: string): WasteFile {
   const parsed = parseIcs(text, timeZone);
-  const groups = new Map<string, { key: string; dates: Set<string>; descriptions: (string | null)[] }>();
+  const groups = new Map<string, { key: string; dates: Set<string> }>();
   for (const e of parsed.events) {
     const key = wasteKey(e.summary);
     const id = key.toLocaleLowerCase("de");
     let g = groups.get(id);
-    if (!g) groups.set(id, (g = { key, dates: new Set(), descriptions: [] }));
+    if (!g) groups.set(id, (g = { key, dates: new Set() }));
     g.dates.add(e.date);
-    g.descriptions.push(e.description);
   }
   const all = parsed.events.map((e) => e.date).sort();
   return {
-    groups: [...groups.values()].map((g) => ({
-      key: g.key,
-      dates: [...g.dates].sort(),
-      description: g.descriptions.every((d) => d !== null && d === g.descriptions[0]) ? g.descriptions[0]! : null,
-    })),
+    groups: [...groups.values()].map((g) => ({ key: g.key, dates: [...g.dates].sort() })),
     range: all.length ? { from: all[0]!, to: all[all.length - 1]! } : null,
     withRule: parsed.withRule,
     cancelled: parsed.cancelled,
@@ -180,7 +173,6 @@ export async function applyWasteImport(
         dates: row.group.dates,
         offsetDays: -Math.abs(offsetDays),
         wasteType: row.group.key,
-        ...(row.group.description ? { note: row.group.description } : {}),
       });
     } else {
       const action = mergeAction(row, file);

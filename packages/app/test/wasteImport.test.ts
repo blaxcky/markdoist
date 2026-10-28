@@ -56,7 +56,7 @@ function followUp(): string {
 }
 
 describe("ICS einlesen (4.7)", () => {
-  it("Nachbildung der Vorlage: 10 Termine in 4 Arten, Zeitraum, Beschreibung entfaltet", () => {
+  it("Nachbildung der Vorlage: 10 Termine in 4 Arten, Zeitraum", () => {
     const f = readWasteFile(FIXTURE, TZ);
     expect(f.groups.map((g) => [g.key, g.dates.length])).toEqual([
       ["Bioabfallbehaelter 80 l", 5],
@@ -65,9 +65,6 @@ describe("ICS einlesen (4.7)", () => {
       ["Papierbehaelter 240 l", 1],
     ]);
     expect(f.range).toEqual({ from: "2026-10-29", to: "2026-12-19" });
-    expect(f.groups[0]!.description).toBe(
-      "Stellen Sie bitte die Muellsammelgefaesse am Abfuhrtag um 7.00 Uhr an der strassenseitigen Grundstuecksgrenze entlang der Fahrbahn zur Entleerung bereit.",
-    );
     expect({ withRule: f.withRule, cancelled: f.cancelled, unreadable: f.unreadable }).toEqual({ withRule: 0, cancelled: 0, unreadable: 0 });
   });
 
@@ -76,14 +73,14 @@ describe("ICS einlesen (4.7)", () => {
       "BEGIN:VCALENDAR",
       "BEGIN:VEVENT",
       "DTSTART;VALUE=DATE:20270105",
-      "SUMMARY:Gelber Sack\\, groß",
+      "SUMMARY:Gelber Sack\\, gr",
+      " oß",
       "BEGIN:VALARM",
       "TRIGGER:-PT12H",
       "DESCRIPTION:Erinnerung",
       "SUMMARY:Alarm",
       "END:VALARM",
-      "DESCRIPTION:Zeile eins\\nZeile",
-      "  zwei",
+      "DESCRIPTION:Hinweis\\nwird nicht übernommen",
       "END:VEVENT",
       "BEGIN:VEVENT",
       "DTSTART;TZID=America/New_York:20270105T233000",
@@ -114,10 +111,10 @@ describe("ICS einlesen (4.7)", () => {
     ].join("\n");
     const p = parseIcs(text, TZ);
     expect(p.events).toEqual([
-      { summary: "Gelber Sack, groß", date: "2027-01-05", description: "Zeile eins\nZeile zwei" },
-      { summary: "Spät", date: "2027-01-06", description: null },
-      { summary: "UTC", date: "2027-01-06", description: null },
-      { summary: "Windowszone", date: "2027-01-05", description: null },
+      { summary: "Gelber Sack, groß", date: "2027-01-05" },
+      { summary: "Spät", date: "2027-01-06" },
+      { summary: "UTC", date: "2027-01-06" },
+      { summary: "Windowszone", date: "2027-01-05" },
     ]);
     expect([p.cancelled, p.withRule, p.unreadable]).toEqual([1, 1, 1]);
   });
@@ -155,8 +152,9 @@ describe("AK-46: Import über das Repository", () => {
     expect(rest).toMatch(/^recurrence_offset_days: -7$/m);
     expect(rest).toMatch(/^waste_type: Restabfallbehaelter 120 l$/m);
     expect(rest).toMatch(/recurrence_dates:\n {2}- 2026-11-13\n {2}- 2026-12-11\n/);
-    expect(rest).toMatch(/---\nStellen Sie bitte die Muellsammelgefaesse/);
-    for (const { text } of adapter.tasks.values()) expect(text).not.toMatch(/MUSTERWEG|BEISPIELORT/);
+    // Der Bereitstellhinweis der Termine (DESCRIPTION) wird nicht übernommen: Body leer.
+    expect(rest.endsWith("---\n")).toBe(true);
+    for (const { text } of adapter.tasks.values()) expect(text).not.toMatch(/MUSTERWEG|BEISPIELORT|Muellsammelgefaesse/);
 
     const idx = repo.getState().index;
     expect(wasteView(idx).map((e) => [e.view.task.fields.title, e.next?.toString()])).toEqual([

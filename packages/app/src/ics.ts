@@ -7,7 +7,6 @@ export interface IcsEvent {
   summary: string;
   /** Tag des Termins (`YYYY-MM-DD`) in der Gerätezone */
   date: string;
-  description: string | null;
 }
 
 export interface IcsParse {
@@ -149,6 +148,5 @@ function finish(props: Property[], timeZone: string, out: IcsParse) {
     out.unreadable++;
     return;
   }
-  const description = get("DESCRIPTION");
-  out.events.push({ summary: title, date, description: description ? unescapeText(description.value).trim() || null : null });
+  out.events.push({ summary: title, date });
 }

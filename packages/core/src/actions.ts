@@ -966,7 +966,6 @@ export function newTaskText(input: NewTaskInput, ctx: ActionContext): { id: stri
 
 export interface NewDateSeriesInput {
   title: string;
-  note?: string;
   /** Termine der festen Terminliste (`YYYY-MM-DD`), Reihenfolge und Duplikate egal */
   dates: string[];
   /** Abstand von `scheduled` zur Frist in Tagen (Vorlauf, negativ = davor); null = kein `scheduled` */
@@ -994,8 +993,6 @@ export function newDateSeriesText(
   if (scheduled && !inDateRange(scheduled)) return null;
   const id = ctx.newId();
   const now = formatTimestamp(ctx.at, ctx.timeZone);
-  const note = input.note ?? "";
-  const body = note === "" ? "" : note.endsWith("\n") ? note : `${note}\n`;
   const text = createFileText(
     [
       ["id", id],
@@ -1017,7 +1014,7 @@ export function newDateSeriesText(
       ["dateCreated", now],
       ["dateModified", now],
     ],
-    body,
+    "",
   );
   return { id, text, instance: k.toString() };
 }

@@ -584,7 +584,7 @@ Entscheidungen vom 28.10.2026 (`.fragen/2026-10-28-1849-muellabfuhr.md`) [F]; Um
   - `UID` wird nicht verwendet: Die vorliegende Datei vergibt sie bei jedem Herunterladen neu (`<Zeitstempel>-<n>@…`). `LOCATION` (Adresse) wird nicht übernommen.
   - Form der vorliegenden Datei (Stand 28.10.2026): ganztägige Termine (`DTSTART;VALUE=DATE`), ein `VEVENT` je Abholtag, vier Abfuhrarten (`Bioabfallbehaelter  80 l`, `Restabfallbehaelter  120 l`, `Leichtverpackungen  110 l`, `Papierbehaelter  240 l`), Umlaute als ae/oe/ue, doppelte Leerzeichen vor der Größe. Die Datei enthält nur Termine ab dem Tag des Herunterladens. Die Abstände sind unregelmäßig (Feiertagsverschiebungen, Bioabfall auch mittwochs, Leichtverpackungen auch samstags); eine RRULE könnte sie nicht abbilden.
 - **Abgleich beim Übernehmen [V],** je Abfuhrart als ein Schreibvorgang:
-  - **Neue Art:** Datei anlegen, Dateiname aus dem Namen nach F002. K ist der erste Termin ab dem Importtag; frühere Termine kommen mit in die Liste. Gibt es keinen Termin ab dem Importtag, wird nichts angelegt. Als Notiz übernimmt die App die `DESCRIPTION` der Termine (bei der vorliegenden Datei der Bereitstellhinweis „am Abfuhrtag um 7.00 Uhr“), wenn sie bei allen Terminen dieser Art gleich ist; sonst bleibt der Body leer.
+  - **Neue Art:** Datei anlegen, Dateiname aus dem Namen nach F002. K ist der erste Termin ab dem Importtag; frühere Termine kommen mit in die Liste. Gibt es keinen Termin ab dem Importtag, wird nichts angelegt. Der Body bleibt leer: `DESCRIPTION` der Termine wird nicht übernommen (Wunsch 28.10.2026, bei der vorliegenden Datei nur ein allgemeiner Bereitstellhinweis).
   - **Bekannte Art:** neue Daten in `recurrence_dates` einfügen. Daten der Liste, die nach dem Importtag liegen, weder erledigt noch übersprungen sind, im Zeitraum der Importdatei liegen (erster bis letzter Termin aller Arten) und in der Datei fehlen, werden entfernt: Der Termin wurde verlegt. [V, Umsetzung 28.10.2026: zuerst war der Zeitraum je Art geplant; dann bliebe ein verlegter erster Termin doppelt stehen.] Vergangene, erledigte und übersprungene Daten bleiben immer. Fällt dabei das aktuelle K weg, wird der nächste ungelöste Termin ab dem alten K das neue K; die Datumsfelder folgen nach 5.3.
   - **Beendete Art** (`status: done`, gleich ob die Terminliste ausgeschöpft ist oder die Serie von Hand beendet wurde, 5.7): Bringt der Import **neue** Termine ab dem Importtag, wird die Serie fortgesetzt, also `status: open`, `completedDate` entfernen und als K den ersten ungelösten Termin ab dem Importtag setzen, in derselben Revision. Derselbe Import ein zweites Mal öffnet eine von Hand beendete Serie damit nicht wieder. Die Vorschau zeigt das als „wird fortgesetzt“; wer eine Abfuhrart nicht mehr hat, nimmt dort den Haken weg.
   - Derselbe Import ein zweites Mal ändert nichts (No-op). Jede geänderte Datei steht als eigener Eintrag im Verlauf und ist einzeln zurücknehmbar (4.4).
@@ -736,7 +736,6 @@ waste_type: Restabfallbehaelter 120 l
 dateCreated: 2026-10-28T19:10:00+01:00
 dateModified: 2026-10-28T19:10:00+01:00
 ---
-Stellen Sie bitte die Muellsammelgefaesse am Abfuhrtag um 7.00 Uhr … zur Entleerung bereit.
 ```
 
 ## 6. Unterstützter Wiederholungsumfang
