@@ -11,14 +11,9 @@ appId: de.markdoist.aufgaben
 - inputText: "Wegwerfen"
 - tapOn:
     id: capture-submit
-# Die Snackbar „Erfasst im Eingang“ liegt unten über den Menüs; erst danach weiter.
-- extendedWaitUntil:
-    notVisible:
-      id: snackbar
-    timeout: 8000
 - assertVisible:
     id: row-Wegwerfen
-# Aus dem Detail: Es schließt sofort, die Zeile ist weg, danach meldet die Snackbar das Löschen.
+# Aus dem Detail: Es schließt sofort, die Zeile ist weg; das Löschen steht im Verlauf, nicht in einer Meldung.
 - tapOn:
     id: row-Wegwerfen
 - tapOn:
@@ -27,11 +22,8 @@ appId: de.markdoist.aufgaben
     id: delete
 - assertNotVisible:
     id: row-Wegwerfen
-- assertVisible: "Gelöscht"
-- extendedWaitUntil:
-    notVisible:
-      id: snackbar
-    timeout: 8000
+- assertNotVisible:
+    id: snackbar
 - tapOn:
     id: fab-capture
 - tapOn:
@@ -39,11 +31,6 @@ appId: de.markdoist.aufgaben
 - inputText: "Auch weg"
 - tapOn:
     id: capture-submit
-# Die Snackbar „Erfasst im Eingang“ liegt unten über den Menüs; erst danach weiter.
-- extendedWaitUntil:
-    notVisible:
-      id: snackbar
-    timeout: 8000
 # Über das Aktionsblatt (langes Drücken).
 - longPressOn:
     id: row-Auch weg
@@ -51,4 +38,16 @@ appId: de.markdoist.aufgaben
     id: act-delete
 - assertNotVisible:
     id: row-Auch weg
-- assertVisible: "Gelöscht"
+# Rückgängig über den Verlauf im Drei-Punkte-Menü (4.4).
+- tapOn:
+    id: nav-menu
+- tapOn:
+    id: nav-history
+- assertVisible:
+    id: "history-Wegwerfen"
+- tapOn:
+    id: "history-undo-Auch weg"
+- assertVisible: "Zurückgenommen"
+- back
+- assertVisible:
+    id: row-Auch weg

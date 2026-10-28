@@ -1,6 +1,7 @@
 export * from "./storage";
 export * from "./memoryAdapter";
 export * from "./repository";
+export * from "./history";
 export * from "./texts";
 export * from "./store";
 export * from "./markdown";

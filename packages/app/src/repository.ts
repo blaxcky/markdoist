@@ -48,6 +48,14 @@ export interface UndoEntry {
   beforeText?: string;
   /** Name vor der Aktion (rename) */
   beforeName?: string;
+  /** Zeitpunkt der Aktion (ms); ältere Einträge haben keinen */
+  at?: number;
+  /** Titel bzw. Dateiname zur Anzeige im Verlauf */
+  title?: string;
+  /** Referenz vor der Aktion, wenn sie den Ort ändert (trash, restore, rename) */
+  fromRef?: string;
+  /** Zeitpunkt der Rücknahme (ms), nur bei Einträgen in `undone` */
+  undoneAt?: number;
 }
 
 export interface Draft {
@@ -78,6 +86,8 @@ export interface RepoState {
   /** Verzeichnisabfrage fehlgeschlagen: letzter Stand sichtbar, aber schreibgeschützt bis zum nächsten Abgleich (7.1) */
   stale: boolean;
   undo: UndoEntry[];
+  /** zuletzt zurückgenommene Einträge für den Verlauf, neueste zuletzt */
+  undone: UndoEntry[];
   recovery: RecoveryCase[];
   drafts: Draft[];
   /** Kennzahlen des letzten Abgleichs (Anzeige und Leistungsmessung, M7) */
@@ -88,7 +98,9 @@ export interface RepoState {
   scanProgress: { done: number; total: number } | null;
 }
 
-const UNDO_LIMIT = 50;
+export const UNDO_LIMIT = 50;
+/** zurückgenommene Einträge, die der Verlauf noch zeigt */
+const UNDONE_LIMIT = 20;
 const MAX_ATTEMPTS = 3;
 /** Zurückwechseln nach längerer Pause gleicht vollständig ab, sonst schnell (7.1). */
 export const FULL_SCAN_AFTER_MS = 30 * 60_000;
@@ -143,6 +155,7 @@ export class Repository {
   private metas = new Map<string, FileMeta>();
   private trash: FileMeta[] = [];
   private undoStack: UndoEntry[] = [];
+  private undoneLog: UndoEntry[] = [];
   private recovery: RecoveryCase[] = [];
   private drafts: Draft[] = [];
   private unverified = true;
@@ -255,6 +268,7 @@ export class Repository {
       readError: this.readError,
       stale: this.stale,
       undo: [...this.undoStack],
+      undone: [...this.undoneLog],
       recovery: [...this.recovery],
       drafts: [...this.drafts],
       lastScan: this.lastScan,
@@ -310,6 +324,11 @@ export class Repository {
       this.undoStack = JSON.parse((await this.kv.get(this.key("undo"))) ?? "[]");
     } catch {
       this.undoStack = [];
+    }
+    try {
+      this.undoneLog = JSON.parse((await this.kv.get(this.key("undone"))) ?? "[]");
+    } catch {
+      this.undoneLog = [];
     }
     await this.loadDrafts();
     this.recovery = await this.adapter.recover();
@@ -600,6 +619,10 @@ export class Repository {
     for (const e of undo ? this.undoStack : []) {
       if (e.ref === oldRef) {
         e.ref = newRef;
+        changed = true;
+      }
+      if (e.fromRef === oldRef) {
+        e.fromRef = newRef;
         changed = true;
       }
     }
@@ -920,7 +943,7 @@ export class Repository {
       }
       this.dropHidden(ref);
       this.bump(ref);
-      const saved = this.pushUndo({ id: this.newId(), kind: "trash", label: "Gelöscht", ref: res.ref, afterHash: res.hash });
+      const saved = this.pushUndo({ id: this.newId(), kind: "trash", label: "Gelöscht", ref: res.ref, afterHash: res.hash, fromRef: ref, title: titleOf(f) });
       this.trashed(res.ref, res.name);
       this.emit();
       await saved;
@@ -945,7 +968,7 @@ export class Repository {
     const res = await this.adapter.restoreFromTrash(trashRef, read.hash);
     if (res.status !== "ok") return this.failed(res);
     this.setFile(res.ref, res.name, read.text, res.hash, read.invalidUtf8);
-    const saved = this.pushUndo({ id: this.newId(), kind: "restore", label: "Wiederhergestellt", ref: res.ref, afterHash: res.hash });
+    const saved = this.pushUndo({ id: this.newId(), kind: "restore", label: "Wiederhergestellt", ref: res.ref, afterHash: res.hash, fromRef: trashRef });
     this.trash = this.trash.filter((m) => m.ref !== trashRef);
     this.emit();
     await saved;
@@ -1020,7 +1043,7 @@ export class Repository {
       this.setFile(res.ref, res.name, f.text, res.hash);
       // Eigene Umbenennung: Undo-Einträge behalten ihren Ort, das Rückgängigmachen stellt ihn wieder her.
       const drafts = this.remapRef(ref, res.ref, false) ? this.saveDrafts() : null;
-      const saved = this.pushUndo({ id: this.newId(), kind: "rename", label: "Umbenannt", ref: res.ref, afterHash: res.hash, beforeName: f.name });
+      const saved = this.pushUndo({ id: this.newId(), kind: "rename", label: "Umbenannt", ref: res.ref, afterHash: res.hash, beforeName: f.name, fromRef: ref });
       this.emit();
       await drafts;
       await saved;
@@ -1081,13 +1104,23 @@ export class Repository {
   // Undo (4.4)
 
   private async pushUndo(e: UndoEntry) {
-    this.undoStack.push(e);
+    const f = this.files.get(e.ref);
+    this.undoStack.push({ ...e, at: this.clock().now().epochMilliseconds, title: e.title ?? (f ? titleOf(f) : e.ref.replace(/^.*\//, "").replace(/\.md$/i, "")) });
     if (this.undoStack.length > UNDO_LIMIT) this.undoStack.splice(0, this.undoStack.length - UNDO_LIMIT);
     await this.kv.set(this.key("undo"), JSON.stringify(this.undoStack));
   }
 
   undo(): Promise<Outcome> {
-    const run = this.undoChain.catch(() => undefined).then(() => this.doUndo());
+    return this.chainUndo(() => this.undoStack[this.undoStack.length - 1]);
+  }
+
+  /** Einen bestimmten Eintrag aus dem Verlauf zurücknehmen; eine neuere Aktion auf derselben Datei geht vor. */
+  undoEntry(id: string): Promise<Outcome> {
+    return this.chainUndo(() => this.undoStack.find((e) => e.id === id) ?? null);
+  }
+
+  private chainUndo(pick: () => UndoEntry | null | undefined): Promise<Outcome> {
+    const run = this.undoChain.catch(() => undefined).then(() => this.doUndo(pick()));
     this.undoChain = run;
     return run;
   }
@@ -1098,9 +1131,10 @@ export class Repository {
    * Rücknahme eingereiht wurden und noch warten, werden verworfen (AK-15); später eingereihte warten
    * auf die Rücknahme und laufen danach auf dem zurückgenommenen Stand.
    */
-  private async doUndo(): Promise<Outcome> {
-    const e = this.undoStack[this.undoStack.length - 1];
+  private async doUndo(e: UndoEntry | null | undefined): Promise<Outcome> {
+    if (e === null) return { status: "blocked", message: "Rückgängig nicht möglich: nicht mehr im Verlauf" };
     if (!e) return { status: "noop" };
+    if (newerOnSameFile(this.undoStack, e)) return { status: "blocked", message: "Rückgängig nicht möglich: erst die neuere Aktion zurücknehmen" };
     const ref = e.ref;
     const block = this.writeBlock(ref);
     if (block) return block;
@@ -1145,7 +1179,10 @@ export class Repository {
       this.touch(res.ref);
       const i = this.undoStack.indexOf(e);
       if (i >= 0) this.undoStack.splice(i, 1);
+      this.undoneLog.push({ ...e, undoneAt: this.clock().now().epochMilliseconds });
+      if (this.undoneLog.length > UNDONE_LIMIT) this.undoneLog.splice(0, this.undoneLog.length - UNDONE_LIMIT);
       await this.kv.set(this.key("undo"), JSON.stringify(this.undoStack));
+      await this.kv.set(this.key("undone"), JSON.stringify(this.undoneLog));
       await this.scan({ full: false });
       return { status: "ok", message: `Rückgängig: ${e.label}` };
     } finally {
@@ -1394,3 +1431,15 @@ export function errMessage(e: unknown): string {
 }
 
 export { freeName };
+
+/** Titel einer Aufgabe oder Liste, sonst der Dateiname ohne Endung (Verlauf). */
+function titleOf(f: IndexedFile): string {
+  const title = f.kind === "task" ? f.fields.title.trim() : "";
+  return title || f.name.replace(/\.md$/i, "");
+}
+
+/** Eine spätere Aktion im Undo-Journal betrifft dieselbe Datei; sie muss zuerst zurückgenommen werden. */
+export function newerOnSameFile(stack: readonly UndoEntry[], e: UndoEntry): boolean {
+  const i = stack.indexOf(e);
+  return i >= 0 && stack.slice(i + 1).some((n) => n.ref === e.ref || n.fromRef === e.ref);
+}

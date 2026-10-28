@@ -11,11 +11,6 @@ appId: de.markdoist.aufgaben
     id: field-priority
 - tapOn:
     id: priority-high
-# Die Snackbar „Priorität geändert“ liegt unten über dem Editor; erst danach ins Textfeld tippen.
-- extendedWaitUntil:
-    notVisible:
-      id: snackbar
-    timeout: 8000
 - scrollUntilVisible:
     element:
       id: editor

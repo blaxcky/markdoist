@@ -11,6 +11,7 @@ export const T = {
     done: "Erledigt",
     problems: "Probleme",
     trash: "Papierkorb",
+    history: "Verlauf",
     search: "Suche",
     lists: "Listen",
   },

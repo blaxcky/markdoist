@@ -6,14 +6,23 @@ appId: de.markdoist.aufgaben
     id: tab-inbox
 - tapOn:
     id: "check-Zahnarzttermin vereinbaren"
-- assertVisible:
-    id: snackbar
-- assertNotVisible:
-    id: field-due
 # Zeile blendet aus und klappt ein; erst danach Rückgängig, sonst wäre der Titel ohnehin noch sichtbar.
 - extendedWaitUntil:
     notVisible: "Zahnarzttermin vereinbaren"
     timeout: 3000
+- assertNotVisible:
+    id: field-due
+- assertNotVisible:
+    id: snackbar
+# Rückgängig über den Verlauf im Drei-Punkte-Menü (4.4).
 - tapOn:
-    id: snackbar-undo
+    id: nav-menu
+- tapOn:
+    id: nav-history
+- assertVisible:
+    id: "history-Zahnarzttermin vereinbaren"
+- tapOn:
+    id: "history-undo-Zahnarzttermin vereinbaren"
+- assertVisible: "Zurückgenommen"
+- back
 - assertVisible: "Zahnarzttermin vereinbaren"

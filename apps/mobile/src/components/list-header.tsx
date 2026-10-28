@@ -57,6 +57,7 @@ export function ListHeader({ title, subtitle, filter = true }: { title: string; 
           filter && { label: "Filter und Sortierung", onPress: () => f.setOpen(true) },
           { label: T.actions.rescan, onPress: () => void repo.scan({ full: true }) },
           { label: problems > 0 ? `${T.views.problems} (${problems})` : T.views.problems, onPress: () => nav.navigate("Problems") },
+          { label: T.views.history, onPress: () => nav.navigate("History"), testID: "nav-history" },
           { label: T.views.trash, onPress: () => nav.navigate("Trash") },
           { label: "Einstellungen", onPress: () => nav.navigate("Settings"), testID: "nav-settings" },
         ]}

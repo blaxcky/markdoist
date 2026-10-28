@@ -485,9 +485,10 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (ge
 - Ein bereits erfüllter Zielzustand ist ein No-op, auch bei Zeitstempeln. Die Regeln für Wiederöffnen einer Serie stehen in 5.4.
 - **Löschen:** Die Datei wandert in den Papierkorb `.todo-trash/` [F, F004]. „Wiederherstellen“ verschiebt sie zurück; bei Namenskollision wird eine Zahl angehängt.
 - **Undo:**
-  - Aufgaben-Undo bzw. ein Snackbar-Knopf „Rückgängig“ stellt den exakten vorherigen Dateiinhalt und bei Dateioperationen den vorherigen Ort/Namen wieder her. Rücknahme einer Neuanlage legt die Datei in den Papierkorb; sie wird nicht unwiederbringlich gelöscht. „Papierkorb leeren“ ist ausdrücklich endgültig und hat kein Undo.
+  - Aufgaben-Undo bzw. „Rückgängig“ im Verlauf stellt den exakten vorherigen Dateiinhalt und bei Dateioperationen den vorherigen Ort/Namen wieder her. Rücknahme einer Neuanlage legt die Datei in den Papierkorb; sie wird nicht unwiederbringlich gelöscht. „Papierkorb leeren“ ist ausdrücklich endgültig und hat kein Undo.
   - Bedingung: Die Datei ist seitdem unverändert (Hash-Vergleich).
   - Das Undo-Journal ist gerätelokal, umfasst die letzten 50 Aktionen und überdauert einen Neustart.
+  - **Verlauf** (Entscheidung 28.10.2026): eigener Punkt im Drei-Punkte-Menü (Android) bzw. in der Seitenleiste (Desktop), statt eines „Rückgängig“-Knopfs in der Meldung. Er zeigt die Einträge des Undo-Journals, neueste zuerst und nach Tagen gruppiert, je mit Art der Aktion, Uhrzeit und Titel; jeder Eintrag lässt sich einzeln zurücknehmen. Gesperrt mit Hinweis sind Einträge, auf deren Datei eine neuere Aktion im Journal folgt („Erst die neuere Aktion zurücknehmen“), deren Datei sich seitdem anders geändert hat oder die es nicht mehr gibt. Zurückgenommene Einträge bleiben als „Zurückgenommen“ sichtbar (höchstens die letzten 20). Desktop behält zusätzlich Ctrl+Z und den Knopf in der Kopfleiste für die letzte Aktion.
 - **Detailansicht:** Formularfelder für alle Kernfelder, Markdown-Editor und Vorschau.
   - Textänderungen werden automatisch gespeichert, 1,5 s nach der letzten Eingabe und beim Verlassen.
   - Ein gerätelokaler Entwurf wird bereits während der Eingabe fortlaufend gesichert, unabhängig vom verzögerten Schreiben in die Markdown-Datei (7.6). „Gespeichert“ wird erst nach erfolgreichem Dateischreiben angezeigt.
@@ -495,14 +496,15 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (ge
 - **Status `in-progress`:** wird bei einer Serie beim Fortschreiben auf `open` zurückgesetzt.
 - **Rückmeldung beim Abhaken** (Desktop und Android, gemeinsamer Ablauf `completionFlow` in `packages/app`):
   - Der Haken zeigt sofort den Zielzustand mit kurzem Aufspringen; das Schreiben startet im selben Moment.
-  - Die Liste bleibt stehen, bis die Zeile fertig ist: Haken mindestens 250 ms halten, Zeile 150 ms ausblenden, Lücke 220 ms einklappen, die Zeilen darunter rücken nach. Die Snackbar erscheint mit dem Ausblenden.
+  - Die Liste bleibt stehen, bis die Zeile fertig ist: Haken mindestens 250 ms halten, Zeile 150 ms ausblenden, Lücke 220 ms einklappen, die Zeilen darunter rücken nach.
   - Bleibt die Aufgabe nach dem Schreiben in der Ansicht (Serie in Alle oder Eingang), geht nur der Haken zurück. Schlägt das Schreiben fehl, springt die Zeile zurück und die Fehlermeldung erscheint (7.6).
   - Bei reduzierter Bewegung (System-Einstellung) entfallen Halten, Aufspringen und Einklappen.
 - **Rückmeldung beim Anlegen und Löschen** (Desktop und Android, im `Repository`; Entscheidung 28.10.2026):
   - Eine neue Aufgabe oder Liste steht sofort in der Ansicht, das Erfassungsblatt schließt bzw. die Liste oder das Detail öffnet sich sofort; geschrieben wird im Hintergrund. Aktionen auf die neue Aufgabe warten, bis die Datei geschrieben ist.
   - Gelöschte Aufgaben und Listen verschwinden sofort aus allen Ansichten, das Detail schließt sofort; das Verschieben in den Papierkorb läuft im Hintergrund.
-  - Snackbar und „Rückgängig“ erscheinen nach erfolgreichem Schreiben. Scheitert es, springt der Stand zurück und die Fehlermeldung erscheint; eine gescheiterte Erfassung öffnet sich erneut mit Titel und Beschreibung (7.6).
+  - Nach erfolgreichem Schreiben steht die Aktion im Verlauf; eine Meldung erscheint nicht. Scheitert es, springt der Stand zurück und die Fehlermeldung erscheint; eine gescheiterte Erfassung öffnet sich erneut mit Titel und Beschreibung (7.6).
   - Ein Abgleich während eines solchen Vorgangs lässt die betroffene Datei unangetastet, damit nichts kurz zurückspringt.
+- **Meldungen:** Aktionen, die im Verlauf landen, zeigen keine Meldung, außer die Aktion liefert einen Hinweis (z. B. zum Serienende). Fehler, Konflikte und endgültige Aktionen ohne Undo (z. B. „Papierkorb leeren“) melden sich weiter.
 - **Lage der Meldung:** Android: Die Snackbar steht über dem Plus-Button und der unteren Leiste, auf Bildschirmen ohne Plus-Button knapp über dem unteren Rand; eine neue Meldung blendet über die alte. Desktop: unten mittig, mit Ein- und Ausblenden.
 
 ### 4.5 Bedienung [V]

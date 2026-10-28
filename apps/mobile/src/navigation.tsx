@@ -18,6 +18,7 @@ import { NewListScreen } from "./screens/new-list-screen";
 import { SearchScreen } from "./screens/search-screen";
 import { ProblemsScreen } from "./screens/problems-screen";
 import { TrashScreen } from "./screens/trash-screen";
+import { HistoryScreen } from "./screens/history-screen";
 import { SettingsScreen } from "./screens/settings-screen";
 import { RecurrenceScreen } from "./screens/recurrence-screen";
 import { SeriesHistoryScreen } from "./screens/series-history-screen";
@@ -38,6 +39,7 @@ export type RootStack = {
   Search: undefined;
   Problems: undefined;
   Trash: undefined;
+  History: undefined;
   Settings: undefined;
   Recurrence: { ref: string; continueSeries?: boolean };
   SeriesHistory: { ref: string };
@@ -166,6 +168,7 @@ function RootStackNavigator() {
       <Stack.Screen name="Search" component={SearchScreen} options={{ title: T.views.search }} />
       <Stack.Screen name="Problems" component={ProblemsScreen} options={{ title: T.views.problems }} />
       <Stack.Screen name="Trash" component={TrashScreen} options={{ title: T.views.trash }} />
+      <Stack.Screen name="History" component={HistoryScreen} options={{ title: T.views.history }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Einstellungen" }} />
       <Stack.Screen name="Recurrence" component={RecurrenceScreen} options={{ title: "Wiederholung" }} />
       <Stack.Screen name="SeriesHistory" component={SeriesHistoryScreen} options={{ title: "Verlauf" }} />

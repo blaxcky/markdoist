@@ -165,6 +165,10 @@ Ein vollständiger Abgleich von PLAN1.md (Abschnitte 1, 3–7, 9) mit dem Code h
 - Android (Emulator `Markdoist_API_36`, Release x86_64, Debug-Keystore des Projekts): **15 Maestro-Flows und 20 Dateiprüfungen grün**. Der Bundle-Task lief nach den Kernänderungen neu (Gradle-Inputs aus dem Config-Plugin); das Bundle im APK enthält den neuen Patch-Haken und die neue Meldung zur Datumsgrenze.
 - Gefunden und behoben: Nach längerer Ruhe war der Emulator-Bildschirm aus, Flow 00 fand daher kein Element. `run.sh` weckt und entsperrt das Gerät jetzt vor den Flows und hält es wach. Hermes speichert Texte mit Umlauten als UTF-16; eine Suche im Bundle nach solchen Meldungen braucht diese Kodierung.
 
+**Verlauf statt Rückgängig in der Meldung (28.10.2026):** PLAN1 4.4. Rückgängig geht über den Verlauf (Drei-Punkte-Menü bzw. Seitenleiste), jede Aktion einzeln; Aktionen mit Undo zeigen keine Meldung mehr.
+- `pnpm test` mit 5.528 Tests grün (neu: `packages/app/test/history.test.ts`), `pnpm typecheck` und `pnpm lint` grün, `pnpm e2e:desktop` 31 Playwright-Tests grün.
+- Android (Emulator `Markdoist_API_36`, Release x86_64, Debug-Keystore): alle Maestro-Flows grün. 12, 30 und 31 nehmen jetzt über den Verlauf zurück, 42 prüft die Ausnahme am Termin statt an der Meldung. Die Dateiprüfungen erwarten „Auch weg.md“ wieder im Ordner (10 Dateien); gegen den Ordner nach dem Lauf geprüft.
+
 **[V]-Abweichungen:**
 - Ausnahmen werden nur bei Kalenderserien angeboten. Eine Serie „ab Erledigung“ hat kein festes künftiges Raster; ihr aktuelles Vorkommen wird mit „Überspringen“ bearbeitet.
 - Texte: Die gemeinsamen Begriffe (Ansichten, Felder, Aktionen, Speicherzustände, Vorschau) stehen in `packages/app/src/texts.ts`; einzelne bildschirmspezifische Beschriftungen stehen weiter im jeweiligen Oberflächencode.

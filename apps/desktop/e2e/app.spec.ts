@@ -93,7 +93,9 @@ test("Erfassung aus Heute landet im Eingang ohne Termin (AK-01)", async () => {
   await page.keyboard.press("n");
   await page.getByTestId("capture-title").fill("Steuer: Belege sammeln?");
   await page.getByTestId("capture-submit").click();
-  await expect(page.getByTestId("toast")).toContainText("Eingang");
+  // Neuanlage landet im Verlauf, nicht in einer Meldung (4.4).
+  await expect.poll(() => file("Steuer Belege sammeln.md").catch(() => "")).toContain("inbox: true");
+  await expect(page.getByTestId("toast")).toHaveCount(0);
   const text = await file("Steuer Belege sammeln.md");
   expect(text).toContain("inbox: true");
   expect(text).toContain("title: \"Steuer: Belege sammeln?\"");
@@ -123,15 +125,21 @@ test("Erledigen per Leertaste und Aufgaben-Undo stellt exakt wieder her", async 
   await expect.poll(() => file("Zahnarzt.md")).toBe(before);
 });
 
-test("Abhaken per Klick: Haken sofort, Zeile blendet aus, Meldung mit Rückgängig", async () => {
+test("Abhaken per Klick: Haken sofort, Zeile blendet aus, Rückgängig über den Verlauf", async () => {
   const r = row("Zahnarzttermin vereinbaren");
   const check = r.getByRole("checkbox");
   await check.click();
   await expect(check).toHaveAttribute("aria-checked", "true");
   await expect(r).toHaveCount(0);
-  await expect(page.getByTestId("toast-undo")).toBeVisible();
-  expect(await file("Zahnarzt.md")).toContain("status: done");
-  await page.getByTestId("toast-undo").click();
+  await expect.poll(() => file("Zahnarzt.md")).toContain("status: done");
+  await expect(page.getByTestId("toast")).toHaveCount(0);
+  await page.getByTestId("nav-history").click();
+  const h = page.locator('[data-testid=history-row][data-title="Zahnarzttermin vereinbaren"]');
+  await expect(h).toContainText("Erledigt");
+  await h.getByTestId("history-undo").click();
+  await expect(h).toContainText("Zurückgenommen");
+  await expect(h.getByTestId("history-undo")).toHaveCount(0);
+  await page.getByTestId("nav-today").click();
   await expect(row("Zahnarzttermin vereinbaren")).toBeVisible();
   await expect(row("Zahnarzttermin vereinbaren").getByRole("checkbox")).toHaveAttribute("aria-checked", "false");
 });
@@ -429,12 +437,16 @@ test("Papierkorb leeren ist endgültig: kein „Rückgängig“ (4.4)", async ()
   await row("Zahnarzttermin vereinbaren").click();
   await page.getByTestId("detail-more").click();
   await page.getByTestId("delete").click();
-  await expect(page.getByTestId("toast-undo")).toBeVisible();
+  await page.getByTestId("nav-history").click();
+  const h = page.locator('[data-testid=history-row][data-title="Zahnarzttermin vereinbaren"]');
+  await expect(h.getByTestId("history-undo")).toBeVisible();
   await page.getByTestId("nav-trash").click();
   await page.getByTestId("empty-trash").click();
   await page.getByTestId("confirm-empty").click();
   await expect.poll(async () => (await readdir(join(folder, ".todo-trash"))).length).toBe(0);
-  await expect(page.getByTestId("toast-undo")).toHaveCount(0);
+  await page.getByTestId("nav-history").click();
+  await expect(h).toContainText("Datei nicht mehr vorhanden");
+  await expect(h.getByTestId("history-undo")).toHaveCount(0);
 });
 
 test("Menü einer anderen Aufgabe: Leertaste trifft die Menüaufgabe, nicht die Auswahl (R9)", async () => {

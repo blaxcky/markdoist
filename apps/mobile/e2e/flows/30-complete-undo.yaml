@@ -1,4 +1,4 @@
-# Erledigen per Wischen nach rechts und Rückgängig über die Snackbar.
+# Erledigen per Wischen nach rechts und Rückgängig über den Verlauf.
 appId: de.markdoist.aufgaben
 ---
 - runFlow: ../launch.yaml
@@ -12,7 +12,7 @@ appId: de.markdoist.aufgaben
 - waitForAnimationToEnd:
     timeout: 3000
 # Im Gesamtlauf kommt die erste Wischgeste nach dem Start teils nicht an (auch vor 28.10.2026 reproduzierbar):
-# dann erneut wischen. Eine angekommene Geste zeigt die Snackbar, die Wiederholung entfällt.
+# dann erneut wischen. Eine angekommene Geste blendet die Zeile aus, die Wiederholung entfällt.
 - retry:
     maxRetries: 2
     commands:
@@ -21,12 +21,21 @@ appId: de.markdoist.aufgaben
             id: "row-Zahnarzttermin vereinbaren"
           direction: RIGHT
           duration: 250
-      - assertVisible:
-          id: snackbar
-# Zeile blendet aus und klappt ein; erst danach Rückgängig, sonst wäre der Titel ohnehin noch sichtbar.
-- extendedWaitUntil:
-    notVisible: "Zahnarzttermin vereinbaren"
-    timeout: 3000
+      - extendedWaitUntil:
+          notVisible: "Zahnarzttermin vereinbaren"
+          timeout: 3000
+# Keine Meldung mehr: Erledigen landet im Verlauf.
+- assertNotVisible:
+    id: snackbar
+# Rückgängig über den Verlauf im Drei-Punkte-Menü (4.4).
 - tapOn:
-    id: snackbar-undo
+    id: nav-menu
+- tapOn:
+    id: nav-history
+- assertVisible:
+    id: "history-Zahnarzttermin vereinbaren"
+- tapOn:
+    id: "history-undo-Zahnarzttermin vereinbaren"
+- assertVisible: "Zurückgenommen"
+- back
 - assertVisible: "Zahnarzttermin vereinbaren"

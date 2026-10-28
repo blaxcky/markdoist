@@ -23,6 +23,7 @@ import { Detail } from "./components/Detail";
 import { Capture } from "./components/Capture";
 import { Problems } from "./components/Problems";
 import { Trash } from "./components/Trash";
+import { History } from "./components/History";
 import { ListRow, Lists } from "./components/Lists";
 import { Menu, MenuItem } from "./components/Menu";
 import { useDialog } from "./dialog";
@@ -50,13 +51,12 @@ import {
   IconWarning,
 } from "./components/Icons";
 
-type ViewName = "inbox" | "today" | "all" | "done" | "lists" | "problems" | "trash";
+type ViewName = "inbox" | "today" | "all" | "done" | "lists" | "problems" | "trash" | "history";
 type FocusField = "due" | "scheduled" | "priority" | "title" | "note";
 
 interface Toast {
   text: string;
   error?: boolean;
-  undo?: boolean;
   id: number;
   /** blendet gerade aus */
   out?: boolean;
@@ -158,8 +158,10 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   }, []);
 
   const notify = useCallback((o: Outcome, label?: string) => {
-    // „Rückgängig“ nur, wenn die Aktion einen Undo-Eintrag angelegt hat; „Papierkorb leeren“ u. a. sind endgültig (4.4).
-    if (o.status === "ok") setToast({ text: o.message ?? label ?? "Gespeichert", undo: o.undoable === true, id: Date.now() });
+    // Was im Verlauf landet, braucht keine Bestätigung; ein Hinweis der Aktion erscheint trotzdem (4.4).
+    if (o.status === "ok") {
+      if (o.message || o.undoable !== true) setToast({ text: o.message ?? label ?? "Gespeichert", id: Date.now() });
+    }
     else if (o.status === "blocked" || o.status === "error" || o.status === "conflict")
       setToast({ text: o.message, error: true, id: Date.now() });
   }, []);
@@ -383,7 +385,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const viewTitle = query.trim() ? `${T.views.search}: „${query.trim()}“` : T.views[view];
   const activeDisplay = Object.keys(filter).length + (sort !== "default" ? 1 : 0);
   const listsPage = view === "lists" && !query;
-  const listView = !((view === "problems" || view === "trash" || view === "lists") && !query);
+  const listView = !((view === "problems" || view === "trash" || view === "history" || view === "lists") && !query);
 
   const nav = (name: ViewName, label: string, icon: React.ReactNode, count?: number, testid?: string) => (
     <button
@@ -515,6 +517,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
             {folderName}
           </div>
           {problems > 0 && nav("problems", T.views.problems, <IconWarning size={24} />, problems)}
+          {nav("history", T.views.history, <IconUndo size={24} />)}
           {nav("trash", T.views.trash, <IconTrash size={24} />, state.trash.length)}
           <div className="spacer" />
           <button className="help" onClick={() => setHelp(true)} data-testid="help">
@@ -698,6 +701,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
               <Problems repo={repo} state={state} onSelect={(r) => openTask(r)} onOutcome={notify} />
             ) : view === "trash" && !query ? (
               <Trash repo={repo} state={state} onOutcome={notify} />
+            ) : view === "history" && !query ? (
+              <History repo={repo} state={state} onOutcome={notify} />
             ) : (
               <div className="list" role="listbox" aria-label="Aufgaben" data-testid="list">
                 {shown.map((s, i) =>
@@ -815,11 +820,6 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
       {toast && (
         <div key={toast.id} className={`toast${toast.error ? " error" : ""}${toast.out ? " out" : ""}`} role="status" data-testid="toast">
           <span>{toast.text}</span>
-          {toast.undo && state.undo.length > 0 && (
-            <button onClick={() => (setToast(null), doUndo())} data-testid="toast-undo">
-              {T.actions.undo}
-            </button>
-          )}
         </div>
       )}
     </div>

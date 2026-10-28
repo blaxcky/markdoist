@@ -82,13 +82,13 @@ if [ $fail = 0 ]; then
   if adb shell "cat '$DIR/Einkauf.md'" | tr -d '\r' | grep -A1 -xF -- "- [ ] Brot" | grep -qxF -- "- [ ] Milch"; then
     echo "OK   Einkauf.md: Brot vor Milch, beide offen"
   else echo "FEHL Einkauf.md: Reihenfolge oder Haken falsch"; fail=1; fi
-  # Löschen (4.4): beide Aufgaben aus Flow 12 liegen im Papierkorb.
-  for f in "Wegwerfen.md" "Auch weg.md"; do
+  # Löschen (4.4): „Wegwerfen“ aus Flow 12 liegt im Papierkorb, „Auch weg“ hat der Verlauf zurückgeholt.
+  for f in "Wegwerfen.md"; do
     if adb shell ls "$DIR/.todo-trash" | tr -d '\r' | grep -qxF -- "$f"; then echo "OK   im Papierkorb: $f"; else echo "FEHL nicht im Papierkorb: $f"; fail=1; fi
   done
-  # AK-12: Serienaktionen legen keine Dateien an – 6 Seed-Dateien + 2 Erfassungen + 1 Liste.
+  # AK-12: Serienaktionen legen keine Dateien an – 6 Seed-Dateien + 2 Erfassungen + 1 Liste + „Auch weg“.
   n=$(adb shell ls "$DIR" | grep -c '\.md' || true)
-  if [ "$n" = 9 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 9)"; fail=1; fi
+  if [ "$n" = 10 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 10)"; fail=1; fi
   adb shell ls -a "$DIR" | grep -q 'todo-tmp' && { echo "FEHL Temp-Datei übrig"; fail=1; } || true
 fi
 exit $fail

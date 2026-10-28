@@ -10,5 +10,8 @@ appId: de.markdoist.aufgaben
       id: "exception-${SKIP_KEY}"
 - tapOn:
     id: "exception-${SKIP_KEY}"
-- assertVisible: "Termin wird übersprungen"
+# Keine Meldung mehr (Verlauf, 4.4): der Termin selbst zeigt die Ausnahme.
+- assertVisible:
+    id: "exception-${SKIP_KEY}"
+    text: ".*wird übersprungen, antippen zum Zurücknehmen"
 - back
