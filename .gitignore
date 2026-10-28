@@ -21,3 +21,5 @@ test-results/
 playwright-report/
 .env
 .env.*
+# Müllabfuhr-Kalender des Nutzers (enthält die Wohnadresse)
+abfuhrtermine/

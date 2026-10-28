@@ -6,6 +6,8 @@
 
 M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10.2026 wurde die Umsetzung vollständig gegen diese Spezifikation abgeglichen; die gefundenen Lücken (Vorschau vor Serienaktionen, Ausnahmen übernehmen, Robustheit nach 7.1/7.3/7.6, fehlende AK-Tests u. a.) sind geschlossen. Nachweise, Messwerte und alle [V]-Abweichungen stehen in [`docs/ABNAHME.md`](docs/ABNAHME.md), das Dateiformat in [`docs/DATEIFORMAT.md`](docs/DATEIFORMAT.md). Repository: https://github.com/blaxcky/markdoist (öffentlich, keine Lizenz).
 
+**Geplant am 28.10.2026, noch nicht umgesetzt:** Müllabfuhr mit ICS-Import (4.7), Serien mit fester Terminliste (5.7) und die kompaktere untere Leiste am Handy (4.5). Umsetzung als M9 (Abschnitt 8).
+
 ## Auftrag an die Umsetzung
 
 **Die Umsetzung ist beauftragt.** Dieses Dokument ist die verbindliche Spezifikation. Vorgehen:
@@ -57,9 +59,17 @@ Du willst eine persönliche, lokal arbeitende Todo-App mit einer Markdown-Datei 
 - Einfache Abhaklisten ohne Termine (Einkauf, Packliste, Gesprächsthemen) ergänzen die Aufgaben. Sie erscheinen in keiner Aufgabenansicht.
 - Abgehakte Einträge wandern in einen einklappbaren Bereich „Abgehakt (n)“ am Listenende.
 - Eine nicht mehr gebrauchte Liste wird gelöscht (Papierkorb, Undo); es gibt kein „Abschließen“.
-- Android: fünfter Reiter „Listen“; kein Eintrag „Neue Liste“ in der App-Verknüpfung.
+- Android: fünfter Reiter „Listen“ (am 28.10.2026 ersetzt durch „⋯ Mehr → Listen“, siehe unten); kein Eintrag „Neue Liste“ in der App-Verknüpfung.
 - Sammelaktionen: „Abgehakte entfernen“, „Alle Haken zurücksetzen“, Reihenfolge per Ziehen. Kein Duplizieren.
 - Übersicht: zuletzt geänderte Liste zuerst.
+
+**Entscheidungen aus `.fragen/2026-10-28-1849-muellabfuhr.md` (28.10.2026, neue Funktion „Müllabfuhr“, Abschnitte 4.5, 4.7, 5.7):**
+- Die Abholtermine der Müllabfuhr kommen einmal im Jahr als ICS-Datei und werden importiert. Je Abfuhrart entsteht **eine Serie mit fester Terminliste**, keine Einzelaufgabe je Abholtag. Frist am Abholtag, geplant eine Woche vorher.
+- Ein verstrichener, nicht abgehakter Abholtermin bleibt überfällig, bis er abgehakt oder übersprungen wird, wie jede Aufgabe (5.2). Je Abfuhrart steht so höchstens ein überfälliger Eintrag.
+- Import nur am Desktop. Am Handy werden die Termine angezeigt und erledigt.
+- **Untere Leiste am Handy: Eingang, Heute, Alle, ⋯ Mehr.** „Mehr“ öffnet ein Blatt mit den drei Einträgen Erledigt, Listen und Müllabfuhr; jeder öffnet seine Übersicht. **Das ersetzt die Entscheidung vom 26.10.2026 „fünfter Reiter Listen“.**
+- Das ⋮-Menü der Kopfzeile bleibt unverändert (Neu einlesen, Verlauf, Probleme, Papierkorb, Einstellungen).
+- Vorlage ist die vom Nutzer bereitgestellte ICS-Datei im Ordner `abfuhrtermine/`. Sie enthält die Wohnadresse und gehört deshalb nicht ins öffentliche Repository (`.gitignore`); Tests verwenden eine anonymisierte Nachbildung.
 
 **Entscheidungen aus `.fragen/2026-10-23-2320-wiederholungen.md` (23.10.2026, Testrunde Wiederholungen, Bericht `docs/TEST-WIEDERHOLUNGEN.md`):**
 - „Ab Erledigung“ mit Regel ohne BY-Teile rechnet als fester Abstand ab dem Erledigungstag mit Klemmen ans Monatsende (31.10. + 1 Monat = 30.11.); rrule-Verhalten gilt nur noch für Completion-Regeln mit BY-Teilen (5.2).
@@ -269,9 +279,10 @@ Nicht genutzt: alle `eas-*`-Skills (kein EAS Build, Update, Hosting, Workflows o
 | `due` | Datum `YYYY-MM-DD` oder lokale Datumszeit `YYYY-MM-DDTHH:mm` | optional | Frist | keine Frist. Ungültiger Wert: wird ignoriert, Hinweis, bleibt unverändert. | [F] |
 | `scheduled` | wie `due` | optional | geplanter Bearbeitungstag | wie `due` | [F] |
 | `recurrence` | RRULE-Wert nach RFC 5545 **ohne** DTSTART, z. B. `FREQ=WEEKLY;BYDAY=MO` | optional | Regel; vorhanden = Serie | keine Serie. Präfix `RRULE:` und die TaskNotes-Form `DTSTART:…;FREQ=…` werden gelesen und nicht umgeschrieben. | [F]-Feld, Form [V] |
+| `recurrence_dates` | Liste von Daten `YYYY-MM-DD` | statt `recurrence` bei einer Serie mit fester Terminliste (5.7) | die Termine der Serie; vorhanden = Serie | keine Serie. Zusammen mit `recurrence`, mit Uhrzeiten oder ungültigen Einträgen: Probleme, Serienaktionen gesperrt, Rohwert bleibt. | [V], Entscheidung 28.10.2026 |
 | `recurrence_revision` | ULID-String | bei neu angelegter/geänderter Serie | Identität des aktiven Serienabschnitts; neue Regel oder neue Begrenzung = neue Revision | temporäre Alt-Revisionskennung; wird erst bei einer ausdrücklichen Serienaktion materialisiert | [V] |
 | `recurrence_archive` | Liste abgeschlossener Abschnitts-Snapshots, siehe 5.1 | optional | frühere Regeln mit ihrer Historie; zählen nicht im aktiven Abschnitt | leer | [V], erhält die Historie nach [F] |
-| `recurrence_start` | Datum oder lokale Datumszeit | bei Serie | Beginn des Regelrasters (DTSTART). Eine Uhrzeit hier ist die feste Uhrzeit jedes Vorkommens (F005, 5.1). | DTSTART aus `recurrence` → `recurrence_instance` → Datum des Bezugsfelds → Datum aus `dateCreated` | [V] |
+| `recurrence_start` | Datum oder lokale Datumszeit | bei Serie | Beginn des Regelrasters (DTSTART). Eine Uhrzeit hier ist die feste Uhrzeit jedes Vorkommens (F005, 5.1). | DTSTART aus `recurrence` → `recurrence_instance` → Datum des Bezugsfelds → Datum aus `dateCreated`; bei fester Terminliste der erste Listentermin (5.7) | [V] |
 | `recurrence_anchor` | `calendar` \| `completion` | bei Serie | Wiederholungsart: Kalenderrhythmus oder ab Erledigung | `calendar` | [F]-Konzept, Werte [V] |
 | `recurrence_field` | `due` \| `scheduled` | bei Serie | welches Aufgabenfeld die Serie fortschreibt | `due`, wenn `due` gesetzt ist, sonst `scheduled` | [V] |
 | `recurrence_offset_days` | Ganzzahl | optional | Abstand des **anderen** Datumsfelds zum Vorkommen in Kalendertagen (negativ = davor) | fehlt es und sind beide Felder gesetzt, wird der Abstand beim Fortschreiben aus den aktuellen Werten abgeleitet (5.3) | [V] |
@@ -279,6 +290,7 @@ Nicht genutzt: alle `eas-*`-Skills (kein EAS Build, Update, Hosting, Workflows o
 | `complete_instances` | Liste von Vorkommensschlüsseln | optional | erledigte Vorkommen des aktiven Abschnitts | leer. Reihenfolge und Duplikate haben keine Bedeutung. | [F]-Prinzip |
 | `skipped_instances` | Liste von Vorkommensschlüsseln | optional | übersprungene Vorkommen. Zukünftige Einträge wirken als Ausnahmen. | leer | [F]-Prinzip |
 | `last_completed_at` | Zeitstempel mit Offset | optional | tatsächlicher Zeitpunkt der letzten Vorkommenserledigung im aktiven Abschnitt; wird nur bei neuer Erledigung gesetzt | fehlt. Erster Termin einer neuen Serie = `recurrence_start`; bei inkonsistenter Historie keine erfundene Erledigungsbasis (5.2). | [F] (in deiner Ausgangsbeschreibung vorgeschlagen; bleibt trotz F006, siehe 5.5) |
+| `waste_type` | String | bei Müllabfuhr-Serien | Abfuhrart so, wie sie im Titel der ICS-Termine steht (Leerraum zusammengefasst), z. B. `Restabfallbehaelter 120 l`. Kennzeichnet die Serie für die Müllabfuhr-Ansicht und ist der Schlüssel für den nächsten Import (4.7). | keine Müllabfuhr-Serie | [V], Entscheidung 28.10.2026 |
 | `dateCreated` | Zeitstempel mit Offset | geschrieben immer | Erstellzeitpunkt | unbekannt. Sortierung fällt auf die Datei-mtime zurück. | [V] |
 | `dateModified` | Zeitstempel mit Offset | geschrieben immer | letzte Änderung **durch die App** | unbekannt | [V] |
 | `completedDate` | Zeitstempel mit Offset | bei `done` | Abschluss einer Einzelaufgabe bzw. Ende einer Serie | `dateModified`, sonst mtime | [V] |
@@ -286,7 +298,7 @@ Nicht genutzt: alle `eas-*`-Skills (kein EAS Build, Update, Hosting, Workflows o
 
 Die Feldnamen folgen deinen Vorschlägen. Dadurch mischen sie camelCase (`dateCreated`) und snake_case (`complete_instances`) [V].
 
-**Formatversion und ältere Leser [V]:** Neue Dateien erhalten `format_version: 1`. Versionslose Dateien bleiben beim Lesen und bei unabhängigen Feldänderungen unverändert; eine ausdrückliche Serienaktion übernimmt sie nach validierter Vorschau in Version 1. Eine höhere als die unterstützte Formatversion oder eine unbekannte Struktur in den Serienfeldern führt zum schreibgeschützten Anzeigen unter Probleme, auch für Body-Änderungen. Kein automatisches Downgrade. Künftige semantische Erweiterungen, etwa mehrere Vorkommen pro Tag, benötigen eine neue Formatversion und Migrationstests; sie sind nicht pauschal „ohne Formatbruch“. Dateien werden als valides UTF-8 verarbeitet; bei ungültiger Kodierung kein Schreiben. Die spätere Formatdokumentation beschreibt auch die vollständige Struktur von `recurrence_archive` aus 5.1.
+**Formatversion und ältere Leser [V]:** Neue Dateien erhalten `format_version: 1`. Versionslose Dateien bleiben beim Lesen und bei unabhängigen Feldänderungen unverändert; eine ausdrückliche Serienaktion übernimmt sie nach validierter Vorschau in Version 1. Eine höhere als die unterstützte Formatversion oder eine unbekannte Struktur in den Serienfeldern führt zum schreibgeschützten Anzeigen unter Probleme, auch für Body-Änderungen. Kein automatisches Downgrade. Künftige semantische Erweiterungen, etwa mehrere Vorkommen pro Tag, benötigen eine neue Formatversion und Migrationstests; sie sind nicht pauschal „ohne Formatbruch“. Dateien werden als valides UTF-8 verarbeitet; bei ungültiger Kodierung kein Schreiben. **Formatversion 2** (28.10.2026) = Version 1 plus Serien mit fester Terminliste (5.7). Nur Dateien mit `recurrence_dates` werden mit `format_version: 2` geschrieben, alle anderen bleiben bei 1. Ein App-Stand, der nur Version 1 kennt, zeigt solche Dateien schreibgeschützt, statt eine Abfuhrart beim Abhaken als Einzelaufgabe zu erledigen. Die spätere Formatdokumentation beschreibt auch die vollständige Struktur von `recurrence_archive` aus 5.1.
 
 Schreibweise beim Neuanlegen [V]:
 - Reihenfolge der Felder: id, format_version, title, status, priority, inbox, due, scheduled, recurrence…, complete_instances, skipped_instances, last_completed_at, dateCreated, dateModified, completedDate.
@@ -510,16 +522,17 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (ge
 ### 4.5 Bedienung [V]
 
 - **Desktop:**
-  - Aufbau: Seitenleiste (Erfassen, Suche, Eingang mit Zähler, Heute mit Zähler, Alle offenen, Erledigt, Listen, Probleme, Papierkorb), zentrierte Liste, Details als Dialog über der Liste (Klick oder Enter öffnet, Escape schließt, ↑/↓ blättert). Gestaltung nach den Vorlage-Screenshots vom 18.10.2026 (Todoist-ähnlich): warme Seitenleiste, große Ansichtsüberschrift mit Aufgabenzahl, runde Haken in Prioritätsfarbe, Sortierung und Filter im Menü „Anzeige“.
+  - Aufbau: Seitenleiste (Erfassen, Suche, Eingang mit Zähler, Heute mit Zähler, Alle offenen, Erledigt, Listen, Müllabfuhr, Probleme, Papierkorb), zentrierte Liste, Details als Dialog über der Liste (Klick oder Enter öffnet, Escape schließt, ↑/↓ blättert). Gestaltung nach den Vorlage-Screenshots vom 18.10.2026 (Todoist-ähnlich): warme Seitenleiste, große Ansichtsüberschrift mit Aufgabenzahl, runde Haken in Prioritätsfarbe, Sortierung und Filter im Menü „Anzeige“.
   - Tasten:
-    - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…5 für Eingang, Heute, Alle offenen, Erledigt und Listen; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
+    - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…6 für Eingang, Heute, Alle offenen, Erledigt, Listen und Müllabfuhr; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
     - Aufgabenaktionen: Leertaste erledigt/öffnet wieder, `E` sortiert ein, `D` setzt die Frist, `S` plant ein, `P` setzt die Priorität, Entf löscht.
     - Sonstiges: Ctrl+Z macht rückgängig, F5 liest neu ein.
   - In Eingabefeldern/Editoren sind Buchstaben-, Leertasten- und Entf-Aktionen deaktiviert. Ctrl+Z wirkt dort auf die Texteingabe; Aufgaben-Undo bleibt als eigener Befehl erreichbar. Fokus, Tastaturbedienung und Screenreader-Beschriftungen werden auch für Konflikt- und Wiederholungsdialoge geprüft.
   - Hell/dunkel folgt dem System, mit manueller Umschaltung.
   - Keine systemweite Schnellerfassung [F, F008]. Erfasst wird im App-Fenster (`N`/Ctrl+N).
 - **Android:**
-  - Untere Navigation (Eingang, Heute, Alle, Erledigt, Listen), Suche in der Kopfzeile, Plus-Button zum Erfassen, Ziehen nach unten zum Neueinlesen.
+  - Untere Navigation mit vier Reitern: Eingang, Heute, Alle, ⋯ Mehr (Entscheidung 28.10.2026; vorher fünf Reiter mit Erledigt und Listen). Suche in der Kopfzeile, Plus-Button zum Erfassen, Ziehen nach unten zum Neueinlesen.
+  - **Mehr:** Der Reiter wechselt nicht selbst die Ansicht, sondern öffnet ein Blatt von unten (wie die übrigen Blätter der App) mit den Einträgen Erledigt, Listen und Müllabfuhr. „Müllabfuhr“ erscheint nur, wenn es mindestens eine Müllabfuhr-Serie gibt, weil am Handy nicht importiert wird (4.7). Ein Eintrag öffnet die jeweilige Übersicht; solange eine dieser drei Ansichten aktiv ist, trägt „Mehr“ die hinterlegte Pille. Die Zurück-Taste führt von dort zur zuletzt gewählten Hauptansicht (Eingang, Heute oder Alle).
   - Gestaltung nach den Vorlage-Screenshots vom 19.10.2026 (Todoist-ähnlich, wie der Desktop): warmer Grund, Aufgaben als weiße Karten, runde Haken in Prioritätsfarbe, Datum mit Kalendersymbol in Farbstufe, „Eingang“ rechts in der Zeile; Kopfzeile mit großer Überschrift und Aufgabenzahl, Suche, Anzeige (Filter/Sortierung) und ⋮-Menü (Neu einlesen, Probleme, Papierkorb, Einstellungen); aktive Ansicht in der unteren Leiste mit hinterlegter Pille; roter Plus-Button.
   - Details und Erfassung als Blatt von unten über der Liste: Detail mit Eingang/Einsortiert und ⋮-Menü (Status, Wiederholung, Dateiname, Löschen), Titelkarte mit Haken, Terminzeilen, fehlende Eigenschaften als Chips (Beschreibung, Priorität, Frist, Geplant, Wiederholung), „Checklistenpunkt hinzufügen“; Erfassung mit Titelzeile, Chips und rotem Senden-Knopf über der Tastatur.
   - Wischgesten: nach rechts erledigt, nach links öffnet Aktionen (Einsortieren, Termin, Löschen).
@@ -537,8 +550,46 @@ Entscheidungen vom 26.10.2026 (`.fragen/2026-10-26-2303-listen.md`) [F]; Umsetzu
 - **Ansichten:** Listen erscheinen nicht in Eingang, Heute, Alle offenen oder Erledigt, unabhängig vom Status. Die Ansicht „Listen“ zeigt alle Listen, zuletzt geänderte zuerst, mit Fortschritt „abgehakt/gesamt“. Die Suche findet Listen (auch ohne „inkl. erledigt“) und öffnet die Listenansicht. Probleme und Konflikte gelten wie bei Aufgaben.
 - **Geöffnete Liste:** offene Einträge oben. Abgehakte Einträge stehen durchgestrichen im einklappbaren Bereich „Abgehakt (n)“. Neue Einträge: Desktop über die Eingabezeile unter den offenen Einträgen, Android über den Plus-Knopf, der das Eingabeblatt der Erfassung (ohne Chips) öffnet; beide bleiben nach jedem Eintrag offen. Auch „Neue Liste“ nutzt am Handy dieses Blatt. Antippen des Kreises hakt ab oder wieder auf, mit demselben Ablauf wie bei Aufgaben (Haken sofort, kurze Haltezeit, dann gleitet der Eintrag in seinen Bereich und die übrigen rücken nach); ein Erfolg wird nicht gemeldet. Antippen des Texts bearbeitet ihn; ein geleerter Text löscht den Eintrag. Offene Einträge der obersten Ebene lassen sich am Griff verschieben.
 - **Aktionen der Liste:** Umbenennen, „Abgehakte entfernen“, „Alle Haken zurücksetzen“, „Als Markdown bearbeiten“, „Liste löschen“ (Papierkorb). Jede Eintragsaktion ist ein eigener Schreibvorgang mit Undo; sie trägt den angezeigten Eintragstext mit. Steht in der Zeile inzwischen etwas anderes, wird nichts geschrieben (Meldung „Die Liste hat sich inzwischen geändert“).
-- **Bedienung:** Desktop: Seitenleiste „Listen“, Ctrl+5, Escape führt von der Liste zur Übersicht zurück. Android: fünfter Reiter „Listen“, Plus-Button legt eine Liste an, ⋮ in der Kopfzeile der Liste für die Listenaktionen, langes Drücken auf einen Eintrag für Bearbeiten/Löschen.
+- **Bedienung:** Desktop: Seitenleiste „Listen“, Ctrl+5, Escape führt von der Liste zur Übersicht zurück. Android: „⋯ Mehr → Listen“ (seit 28.10.2026, vorher fünfter Reiter, 4.5), Plus-Button legt eine Liste an, ⋮ in der Kopfzeile der Liste für die Listenaktionen, langes Drücken auf einen Eintrag für Bearbeiten/Löschen.
 - **Nicht vorgesehen:** Liste abschließen, Liste duplizieren, „Neue Liste“ in der App-Verknüpfung, Termine an Listen.
+
+### 4.7 Müllabfuhr [F]/[V]
+
+Entscheidungen vom 28.10.2026 (`.fragen/2026-10-28-1849-muellabfuhr.md`) [F]; Umsetzung [V].
+
+- **Zweck:** Die Abholtermine kommen einmal im Jahr als ICS-Datei. Jeder Abholtag soll an diesem Tag fällig sein und eine Woche vorher als geplant in Heute stehen, damit man sich rechtzeitig darum kümmert.
+- **Modell [F]:** je Abfuhrart eine Aufgabe mit einer Serie aus fester Terminliste (5.7): Kalenderart, Bezugsfeld `due`, `recurrence_offset_days: -7` (Vorlauf), also `scheduled` = Abholtag − 7. Dazu `inbox: false`, `priority: none` und das Kennzeichen `waste_type`. Ein Abholtag ist ein Vorkommen. Abhaken erledigt das Vorkommen, danach rückt der nächste Termin nach. Ein verstrichener, nicht abgehakter Termin bleibt überfällig (5.2); wird er später abgehakt, springt die Serie auf den nächsten Termin nach dem Aktionstag.
+- **In den normalen Ansichten** verhalten sich Müllabfuhr-Serien wie jede Serie: am Abholtag unter Fällig (mit „geplant …“ als Zusatz), in den sieben Tagen davor unter Geplant, am ersten Tag als „Heute eingeplant“, danach als „Früher eingeplant“. Je Abfuhrart steht nur das aktuelle Vorkommen in Heute und Alle offenen; Erledigt zeigt die Abholungen unter „Erledigte Vorkommen“. Suche, Filter („Wiederholung: Kalender“) und Probleme gelten unverändert. Die Zeile trägt ein kleines Tonnensymbol.
+- **Übersicht „Müllabfuhr“:** eine Zeile je Abfuhrart mit Titel, nächstem Termin („Fr 13.11.“) und Zahl der restlichen Termine, nach dem nächsten Termin sortiert. Arten ohne weiteren Termin stehen unten mit „Keine Termine mehr“; am Desktop mit dem Hinweis auf den Import. Ohne Müllabfuhr-Serie zeigt der Desktop einen leeren Zustand mit dem Importknopf.
+- **Ansicht einer Abfuhrart:**
+  - Oben das aktuelle Vorkommen als normale Aufgabenzeile: abhaken, wischen, Detail öffnen.
+  - Darunter „Weitere Termine“: die kommenden Daten der Terminliste, übersprungene durchgestrichen. Am Desktop über ⋮ an der Zeile, am Handy per langem Drücken: „Überspringen“ bzw. „Nicht mehr überspringen“ (Ausnahme, 5.4).
+  - Darunter einklappbar „Vergangene Termine“, je Datum erledigt, übersprungen oder versäumt (5.5).
+  - Das Detail ist das normale Seriendetail. Statt einer Regel steht dort „Feste Termine aus dem Kalender: noch n, bis Sa 19.12.2026“. Der Vorlauf ist als Abstand änderbar (5.3).
+- **Navigation:** Desktop: Seitenleiste „Müllabfuhr“ unter „Listen“, immer sichtbar, Ctrl+6. Ein Klick auf eine Abfuhrart öffnet ihre Ansicht, Escape führt zur Übersicht zurück. Android: ⋯ Mehr → Müllabfuhr (4.5), von der Übersicht weiter zur Abfuhrart.
+- **Import, nur Desktop [F]:**
+  1. „Kalender importieren …“ in der Müllabfuhr-Übersicht öffnet die Dateiauswahl für `.ics`-Dateien.
+  2. Die Datei wird eingelesen (siehe unten) und nach Abfuhrart gruppiert.
+  3. Eine Vorschau zeigt je Abfuhrart einen Haken (übernehmen ja/nein), den Namen, Zahl und Zeitraum der Termine und die Wirkung: „neu, 5 Termine“, „+26 Termine“, „1 Termin verlegt“, „wird fortgesetzt“, „keine Änderung“ oder „nur vergangene Termine“.
+  4. „Übernehmen“ schreibt je Abfuhrart eine Datei. Danach meldet die App „Kalender importiert: 4 Abfuhrarten, 10 Termine“. Die Meldung gilt als Hinweis nach 4.4, weil mehrere Dateien betroffen sind.
+- **Vorschau im Einzelnen:**
+  - **Name:** Ist die Abfuhrart bekannt, steht dort der Titel der bestehenden Serie. Sonst schlägt die App den Abfuhrart-Schlüssel ohne die Behältergröße am Ende vor (`80 l`, `120 l`), z. B. „Bioabfallbehaelter“; der Name ist frei änderbar, etwa zu „Biotonne“. Er wird zum Titel, `waste_type` behält den Schlüssel. Im folgenden Jahr ist der Name damit schon richtig.
+  - **Zuordnen:** Eine unbekannte Abfuhrart kann statt „neu anlegen“ einer bestehenden Müllabfuhr-Serie zugeordnet werden, z. B. wenn sich die Behältergröße geändert hat. Deren `waste_type` wird dann auf den neuen Schlüssel gesetzt.
+  - **Vorlauf:** ein Feld „Geplant … Tage vorher“, Standard 7. Es gilt für neu angelegte Arten; bestehende behalten ihren Abstand.
+- **ICS einlesen [V]:**
+  - Zeilen nach RFC 5545 entfalten (CRLF und LF), Escapes `\,` `\;` `\n` `\\` auflösen, Parameter wie `LANGUAGE=de` ignorieren.
+  - Ausgewertet werden nur `VEVENT`s mit `DTSTART` und `SUMMARY`; `STATUS:CANCELLED` wird ausgelassen. `DTSTART;VALUE=DATE` ergibt den Tag. Ein Wert mit Uhrzeit (mit `TZID`, mit `Z` oder floating) ergibt das lokale Datum dieses Zeitpunkts in der Gerätezone (3.3); die Uhrzeit wird nicht übernommen.
+  - `VEVENT`s mit `RRULE` oder `RDATE` werden in v1 nicht ausgewertet und in der Vorschau als „nicht übernommen“ gezählt.
+  - **Abfuhrart-Schlüssel** = `SUMMARY` getrimmt, Leerraum zu einem Leerzeichen zusammengefasst. Verglichen wird ohne Groß-/Kleinschreibung. Gleiche Art am gleichen Tag zählt einmal.
+  - `UID` wird nicht verwendet: Die vorliegende Datei vergibt sie bei jedem Herunterladen neu (`<Zeitstempel>-<n>@…`). `LOCATION` (Adresse) wird nicht übernommen.
+  - Form der vorliegenden Datei (Stand 28.10.2026): ganztägige Termine (`DTSTART;VALUE=DATE`), ein `VEVENT` je Abholtag, vier Abfuhrarten (`Bioabfallbehaelter  80 l`, `Restabfallbehaelter  120 l`, `Leichtverpackungen  110 l`, `Papierbehaelter  240 l`), Umlaute als ae/oe/ue, doppelte Leerzeichen vor der Größe. Die Datei enthält nur Termine ab dem Tag des Herunterladens. Die Abstände sind unregelmäßig (Feiertagsverschiebungen, Bioabfall auch mittwochs, Leichtverpackungen auch samstags); eine RRULE könnte sie nicht abbilden.
+- **Abgleich beim Übernehmen [V],** je Abfuhrart als ein Schreibvorgang:
+  - **Neue Art:** Datei anlegen, Dateiname aus dem Namen nach F002. K ist der erste Termin ab dem Importtag; frühere Termine kommen mit in die Liste. Gibt es keinen Termin ab dem Importtag, wird nichts angelegt. Als Notiz übernimmt die App die `DESCRIPTION` der Termine (bei der vorliegenden Datei der Bereitstellhinweis „am Abfuhrtag um 7.00 Uhr“), wenn sie bei allen Terminen dieser Art gleich ist; sonst bleibt der Body leer.
+  - **Bekannte Art:** neue Daten in `recurrence_dates` einfügen. Daten der Liste, die nach dem Importtag liegen, weder erledigt noch übersprungen sind, im Zeitraum der importierten Termine dieser Art liegen (erster bis letzter) und in der Datei fehlen, werden entfernt: Der Termin wurde verlegt. Vergangene, erledigte und übersprungene Daten bleiben immer. Fällt dabei das aktuelle K weg, wird der nächste ungelöste Termin ab dem alten K das neue K; die Datumsfelder folgen nach 5.3.
+  - **Beendete Art** (`status: done`, gleich ob die Terminliste ausgeschöpft ist oder die Serie von Hand beendet wurde, 5.7): Bringt der Import Termine ab dem Importtag, wird die Serie mit ihnen fortgesetzt, also `status: open`, `completedDate` entfernen und als K den ersten neuen Termin ab dem Importtag setzen, in derselben Revision. Die Vorschau zeigt das als „wird fortgesetzt“; wer eine Abfuhrart nicht mehr hat, nimmt dort den Haken weg.
+  - Derselbe Import ein zweites Mal ändert nichts (No-op). Jede geänderte Datei steht als eigener Eintrag im Verlauf und ist einzeln zurücknehmbar (4.4).
+  - Vor dem Schreiben prüft der Abgleich wie jede Aktion den Datei-Hash (7.3). Hat sich eine Datei seit der Vorschau geändert, wird diese Art nicht geschrieben und gemeldet; die übrigen werden übernommen.
+- **Nicht vorgesehen:** Import am Handy, Kalender-Abo per URL, Erinnerungen, Uhrzeiten, Termine von Hand zur Terminliste hinzufügen, Import beliebiger anderer Kalender als eigene Funktion.
 
 ## 5. Wiederholungen
 
@@ -643,6 +694,50 @@ Eine Serienaktion trägt Aufgaben-ID, Revision, K, den gelesenen Regel-/Zustands
 - Das sofortige Undo stellt den vorherigen Zustand exakt wieder her (4.4).
 - Einzelaufgaben setzen nichts zurück.
 - Ein Klick auf eine Checkbox in der Vorschau ändert genau ein Zeichen in der Quellzeile.
+
+### 5.7 Serien mit fester Terminliste [V]
+
+Neue Serienform vom 28.10.2026 für die Müllabfuhr (4.7). Sie folgt der Kalenderart; abweichend ist nur, woher die Termine kommen.
+
+- **Form:** `recurrence_dates` statt `recurrence`, eine Liste reiner Daten. Reihenfolge und Duplikate sind beim Lesen bedeutungslos; die App schreibt die Liste aufsteigend und ohne Duplikate. Die Vorkommen sind genau diese Daten. `recurrence_anchor` ist immer `calendar`; `completion` ist ungültig (Probleme). `recurrence_start` wird beim Anlegen auf den ersten Listentermin gesetzt (fehlt er, ergänzt ihn die erste Serienaktion so, Entscheidung 23.10.2026). Für die Berechnung spielt er keine Rolle und wird beim Ergänzen von Terminen nicht angepasst. Keine Serienuhrzeit.
+- **K, C, S, Revision, Archiv und stabiles Einlesen** wie bei Kalenderserien (5.1, 5.2). Ein K, das nicht in der Liste steht, ist eine Diagnose unter Probleme, keine stille Reparatur.
+- **Fortschreiben:** erster Listentermin `o > max(K, Aktionstag)` mit `o ∉ C ∪ S`. Gibt es keinen, endet die Serie regulär (`status: done`, `completedDate`, K bleibt; 5.2). Das ist der Normalfall am Jahresende.
+- **Abweichungen von 5.1 und 5.4:**
+  - Neue Termine anfügen oder künftige, ungelöste Termine entfernen (nur der Import, 4.7) startet **keinen** neuen Abschnitt. Eine Terminliste hat weder Raster noch Zählung, und die Schlüssel bleiben eindeutige Daten; die Historie bleibt so über die Jahre ein durchgehender Abschnitt.
+  - Eine beendete Serie (ausgeschöpft oder von Hand beendet) setzt der Import in derselben Revision fort, anders als „Beendete Serie wiederöffnen“, das bei Erschöpfung einen neuen Abschnitt verlangt.
+- **Editor und Aktionen:** Der Wiederholungseditor zeigt die kommenden Termine, ihre Anzahl und den letzten Termin. Möglich sind Abstand ändern, Bezugsfeld wechseln, Ausnahmen, Einzelverschieben, Vorkommen erledigen oder überspringen, Serie beenden und Wiederholung entfernen. Nicht möglich sind „Regel bearbeiten“ (kein Umwandeln in eine RRULE und zurück) und Termine von Hand hinzufügen.
+- **Wiederholung entfernen:** Der Archiv-Snapshot (5.1) enthält `recurrence_dates` statt `recurrence`.
+- **Beschreibung:** „an festen Terminen (noch n, bis Sa 19.12.2026)“; im Filter zählt die Form als „Kalender“.
+- **Umfang:** Die Liste wächst je Art um rund 15–30 Daten im Jahr. In v1 kürzt die App sie nicht automatisch.
+- **Formatversion:** Dateien mit `recurrence_dates` tragen `format_version: 2` (3.2).
+
+Beispiel (Restabfall, angelegt beim Import am 28.10.2026):
+
+```markdown
+---
+id: 01KAB3M6Q4X0V2N8R5T7W9Y1ZC
+format_version: 2
+title: Restmüll
+status: open
+priority: none
+inbox: false
+due: 2026-11-13
+scheduled: 2026-11-06
+recurrence_dates:
+  - 2026-11-13
+  - 2026-12-11
+recurrence_revision: 01KAB3M6Q4Y6D8F0H2J4K6M8NP
+recurrence_start: 2026-11-13
+recurrence_anchor: calendar
+recurrence_field: due
+recurrence_offset_days: -7
+recurrence_instance: 2026-11-13
+waste_type: Restabfallbehaelter 120 l
+dateCreated: 2026-10-28T19:10:00+01:00
+dateModified: 2026-10-28T19:10:00+01:00
+---
+Stellen Sie bitte die Muellsammelgefaesse am Abfuhrtag um 7.00 Uhr … zur Entleerung bereit.
+```
 
 ## 6. Unterstützter Wiederholungsumfang
 
@@ -810,6 +905,7 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | **M6 Wiederholungs-UI** | einfacher Editor, Monatsende-Abfrage, erweiterte Regeleingabe mit Validierung, Vorschau, deutscher Beschreibung, Historienansicht, Rücknahme, Serie beenden; beide Plattformen | Abnahme der Wiederholungskriterien |
 | **M7 Gesamtrobustheit und Leistung** | Konfliktansicht (ganze Variante wählen), integrierte Wiederholungen der frühen Abbruchtests mit echten Oberflächen, Leistung mit 2 000 Dateien, simulierte konkurrierende Änderungen auf Desktop und API-36-Emulator | Alle Kriterien aus Abschnitt 9. Ziel: Cache-Anzeige Desktop < 2 s, Android < 3 s, Android-Vollscan < 15 s und Suche < 100 ms bei 2 000 Aufgaben à höchstens 4 KiB. API-36-AVD mit 4 vCPU/4 GiB, Host und Messverfahren dokumentieren; keine Übertragung als Garantie auf dein Handy. |
 | **M8 Version 1.0** | RPM und signierte APK über den Release-Workflow, README und `docs/DATEIFORMAT.md` | Version 1.0 als GitHub-Release, über Obtainium und `dnf` installierbar |
+| **M9 Müllabfuhr und kompakte Leiste** (geplant 28.10.2026) | In dieser Reihenfolge, jeder Teil ein eigener Commit und erst nach grünen Tests gepusht: **(a)** Android-Leiste mit vier Reitern und Mehr-Blatt (4.5), alle Maestro-Flows mit `tab-done`/`tab-lists` umstellen. **(b)** Kern: Serienform feste Terminliste (5.7), `format_version: 2`, `waste_type`, Diagnosen; Eigenschaftstests mit dem bestehenden Invarianten-Orakel. **(c)** `packages/app`: ICS-Einleser und Importabgleich mit Vorschau (4.7), Tests mit anonymisierter Fixture. **(d)** Desktop: Seitenleiste, Müllabfuhr-Übersicht, Abfuhrart-Ansicht, Importdialog, Playwright. **(e)** Android: Müllabfuhr-Übersicht und Abfuhrart-Ansicht hinter „Mehr“, Maestro mit vorab angelegten Müllabfuhr-Dateien. | AK-45 bis AK-47 grün. `docs/DATEIFORMAT.md` beschreibt `recurrence_dates`, `waste_type` und Formatversion 2; Abnahmenotiz in `docs/ABNAHME.md`. |
 
 ## 9. Abnahmekriterien
 
@@ -863,6 +959,9 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | AK-42 | Ungültiges due plus gültiges heutiges scheduled bleibt in Geplant und Probleme sichtbar. Erstes Einzelverschieben ohne expliziten Abstand hält den bisherigen Abstand für spätere Termine fest. |
 | AK-43 | Tastaturaktionen lösen beim Schreiben keinen Aufgabenabschluss aus; Text-Undo und Aufgaben-Undo sind getrennt. Unicode-Dateinamen, leer bereinigter Titel und Kollisionssuffix bleiben innerhalb des Byte-Limits. |
 | AK-44 | Listen (4.6): Eine neue Liste hat `kind: list`, `inbox: false` und keine Termine. Sie erscheint in keiner Aufgabenansicht, aber in „Listen“ und in der Suche. Anfügen, Abhaken, Text ändern, Entfernen, Verschieben, „Abgehakte entfernen“ und „Alle Haken zurücksetzen“ ändern nur die betroffenen Body-Zeilen und sind rückgängig zu machen; eine extern verschobene Zeile führt zu keinem Schreiben. |
+| AK-45 | Feste Terminliste (5.7): Liste 13.11./11.12.2026, Bezugsfeld `due`, Abstand −7. Am 06.11. steht die Aufgabe unter „Heute eingeplant“, am 10.11. unter „Früher eingeplant“, am 13.11. unter Fällig. Erledigen am 15.11. ergibt K = 11.12. und `scheduled` = 04.12.; Erledigen am 20.12. beendet die Serie regulär. Verspätetes Erledigen überspringt einen dazwischen verstrichenen Termin, ohne ihn in C oder S einzutragen. Permutationen und Duplikate in `recurrence_dates` ergeben dasselbe nächste Vorkommen. Eine Datei mit `format_version: 2` ist für einen Leser, der nur Version 1 kennt, schreibgeschützt (wie AK-37). |
+| AK-46 | ICS-Import (4.7) mit einer anonymisierten Nachbildung der Vorlage (CRLF, `SUMMARY;LANGUAGE=de`, doppelte Leerzeichen, 10 Termine in 4 Arten): legt 4 Dateien mit zusammen 10 Terminen an, `inbox: false`, Abstand −7, Namen aus der Vorschau. Derselbe Import erneut: 0 Schreibvorgänge. Eine Folgedatei mit neuen UIDs, zusätzlichen Terminen und einem verlegten Termin ergänzt, entfernt nur den verlegten, ungelösten Zukunftstermin und setzt eine ausgeschöpfte wie eine von Hand beendete Serie in derselben Revision fort; vergangene, erledigte und übersprungene Daten bleiben. Die Adresse aus `LOCATION` steht in keiner Datei. Eine seit der Vorschau geänderte Datei wird nicht überschrieben. |
+| AK-47 | Android-Leiste (4.5): genau vier Reiter (Eingang, Heute, Alle, ⋯ Mehr). Mehr öffnet das Blatt mit Erledigt, Listen und, nur wenn eine Müllabfuhr-Serie existiert, Müllabfuhr; jeder Eintrag öffnet seine Übersicht, die Pille liegt dann auf „Mehr“, Zurück führt zur letzten Hauptansicht. Alle bisherigen Maestro-Flows laufen über den neuen Weg grün. |
 
 ## 10. Build-Plan
 
@@ -956,6 +1055,7 @@ Diese Punkte sind bewusst nicht Teil von v1. Es werden dafür keine Gerüste, Fe
 - Mehrere Vorkommen pro Tag, stündliche Regeln, Erledigungszeit je Vorkommen (F005, F006).
 - Optimierte arm64-APK statt universeller APK (10.2).
 - Automatisches Aufräumen alter Releases (10.2).
+- Müllabfuhr-Import am Handy, Kalender-Abo per URL, Termine von Hand zu einer festen Terminliste hinzufügen (4.7, 5.7).
 
 ---
 
