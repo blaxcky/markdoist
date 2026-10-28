@@ -1,0 +1,44 @@
+# Müllabfuhr (4.7, AK-47): geplant in Heute, hinter „Mehr“, Termin überspringen, Vorlauf ändern.
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-today
+- assertVisible:
+    id: "row-Restmüll"
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: more-waste
+- tapOn:
+    id: "waste-Restmüll"
+- assertVisible:
+    id: waste-desc
+    text: "Feste Termine aus dem Kalender: noch 3.*"
+- longPressOn:
+    id: "waste-date-${WASTE_SKIP}"
+- tapOn:
+    id: waste-skip
+- extendedWaitUntil:
+    visible:
+      id: waste-desc
+      text: "Feste Termine aus dem Kalender: noch 2.*"
+    timeout: 3000
+- tapOn:
+    id: waste-lead
+- tapOn:
+    id: datelist-lead
+- eraseText: 3
+- inputText: "3"
+- tapOn:
+    id: datelist-save
+- extendedWaitUntil:
+    visible: "geplant 3 Tage vorher.*"
+    timeout: 3000
+# Zurück: erst zur Übersicht, dann zur letzten Hauptansicht.
+- pressKey: back
+- assertVisible:
+    id: "waste-Restmüll"
+- pressKey: back
+- assertVisible:
+    id: "row-Restmüll"

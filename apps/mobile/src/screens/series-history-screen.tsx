@@ -3,7 +3,7 @@ import { ScrollView, Text, View } from "react-native";
 import { useRoute, type RouteProp } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { pastSkippedCount, seriesHistory, type HistoryMark, type HistoryMonth } from "@markdoist/app";
-import { describeOccurrence, describeRule, parseKey, type Temporal } from "@markdoist/core";
+import { describeOccurrence, describeSeries, parseKey, type Temporal } from "@markdoist/core";
 import { useRepoState } from "../repo";
 import { useTheme, type Theme } from "../theme";
 import type { RootStack } from "../navigation";
@@ -97,7 +97,7 @@ export function SeriesHistoryScreen() {
   const pastSkipped = s ? pastSkippedCount(s) : 0;
   const plannedSkipped = s ? s.S.size - pastSkipped : 0;
   const { months, mark } = s ? seriesHistory(s) : { months: [], mark: () => null };
-  const ruleText = s ? (s.rule ? (describeRule(s.rule, s.anchor) ?? s.raw) : s.raw) : null;
+  const ruleText = s ? (describeSeries(s) ?? s.raw) : null;
 
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 24, gap: 12 }} testID="series-history">

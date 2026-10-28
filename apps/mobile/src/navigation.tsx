@@ -1,5 +1,5 @@
 // Navigation (Plan 4.5, 4.6): untere Leiste Eingang/Heute/Alle/⋯ Mehr, Stack für Detail und Dialoge.
-// „Mehr“ öffnet ein Blatt mit Erledigt und Listen; diese bleiben Reiter des Tab-Navigators, nur ohne eigenen Knopf.
+// „Mehr“ öffnet ein Blatt mit Erledigt, Listen und Müllabfuhr; diese bleiben Reiter des Tab-Navigators, nur ohne eigenen Knopf.
 // Kopfzeilen der Listen zeichnet die Liste selbst (components/list-header).
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 import { BackHandler, View } from "react-native";
@@ -11,6 +11,7 @@ import { createNavigationContainerRef, useFocusEffect, useNavigation, type Linki
 import { T } from "@markdoist/app";
 import { ListScreen } from "./screens/list-screen";
 import { ListsScreen } from "./screens/lists-screen";
+import { WasteScreen, WasteTypeScreen } from "./screens/waste-screen";
 import { ChecklistScreen } from "./screens/checklist-screen";
 import { DetailScreen } from "./screens/detail-screen";
 import { CaptureScreen } from "./screens/capture-screen";
@@ -27,17 +28,20 @@ import { useRepoState } from "./repo";
 import { useTheme } from "./theme";
 import { FilterProvider, FilterSheet } from "./filter";
 import { GroupedSheet } from "./components/series-sheet";
-import { CalendarIcon, CheckCircleIcon, ChecklistIcon, GridIcon, InboxIcon, MoreIcon } from "./components/icons";
+import { BinIcon, CalendarIcon, CheckCircleIcon, ChecklistIcon, GridIcon, InboxIcon, MoreIcon } from "./components/icons";
+import { wasteView } from "@markdoist/core";
 
-export type Tabs = { Inbox: undefined; Today: undefined; All: undefined; More: undefined; Done: undefined; Lists: undefined };
+export type Tabs = { Inbox: undefined; Today: undefined; All: undefined; More: undefined; Done: undefined; Lists: undefined; Waste: undefined };
 type MainTab = "Inbox" | "Today" | "All";
 const MAIN_TABS: readonly string[] = ["Inbox", "Today", "All"];
 /** Ansichten hinter „Mehr“ (4.5): eigene Reiter ohne Knopf in der Leiste. */
-const MORE_TABS: readonly string[] = ["Done", "Lists"];
+const MORE_TABS: readonly string[] = ["Done", "Lists", "Waste"];
 export type RootStack = {
   Main: NavigatorScreenParams<Tabs> | undefined;
   Detail: { ref: string };
   Checklist: { ref: string };
+  /** eine Abfuhrart (4.7) */
+  WasteType: { ref: string };
   /** Startwerte: Erfassung erneut öffnen, wenn das Schreiben im Hintergrund scheiterte (7.6) */
   Capture: { title?: string; note?: string } | undefined;
   AddItem: { ref: string };
@@ -123,6 +127,8 @@ function TabsNav({ navigation }: NativeStackScreenProps<RootStack, "Main">) {
   const [moreOpen, setMoreOpen] = useState(false);
   const lastMain = useRef<MainTab>("Today");
   const moreActive = MORE_TABS.includes(active);
+  // Müllabfuhr nur, wenn es Abfuhrarten gibt: Am Handy wird nicht importiert (4.5, 4.7).
+  const hasWaste = wasteView(state.index).length > 0;
   const hidden = { tabBarButton: () => null, tabBarItemStyle: { display: "none" } } as const;
   const openTab = (screen: keyof Tabs) => navigation.navigate("Main", { screen });
   return (
@@ -187,6 +193,9 @@ function TabsNav({ navigation }: NativeStackScreenProps<RootStack, "Main">) {
         <Tab.Screen name="Lists" options={{ title: T.views.lists, ...hidden }}>
           {() => <MoreTarget><ListsScreen /></MoreTarget>}
         </Tab.Screen>
+        <Tab.Screen name="Waste" options={{ title: T.views.waste, ...hidden }}>
+          {() => <MoreTarget><WasteScreen /></MoreTarget>}
+        </Tab.Screen>
       </Tab.Navigator>
       <GroupedSheet
         open={moreOpen}
@@ -197,6 +206,7 @@ function TabsNav({ navigation }: NativeStackScreenProps<RootStack, "Main">) {
             items: [
               { label: T.views.done, icon: <CheckCircleIcon color={c.muted} size={18} />, testID: "more-done", onPress: () => openTab("Done") },
               { label: T.views.lists, icon: <ChecklistIcon color={c.muted} size={17} />, testID: "more-lists", onPress: () => openTab("Lists") },
+              hasWaste && { label: T.views.waste, icon: <BinIcon color={c.muted} size={18} />, testID: "more-waste", onPress: () => openTab("Waste") },
             ],
           },
         ]}
@@ -233,6 +243,7 @@ function RootStackNavigator() {
       <Stack.Screen name="AddItem" component={AddItemScreen} options={sheet} />
       <Stack.Screen name="NewList" component={NewListScreen} options={sheet} />
       <Stack.Screen name="Checklist" component={ChecklistScreen} options={{ title: T.views.lists }} />
+      <Stack.Screen name="WasteType" component={WasteTypeScreen} options={{ title: T.views.waste }} />
       <Stack.Screen name="Search" component={SearchScreen} options={{ title: T.views.search }} />
       <Stack.Screen name="Problems" component={ProblemsScreen} options={{ title: T.views.problems }} />
       <Stack.Screen name="Trash" component={TrashScreen} options={{ title: T.views.trash }} />

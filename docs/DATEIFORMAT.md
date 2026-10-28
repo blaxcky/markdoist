@@ -1,4 +1,4 @@
-# Markdoist – Dateiformat (Formatversion 1)
+# Markdoist – Dateiformat (Formatversionen 1 und 2)
 
 Eine Aufgabe ist genau eine Markdown-Datei mit YAML-Frontmatter in der obersten Ebene des gewählten Aufgabenordners. Die Dateien sind die maßgebliche Quelle; Markdoist liest sie, ohne beim bloßen Einlesen etwas zu schreiben. Alles, was Markdoist nicht kennt, bleibt byte-genau erhalten.
 
@@ -23,12 +23,12 @@ Dateien ohne Frontmatter erscheinen unter „Probleme → Nicht erkannte Dateien
 
 ## Felder
 
-Reihenfolge beim Neuanlegen: `id`, `format_version`, `title`, `status`, `priority`, `inbox`, `due`, `scheduled`, Serienfelder, `complete_instances`, `skipped_instances`, `last_completed_at`, `dateCreated`, `dateModified`, `completedDate`. Neue Felder in bestehenden Dateien werden am Ende angehängt; bestehende Felder werden nie umsortiert.
+Reihenfolge beim Neuanlegen: `id`, `format_version`, `title`, `status`, `priority`, `inbox`, `due`, `scheduled`, Serienfelder (bei fester Terminliste `recurrence_dates` an Stelle von `recurrence`), `complete_instances`, `skipped_instances`, `last_completed_at`, `waste_type` (bei Müllabfuhr-Serien, nach `recurrence_instance`), `dateCreated`, `dateModified`, `completedDate`. Neue Felder in bestehenden Dateien werden am Ende angehängt; bestehende Felder werden nie umsortiert.
 
 | Feld | Typ | Bedeutung | Lese-Standard bei Fehlen |
 |---|---|---|---|
 | `id` | ULID | stabile Identität | temporär aus der Dateireferenz; echte ULID beim ersten aktiven Schreiben |
-| `format_version` | Ganzzahl, `1` | interpretierte Semantik | versionslose Datei, wird nicht ungefragt migriert; höher als 1 → schreibgeschützt |
+| `format_version` | Ganzzahl, `1` oder `2` | interpretierte Semantik; `2` nur bei Serien mit fester Terminliste (siehe unten), alle anderen Dateien werden mit `1` geschrieben | versionslose Datei, wird nicht ungefragt migriert; höher als 2 → schreibgeschützt |
 | `title` | String | maßgeblicher Titel | Dateiname ohne `.md` |
 | `status` | `open` \| `in-progress` \| `done` | Zustand; bei Serien `done` = Serie beendet | `open`; unbekannter Wert wird als offen gelistet und bleibt erhalten |
 | `priority` | `none` \| `low` \| `normal` \| `high` | Priorität | `none` |
@@ -39,6 +39,7 @@ Reihenfolge beim Neuanlegen: `id`, `format_version`, `title`, `status`, `priorit
 | `dateModified` | Zeitstempel | letzte Änderung durch die App | unbekannt |
 | `completedDate` | Zeitstempel | Abschluss bzw. Serienende | `dateModified`, sonst mtime |
 | `kind` | `list` | einfache Abhakliste statt Aufgabe (siehe „Listen“) | Aufgabe; ein anderer Wert bleibt erhalten und wird ignoriert |
+| `waste_type` | String | Abfuhrart einer Müllabfuhr-Serie, so wie sie im Titel der importierten ICS-Termine steht (Leerraum zusammengefasst), z. B. `Restabfallbehaelter 120 l`; Schlüssel für den nächsten Import | keine Müllabfuhr-Serie |
 
 **Datums- und Zeitwerte:**
 - Datum `2026-10-14`: Kalendertag ohne Zeitzone. Fällig bis Tagesende, überfällig ab dem Folgetag.
@@ -72,6 +73,7 @@ Eine Serie bleibt eine Datei. Felder des **aktiven Abschnitts**:
 | Feld | Typ | Bedeutung |
 |---|---|---|
 | `recurrence` | RRULE ohne DTSTART, z. B. `FREQ=WEEKLY;BYDAY=MO` | Regel; vorhanden = Serie. `RRULE:`-Präfix und TaskNotes-Form `DTSTART:…;FREQ=…` werden gelesen und nicht umgeschrieben. |
+| `recurrence_dates` | Liste von Daten | statt `recurrence`: feste Terminliste (Formatversion 2, siehe unten) |
 | `recurrence_revision` | ULID | Identität des aktiven Abschnitts |
 | `recurrence_start` | Datum oder lokale Datumszeit | Beginn des Regelrasters; eine Uhrzeit hier ist die feste Uhrzeit jedes Vorkommens |
 | `recurrence_anchor` | `calendar` \| `completion` | fester Kalenderrhythmus oder ab tatsächlicher Erledigung |
@@ -91,6 +93,14 @@ Eine Serie bleibt eine Datei. Felder des **aktiven Abschnitts**:
 - Das Bezugsfeld erhält das neue Vorkommen (mit Serienuhrzeit), das andere Feld den Abstand. `inbox` bleibt unverändert. Angehakte Markdown-Checklisten werden beim Wechsel zu einem neuen offenen Vorkommen zurückgesetzt (nicht in Code-Blöcken).
 - Ist kein weiteres Vorkommen möglich, wird die Serie beendet (`status: done`, `completedDate`); `recurrence_instance` bleibt stehen.
 - Fehlen in einer Fremddatei `recurrence_revision` oder `recurrence_start`, ergänzt die erste Serienaktion beide Felder mit den beim Lesen abgeleiteten Werten, damit Raster und `COUNT` danach fest verankert sind.
+
+**Feste Terminliste (Formatversion 2):** Eine Serie mit `recurrence_dates` statt `recurrence` hat genau diese Daten als Vorkommen; so legt der Müllabfuhr-Import seine Serien an.
+- Nur Kalenderart (`recurrence_anchor: calendar`), reine Daten ohne Uhrzeit. Reihenfolge und Duplikate der Liste sind bedeutungslos; Markdoist schreibt sie aufsteigend.
+- Fortschreiben wie `calendar`: erster Listentermin nach max(K, Aktionstag), der weder in C noch in S steht. Ist die Liste ausgeschöpft, endet die Serie (`status: done`).
+- `recurrence_start` ist der erste Listentermin und spielt für die Berechnung keine Rolle.
+- Ungültig (Probleme, Serienaktionen gesperrt): `recurrence` und `recurrence_dates` zugleich, `recurrence_anchor: completion`, Einträge mit Uhrzeit oder kein gültiges Datum. Ein K außerhalb der Liste wird als Hinweis gemeldet.
+- Die Regel lässt sich nicht bearbeiten; Abstand (Vorlauf), Ausnahmen, Einzelverschieben, Serie beenden und Wiederholung entfernen gehen wie bei jeder Serie. Der Archiv-Snapshot enthält dann `recurrence_dates` statt `recurrence`.
+- Der Import ergänzt neue Termine, entfernt künftige, noch offene Termine im Zeitraum der Importdatei, die dort fehlen (verlegt), und setzt eine beendete Serie in derselben Revision fort, wenn neue künftige Termine dazukommen. Vergangene, erledigte und übersprungene Termine bleiben.
 
 **Regeländerung = neuer Abschnitt:** Eine Änderung von Regel, Start, Serienuhrzeit, Art, `COUNT` oder `UNTIL` (oder ausdrücklich „ab jetzt noch N-mal“) archiviert den aktiven Abschnitt und beginnt einen neuen mit neuer Revision und leerer Historie. Die alte Historie bleibt sichtbar und zählt nicht mit.
 
@@ -148,6 +158,33 @@ tags: [routine]   # unbekanntes Feld, bleibt erhalten
 dateCreated: 2026-09-01T19:02:11+02:00
 dateModified: 2026-10-10T10:32:00+02:00
 ---
+**Beispiel einer Müllabfuhr-Serie** – `Restmüll.md`
+```markdown
+---
+id: 01KAB3M6Q4X0V2N8R5T7W9Y1ZC
+format_version: 2
+title: Restmüll
+status: open
+priority: none
+inbox: false
+due: 2026-11-13
+scheduled: 2026-11-06
+recurrence_dates:
+  - 2026-11-13
+  - 2026-12-11
+recurrence_revision: 01KAB3M6Q4Y6D8F0H2J4K6M8NP
+recurrence_start: 2026-11-13
+recurrence_anchor: calendar
+recurrence_field: due
+recurrence_offset_days: -7
+recurrence_instance: 2026-11-13
+waste_type: Restabfallbehaelter 120 l
+dateCreated: 2026-10-28T19:10:00+01:00
+dateModified: 2026-10-28T19:10:00+01:00
+---
+Stellen Sie bitte die Muellsammelgefaesse am Abfuhrtag um 7.00 Uhr … bereit.
+```
+
 ## Ablauf
 - [ ] Erledigtes der Woche durchsehen
 ```

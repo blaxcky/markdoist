@@ -14,7 +14,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { pastSkippedCount, previewAction, renderMarkdown, seriesStrip, skippedBeyondStrip, splitDateValue, stripByMonth as byMonth, T, type Outcome, type StripCell } from "@markdoist/app";
 import {
   describeOccurrence,
-  describeRule,
+  describeSeries,
   formatGermanDate,
   parseKey,
   Temporal,
@@ -376,7 +376,7 @@ export function DetailScreen() {
   const pastSkipped = s ? pastSkippedCount(s) : 0;
   const hasArchive = Array.isArray(t.data.recurrence_archive) && t.data.recurrence_archive.length > 0;
   const occ = s?.instance ? describeOccurrence(s.instance) : "";
-  const ruleText = s ? (s.rule ? (describeRule(s.rule, s.anchor) ?? s.raw) : s.raw) : "";
+  const ruleText = s ? (describeSeries(s) ?? s.raw) : "";
   const phaseTitle = !s ? "" : s.phase === "ended" ? "Serie beendet" : s.phase === "clarify" ? "Serie · Fortschreibung klären" : s.phase === "active" ? "Serie" : "Serie · gesperrt";
 
   return (
@@ -572,7 +572,7 @@ export function DetailScreen() {
                 )}
                 <View style={{ flexDirection: "row" }}>
                   {reopen?.preview.result === "change" && <Pill c={c} disabled={ro} primary label="Serie wiederöffnen" onPress={() => act({ type: "reopenSeries", revision: s.revisionKey }, "Serie wiederöffnet")} testID="series-reopen" />}
-                  {reopen?.preview.result === "blocked" && <Pill c={c} disabled={ro} label="Mit neuer Regel fortsetzen" icon={<RepeatIcon color={c.fg} size={14} />} onPress={() => nav.navigate("Recurrence", { ref, continueSeries: true })} testID="series-continue" />}
+                  {reopen?.preview.result === "blocked" && !s.dates && <Pill c={c} disabled={ro} label="Mit neuer Regel fortsetzen" icon={<RepeatIcon color={c.fg} size={14} />} onPress={() => nav.navigate("Recurrence", { ref, continueSeries: true })} testID="series-continue" />}
                 </View>
               </View>
             )}
@@ -749,7 +749,7 @@ export function DetailScreen() {
           groups={[
             {
               items: [
-                { label: "Regel bearbeiten", icon: <Glyph color={c.muted} size={16}>✎</Glyph>, testID: "series-edit", onPress: () => nav.navigate("Recurrence", { ref }) },
+                { label: s.dates ? "Termine und Vorlauf" : "Regel bearbeiten", icon: <Glyph color={c.muted} size={16}>✎</Glyph>, testID: "series-edit", onPress: () => nav.navigate("Recurrence", { ref }) },
                 s.phase === "active" &&
                   s.anchor === "calendar" && {
                     label: "Termin überspringen …",

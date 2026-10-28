@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Switch, Text, TextInput, View } from "react-nati
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { defaultForm, formFromSeries, needsMonthEndChoice, previewAction, previewForm, ruleFormAction, type RuleForm } from "@markdoist/app";
-import { describeOccurrence, parseKey, type Weekday } from "@markdoist/core";
+import { describeOccurrence, describeSeries, parseKey, remainingListDates, type TaskView, type Weekday } from "@markdoist/core";
 import { pickDate } from "../components/actions-sheet";
 import { systemClock, useRepo, useRepoState } from "../repo";
 import { useNotify } from "../notify";
@@ -26,6 +26,54 @@ function Chips<V extends string | number>({ c, value, options, onChange, testID 
 }
 
 export function RecurrenceScreen() {
+  const route = useRoute<RouteProp<RootStack, "Recurrence">>();
+  const state = useRepoState();
+  const view = state.index.tasks.find((v) => v.task.ref === route.params.ref);
+  // Feste Terminliste (5.7): Termine kommen aus dem Import, änderbar ist nur der Vorlauf.
+  if (view?.series?.dates) return <DateListLead key={view.task.ref} view={view} />;
+  return <RuleEditor />;
+}
+
+function DateListLead({ view }: { view: TaskView }) {
+  const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
+  const repo = useRepo();
+  const notify = useNotify();
+  const c = useTheme();
+  const s = view.series!;
+  const [lead, setLead] = useState(s.offsetDays === null ? "" : String(-s.offsetDays));
+  useEffect(() => {
+    nav.setOptions({ title: "Termine und Vorlauf" });
+  }, [nav]);
+  const n = lead.trim() === "" ? null : Number(lead);
+  const valid = n === null || (Number.isInteger(n) && n >= 0 && n <= 60);
+  const next = remainingListDates(s).slice(0, 10);
+  const save = () => {
+    void repo
+      .perform(view.task.ref, { type: "changeReference", revision: s.revisionKey, field: s.field, offsetDays: n === null ? null : -n }, "Vorlauf geändert")
+      .then((o) => {
+        notify(o, "Vorlauf geändert");
+        if (o.status === "ok" || o.status === "noop") nav.goBack();
+      });
+  };
+  return (
+    <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+      <Text style={{ color: c.fg, fontSize: 15, fontWeight: "600" }}>{describeSeries(s)}</Text>
+      <Text style={{ color: c.muted, fontSize: 13 }}>Nächste Termine: {next.length ? next.map((d) => describeOccurrence(d)).join(" · ") : "keine"}</Text>
+      <Text style={{ color: c.muted, fontSize: 13, marginTop: 8 }}>Vorlauf</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <Text style={{ color: c.fg }}>geplant</Text>
+        <TextInput keyboardType="number-pad" value={lead} onChangeText={setLead} testID="datelist-lead" style={{ borderWidth: 1, borderColor: c.outline, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, color: c.fg, width: 70 }} />
+        <Text style={{ color: c.fg, flex: 1 }}>Tage vor dem Termin</Text>
+      </View>
+      <Text style={{ color: c.muted, fontSize: 13 }}>Leer lassen, wenn die Termine nicht vorher in Heute stehen sollen. Neue Termine kommen mit dem Kalenderimport am Desktop.</Text>
+      <Pressable onPress={valid ? save : undefined} disabled={!valid} testID="datelist-save" style={{ marginTop: 12, minHeight: 48, borderRadius: 24, backgroundColor: valid ? c.primary : c.surfaceHigh, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: valid ? c.onPrimary : c.muted, fontSize: 15, fontWeight: "600" }}>Speichern</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function RuleEditor() {
   const route = useRoute<RouteProp<RootStack, "Recurrence">>();
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
   const repo = useRepo();

@@ -117,6 +117,18 @@ export function MoreIcon({ color, size = 18 }: P) {
   );
 }
 
+/** Mülltonne (Müllabfuhr, 4.7): Deckel und Korpus. */
+export function BinIcon({ color, size = 18 }: P) {
+  const b = stroke(size);
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "flex-end", paddingBottom: size * 0.04 }}>
+      <View style={{ width: size * 0.3, height: b, backgroundColor: color, marginBottom: size * 0.04 }} />
+      <View style={{ width: size * 0.84, height: b, borderRadius: b, backgroundColor: color }} />
+      <View style={{ width: size * 0.64, height: size * 0.62, borderWidth: b, borderTopWidth: 0, borderColor: color, borderBottomLeftRadius: size * 0.1, borderBottomRightRadius: size * 0.1 }} />
+    </View>
+  );
+}
+
 /** Blatt mit Zeilen (Anzeige: Filter und Sortierung); `dot` markiert aktive Einstellungen. */
 export function ViewOptionsIcon({ color, size = 20, dot }: P & { dot?: string }) {
   const b = stroke(size);

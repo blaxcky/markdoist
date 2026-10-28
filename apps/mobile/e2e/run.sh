@@ -44,11 +44,40 @@ recurrence_instance: $K
 ---
 SEED
 adb push "$TMP/Wochenrueckblick.md" "$DIR/" >/dev/null
+# Müllabfuhr (4.7): feste Terminliste ab übermorgen+1, Vorlauf 7 Tage → heute schon geplant.
+TODAY=$(date +%F)
+W1=$(date -u -d "$TODAY +3 days" +%F)
+W2=$(date -u -d "$TODAY +17 days" +%F)
+W3=$(date -u -d "$TODAY +31 days" +%F)
+cat > "$TMP/Restmuell.md" <<SEED
+---
+id: 01KAB3M6Q4X0V2N8R5T7W9Y1ZC
+format_version: 2
+title: Restmüll
+status: open
+priority: none
+inbox: false
+due: $W1
+scheduled: $(date -u -d "$W1 -7 days" +%F)
+recurrence_dates:
+  - $W1
+  - $W2
+  - $W3
+recurrence_revision: 01KAB3M6Q4Y6D8F0H2J4K6M8NP
+recurrence_start: $W1
+recurrence_anchor: calendar
+recurrence_field: due
+recurrence_offset_days: -7
+recurrence_instance: $W1
+waste_type: Restabfallbehaelter 120 l
+---
+SEED
+adb push "$TMP/Restmuell.md" "$DIR/" >/dev/null
 rm -rf "$TMP"
 fail=0
 for flow in flows/*.yaml; do
   echo "== $flow"
-  maestro test -e NEXT_LABEL="$NEXT_LABEL" -e SKIP_KEY="$SKIP_KEY" -e MAESTRO_DEV="${MAESTRO_DEV:-false}" "$flow" || { fail=1; break; }
+  maestro test -e NEXT_LABEL="$NEXT_LABEL" -e SKIP_KEY="$SKIP_KEY" -e WASTE_SKIP="$W2" -e MAESTRO_DEV="${MAESTRO_DEV:-false}" "$flow" || { fail=1; break; }
 done
 check() { # Datei, erwarteter Text
   if adb shell "cat '$DIR/$1'" | grep -qF -- "$2"; then echo "OK   $1 enthält: $2"; else echo "FEHL $1 enthält nicht: $2"; fail=1; fi
@@ -86,9 +115,17 @@ if [ $fail = 0 ]; then
   for f in "Wegwerfen.md"; do
     if adb shell ls "$DIR/.todo-trash" | tr -d '\r' | grep -qxF -- "$f"; then echo "OK   im Papierkorb: $f"; else echo "FEHL nicht im Papierkorb: $f"; fail=1; fi
   done
-  # AK-12: Serienaktionen legen keine Dateien an – 6 Seed-Dateien + 2 Erfassungen + 1 Liste + „Auch weg“.
+  # Müllabfuhr (4.7): übersprungener Termin, Vorlauf geändert, Formatversion bleibt 2.
+  # Der Termin steht auch in recurrence_dates: nur die Zeile direkt unter skipped_instances zählt.
+  if adb shell "cat '$DIR/Restmuell.md'" | tr -d '\r' | grep -A1 -xF "skipped_instances:" | grep -qxF -- "  - $W2"; then
+    echo "OK   Restmuell.md: $W2 übersprungen"
+  else echo "FEHL Restmuell.md: $W2 nicht übersprungen"; fail=1; fi
+  check "Restmuell.md" "recurrence_offset_days: -3"
+  check "Restmuell.md" "scheduled: $(date -u -d "$W1 -3 days" +%F)"
+  check "Restmuell.md" "format_version: 2"
+  # AK-12: Serienaktionen legen keine Dateien an – 7 Seed-Dateien + 2 Erfassungen + 1 Liste + „Auch weg“.
   n=$(adb shell ls "$DIR" | grep -c '\.md' || true)
-  if [ "$n" = 10 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 10)"; fail=1; fi
+  if [ "$n" = 11 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 11)"; fail=1; fi
   adb shell ls -a "$DIR" | grep -q 'todo-tmp' && { echo "FEHL Temp-Datei übrig"; fail=1; } || true
 fi
 exit $fail
