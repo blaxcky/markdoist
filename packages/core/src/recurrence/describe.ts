@@ -1,6 +1,7 @@
 // Deutsche Beschreibung einfacher Regeln (Abschnitt 6). Sonst null → Rohregel anzeigen.
 import { Temporal } from "temporal-polyfill";
 import type { Rule, Weekday } from "./rule";
+import { remainingListDates, type Series } from "./series";
 
 const WD_LONG: Record<Weekday, string> = {
   MO: "Montag",
@@ -31,6 +32,10 @@ function limits(r: Rule, anchor: "calendar" | "completion"): string {
 
 /** Beschreibt eine Regel, z. B. „jeden 2. Dienstag im Monat“. */
 export function describeRule(r: Rule, anchor: "calendar" | "completion" = "calendar"): string | null {
+  if (r.dates) {
+    const last = r.dates[r.dates.length - 1];
+    return last ? `an festen Terminen bis ${describeOccurrence(last)}` : "an festen Terminen";
+  }
   const others = r.byyearday.length || r.byweekno.length || r.wkst !== "MO" && r.interval > 1 && r.freq === "WEEKLY";
   if (others) return null;
   let core: string | null = null;
@@ -103,4 +108,15 @@ function sortDays(days: Weekday[]): Weekday[] {
 
 export function describeOccurrence(d: Temporal.PlainDate): string {
   return `${WD_SHORT[(["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as Weekday[])[d.dayOfWeek - 1]!]} ${String(d.day).padStart(2, "0")}.${String(d.month).padStart(2, "0")}.${d.year}`;
+}
+
+/** Beschreibung einer Serie für Detail und Verlauf: Regeltext bzw. bei fester Terminliste (5.7)
+ *  „Feste Termine aus dem Kalender: noch n, bis Sa 19.12.2026“. Null → Rohregel anzeigen. */
+export function describeSeries(s: Series): string | null {
+  if (s.dates) {
+    const last = s.dates[s.dates.length - 1];
+    const rest = remainingListDates(s).length;
+    return `Feste Termine aus dem Kalender: noch ${rest}${last ? `, bis ${describeOccurrence(last)}` : ""}`;
+  }
+  return s.rule ? describeRule(s.rule, s.anchor) : null;
 }

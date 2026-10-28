@@ -52,7 +52,7 @@ const ACTIONS: TaskAction[] = [
 
 describe("AK-37: schreibgeschützte Dateien und Historie", () => {
   for (const [name, text] of [
-    ["höhere format_version", serie([], "format_version: 2")],
+    ["höhere format_version", serie([], "format_version: 3")],
     ["unbekannte Serienstruktur", serie(["skipped_instances: 2026-10-19"])],
   ] as const) {
     it(`${name}: alle Aktionen blocked, 0 Schreibvorgänge`, async () => {

@@ -8,17 +8,21 @@ import {
   fileNameForTitle,
   freeName,
   hashText,
+  newDateSeriesText,
   newTaskText,
   NEW_LIST_DATA,
   planAction,
+  readSeries,
   readTaskFile,
   sanitizeTitle,
-  SUPPORTED_FORMAT_VERSION,
+  BASE_FORMAT_VERSION,
+  DATE_LIST_FORMAT_VERSION,
   ulid,
   type ActionContext,
   type Clock,
   type Index,
   type IndexedFile,
+  type NewDateSeriesInput,
   type NewTaskInput,
   type Plan,
   type Task,
@@ -304,6 +308,11 @@ export class Repository {
   private ctx(): ActionContext {
     const c = this.clock();
     return { at: c.now(), timeZone: c.timeZone, newId: this.newId };
+  }
+
+  /** Aktionskontext für Vorschauen (Importvorschau, 4.7): dieselbe Uhr wie beim Schreiben. */
+  previewContext(): ActionContext {
+    return this.ctx();
   }
 
   private key(k: string) {
@@ -709,6 +718,12 @@ export class Repository {
     return this.performWith(ref, action, label);
   }
 
+  /** Nur auf genau die gezeigte Dateifassung anwenden (Importvorschau, 4.7): Hat sich die Datei
+   *  seitdem geändert, wird nichts geschrieben und ein Konflikt gemeldet. */
+  performIfUnchanged(ref: string, hash: string, action: TaskAction, label = "Änderung"): Promise<Outcome> {
+    return this.performWith(ref, action, label, hash);
+  }
+
   /** strictHash: nur auf genau diese Dateifassung anwenden, keine unabhängige Übertragung (7.3 Konfliktdialog). */
   private performWith(ref: string, action: TaskAction, label: string, strictHash?: string): Promise<Outcome> {
     const ctx = this.ctx(); // fester Aktionszeitpunkt ab dem Einreihen, auch für Wiederholungen (7.3)
@@ -836,10 +851,44 @@ export class Repository {
           : { due: input.due ?? undefined, scheduled: input.scheduled ?? undefined },
     });
     if (problem) return { status: "error", message: `Selbstprüfung fehlgeschlagen: ${problem} – nichts geschrieben` };
+    return this.createText(input.title, id, text, input.kind === "list" ? "Neue Liste" : "Neue Aufgabe", shown);
+  }
+
+  /** Neue Serie mit fester Terminliste (Müllabfuhr-Import, 4.7, 5.7); ohne Termin ab heute blocked. */
+  async createDateSeries(input: NewDateSeriesInput): Promise<Outcome> {
+    const block = this.writeBlock();
+    if (block) return block;
+    if (!input.title.trim()) return { status: "blocked", message: "Titel fehlt" };
+    const made = newDateSeriesText(input, this.ctx());
+    if (!made) return { status: "blocked", message: `„${input.title.trim()}“: kein Termin ab heute` };
+    const { id, text } = made;
+    const note = input.note ?? "";
+    let problem = verifyGenerated(text, {
+      id,
+      title: input.title.trim(),
+      body: note === "" ? "" : note.endsWith("\n") ? note : `${note}\n`,
+      data: {
+        format_version: DATE_LIST_FORMAT_VERSION,
+        inbox: false,
+        due: made.instance,
+        recurrence_instance: made.instance,
+        recurrence_anchor: "calendar",
+        recurrence_field: "due",
+        waste_type: input.wasteType,
+      },
+    });
+    const parsed = readTaskFile({ ref: "tasks/neu.md", name: "neu.md", text, hash: hashText(text), mtime: null });
+    if (!problem && (parsed.kind !== "task" || readSeries(parsed)?.phase !== "active")) problem = "Serie wäre nicht aktiv";
+    if (problem) return { status: "error", message: `Selbstprüfung fehlgeschlagen: ${problem} – nichts geschrieben` };
+    return this.createText(input.title, id, text, "Kalender importiert");
+  }
+
+  /** Schreibt eine neu erzeugte, geprüfte Datei: sofort anzeigen, im Hintergrund anlegen (4.4). */
+  private async createText(title: string, id: string, text: string, label: string, shown?: (ref: string) => void): Promise<Outcome> {
     const names = new Set([...this.files.values()].map((f) => f.name.toLowerCase()));
     // Namen offener Wiederherstellungsfälle nicht erneut vergeben (7.3).
     for (const r of this.recovery) if (r.ref.startsWith("tasks/")) names.add(r.name.toLowerCase());
-    const pick = () => fileNameForTitle(input.title, (n) => names.has(n.toLowerCase()), id.slice(-6));
+    const pick = () => fileNameForTitle(title, (n) => names.has(n.toLowerCase()), id.slice(-6));
     const first = pick();
     const ref = `tasks/${first}`;
     const hash = hashText(text);
@@ -864,7 +913,6 @@ export class Repository {
             }
             // Ein laufender Abgleich hat die Datei noch nicht gelistet: nicht als verschwunden werten (R2).
             this.touch(res.ref);
-            const label = input.kind === "list" ? "Neue Liste" : "Neue Aufgabe";
             const saved = this.pushUndo({ id: this.newId(), kind: "create", label, ref: res.ref, afterHash: res.hash });
             this.emit();
             await saved;
@@ -887,7 +935,7 @@ export class Repository {
     if (out.status === "ok" || out.status === "noop") return out;
     this.dropFile(ref);
     this.emit();
-    return { ...out, message: `„${input.title.trim()}“ nicht angelegt – ${out.message}` };
+    return { ...out, message: `„${title.trim()}“ nicht angelegt – ${out.message}` };
   }
 
   /** „Als Aufgabe übernehmen“ für eine Datei ohne Frontmatter (3.1). */
@@ -1401,7 +1449,7 @@ function verifyGenerated(
   if (f.readOnly || f.diagnostics.some((d) => d.severity === "error")) return "Text wäre schreibgeschützt";
   const want: Record<string, YamlValue | undefined> = {
     id: expected.id,
-    format_version: SUPPORTED_FORMAT_VERSION,
+    format_version: BASE_FORMAT_VERSION,
     title: expected.title,
     status: "open",
     priority: "none",

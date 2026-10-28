@@ -34,6 +34,27 @@ export interface Rule {
   byweekno: number[];
   bysetpos: number[];
   wkst: Weekday;
+  /** Feste Terminliste (5.7), aufsteigend und ohne Duplikate: Die Vorkommen sind genau diese Daten;
+   *  Frequenz, BY-Teile und der Start gelten dann nicht. Nur aus `recurrence_dates`, nie aus RRULE-Text. */
+  dates?: readonly Temporal.PlainDate[];
+}
+
+/** Regel einer Serie mit fester Terminliste (5.7); die Liste muss aufsteigend und eindeutig sein. */
+export function dateListRule(dates: readonly Temporal.PlainDate[]): Rule {
+  return {
+    freq: "DAILY",
+    interval: 1,
+    count: null,
+    until: null,
+    byday: [],
+    bymonthday: [],
+    bymonth: [],
+    byyearday: [],
+    byweekno: [],
+    bysetpos: [],
+    wkst: "MO",
+    dates,
+  };
 }
 
 export type RuleParse =

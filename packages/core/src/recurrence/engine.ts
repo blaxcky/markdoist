@@ -105,7 +105,21 @@ function untilPassed(rule: Rule, d: Temporal.PlainDate, time: Temporal.PlainTime
   return false;
 }
 
+/** Feste Terminliste (5.7): Die Liste ist endlich, die Suche bricht nie ab; der Start gilt nicht. */
+function queryDateList(q: EngineQuery, list: readonly Temporal.PlainDate[]): EngineResult {
+  const dates: Temporal.PlainDate[] = [];
+  for (const d of list) {
+    if (q.after && Temporal.PlainDate.compare(d, q.after) <= 0) continue;
+    if (q.from && Temporal.PlainDate.compare(d, q.from) < 0) continue;
+    if (q.exclude && q.exclude(d)) continue;
+    dates.push(d);
+    if (dates.length >= q.limit) return { dates, exhausted: false, aborted: false };
+  }
+  return { dates, exhausted: true, aborted: false };
+}
+
 export function queryOccurrences(q: EngineQuery): EngineResult {
+  if (q.rule.dates) return queryDateList(q, q.rule.dates);
   const searchBase = [q.start, q.after, q.from].reduce<Temporal.PlainDate>(
     (acc, d) => (d && Temporal.PlainDate.compare(d, acc) > 0 ? d : acc),
     q.start,
@@ -248,6 +262,7 @@ export function isOccurrence(
 /** Regel ohne BY-Teile: fester Abstand ab einem Bezugstag (Art „ab Erledigung“, 5.2). */
 export function isPlainInterval(rule: Rule): boolean {
   return (
+    !rule.dates &&
     !rule.byday.length &&
     !rule.bymonthday.length &&
     !rule.bymonth.length &&

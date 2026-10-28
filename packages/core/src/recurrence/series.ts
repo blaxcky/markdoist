@@ -4,7 +4,7 @@ import { parseDateValue, type DateValue } from "../dates";
 import type { YamlValue } from "../frontmatter";
 import type { Diagnostic, Task } from "../task";
 import { isOccurrence, nextOccurrence, queryOccurrences } from "./engine";
-import { parseRule, type Rule, type RuleParse } from "./rule";
+import { dateListRule, parseRule, type Rule, type RuleParse } from "./rule";
 
 export type Anchor = "calendar" | "completion";
 export type RefField = "due" | "scheduled";
@@ -31,9 +31,12 @@ export interface SeriesStart {
 }
 
 export interface Series {
+  /** RRULE-Text; leer bei fester Terminliste */
   raw: string;
   parse: RuleParse;
   rule: Rule | null;
+  /** feste Terminliste (5.7), aufsteigend und eindeutig; null bei RRULE-Serien */
+  dates: Temporal.PlainDate[] | null;
   /** gespeicherte Revision oder null (temporär, wird bei Serienaktion materialisiert) */
   revision: string | null;
   /** Identität des aktiven Abschnitts für Aktionen (gespeichert oder temporär) */
@@ -57,6 +60,7 @@ export interface Series {
 
 export const SERIES_FIELDS = [
   "recurrence",
+  "recurrence_dates",
   "recurrence_revision",
   "recurrence_archive",
   "recurrence_start",
@@ -97,7 +101,9 @@ function dateOf(v: DateValue | null): Temporal.PlainDate | null {
 
 export function readSeries(task: Task): Series | null {
   const data = task.data;
-  if (!("recurrence" in data) || data.recurrence === null || data.recurrence === "") return null;
+  const hasRule = "recurrence" in data && data.recurrence !== null && data.recurrence !== "";
+  const hasDates = "recurrence_dates" in data && data.recurrence_dates !== null;
+  if (!hasRule && !hasDates) return null;
   const diagnostics: Diagnostic[] = [];
   let structureError = false;
   const structure = (field: string, message: string) => {
@@ -105,10 +111,48 @@ export function readSeries(task: Task): Series | null {
     diagnostics.push({ code: "invalid-recurrence-structure", message, severity: "error", field });
   };
 
-  const raw = typeof data.recurrence === "string" ? data.recurrence : String(data.recurrence);
-  if (typeof data.recurrence !== "string") structure("recurrence", "Feld recurrence ist kein Text");
-  const parse = parseRule(raw);
-  const rule = parse.status === "ok" ? parse.rule : null;
+  // Feste Terminliste (5.7): nur reine Daten; Reihenfolge und Duplikate sind bedeutungslos.
+  let dates: Temporal.PlainDate[] | null = null;
+  if (hasDates) {
+    const v = data.recurrence_dates;
+    if (!Array.isArray(v)) structure("recurrence_dates", "recurrence_dates ist keine Liste");
+    else {
+      const byKey = new Map<string, Temporal.PlainDate>();
+      for (const item of v) {
+        const d = parseKey(item);
+        if (!d) {
+          structure("recurrence_dates", `recurrence_dates enthält einen ungültigen Eintrag „${String(item)}“`);
+          continue;
+        }
+        byKey.set(d.toString(), d);
+      }
+      dates = [...byKey.values()].sort(Temporal.PlainDate.compare);
+    }
+  }
+
+  let raw = "";
+  let parse: RuleParse;
+  let rule: Rule | null;
+  if (hasRule) {
+    raw = typeof data.recurrence === "string" ? data.recurrence : String(data.recurrence);
+    if (typeof data.recurrence !== "string") structure("recurrence", "Feld recurrence ist kein Text");
+    parse = parseRule(raw);
+    rule = parse.status === "ok" ? parse.rule : null;
+  } else {
+    rule = dates ? dateListRule(dates) : null;
+    parse = rule
+      ? { status: "ok", rule, dtstart: null, normalized: "" }
+      : { status: "invalid", message: "Terminliste ungültig", dtstart: null };
+  }
+  if (hasRule && hasDates) {
+    rule = null;
+    diagnostics.push({
+      code: "invalid-recurrence",
+      message: "recurrence und recurrence_dates stehen gleichzeitig in der Datei – nur eines ist erlaubt",
+      severity: "warning",
+      field: "recurrence_dates",
+    });
+  }
   if (parse.status === "unsupported") {
     diagnostics.push({
       code: "unsupported-recurrence",
@@ -138,6 +182,15 @@ export function readSeries(task: Task): Series | null {
     if (data.recurrence_anchor === "calendar" || data.recurrence_anchor === "completion") {
       anchor = data.recurrence_anchor;
     } else structure("recurrence_anchor", "Unbekannte Wiederholungsart");
+  }
+  if (dates && anchor === "completion") {
+    rule = null;
+    diagnostics.push({
+      code: "invalid-recurrence",
+      message: "Eine feste Terminliste gibt es nur als Kalenderserie, nicht „ab Erledigung“",
+      severity: "warning",
+      field: "recurrence_anchor",
+    });
   }
 
   const hasDue = data.due !== undefined && data.due !== null && data.due !== "";
@@ -196,11 +249,14 @@ export function readSeries(task: Task): Series | null {
 
   const lastCompletedAt = typeof data.last_completed_at === "string" ? data.last_completed_at : null;
 
-  // recurrence_start: DTSTART aus recurrence → recurrence_instance → Bezugsfeld → dateCreated
+  // recurrence_start: DTSTART aus recurrence → recurrence_instance → Bezugsfeld → dateCreated;
+  // bei fester Terminliste der erste Listentermin (5.7, für die Berechnung ohne Bedeutung).
   let start: SeriesStart | null = null;
   if ("recurrence_start" in data) {
     start = parseStart(data.recurrence_start);
     if (!start) structure("recurrence_start", "recurrence_start ist ungültig");
+  } else if (dates?.length) {
+    start = { date: dates[0]!, time: null };
   } else if (parse.dtstart && !parse.dtstart.utc) {
     start = { date: parse.dtstart.date, time: parse.dtstart.time };
   } else if (parse.dtstart) {
@@ -292,8 +348,17 @@ export function readSeries(task: Task): Series | null {
     } else phase = "active";
   }
 
+  if (dates && instance && rule && !dates.some((d) => d.equals(instance))) {
+    diagnostics.push({
+      code: "series-instance-not-in-list",
+      message: `Vorkommen ${instance} steht nicht in der Terminliste`,
+      severity: "warning",
+      field: "recurrence_instance",
+    });
+  }
+
   // Fremddateien: rrule.js-Verhalten gilt, ein nicht zur Regel passender Start wird benannt (6).
-  if (rule && start && anchor === "calendar" && !isOccurrence(rule, start.date, start.date)) {
+  if (rule && !dates && start && anchor === "calendar" && !isOccurrence(rule, start.date, start.date)) {
     diagnostics.push({
       code: "series-start-mismatch",
       message: `Start ${start.date} ist kein Termin der Regel; gerechnet wird ab dem ersten passenden Termin`,
@@ -306,6 +371,7 @@ export function readSeries(task: Task): Series | null {
     raw,
     parse,
     rule,
+    dates,
     revision,
     revisionKey,
     start,
@@ -322,6 +388,16 @@ export function readSeries(task: Task): Series | null {
     diagnostics,
     structureError,
   };
+}
+
+/** Noch offene Termine einer festen Terminliste ab dem aktuellen Vorkommen (5.7); leer bei
+ *  beendeter Serie und bei RRULE-Serien. */
+export function remainingListDates(s: Series): Temporal.PlainDate[] {
+  if (!s.dates || s.phase === "ended" || !s.instance) return [];
+  const k = s.instance;
+  return s.dates.filter(
+    (d) => Temporal.PlainDate.compare(d, k) >= 0 && !s.C.has(d.toString()) && !s.S.has(d.toString()),
+  );
 }
 
 /** Nächste Termine für die Vorschau (höchstens `limit`). */

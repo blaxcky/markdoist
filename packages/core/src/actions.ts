@@ -28,7 +28,13 @@ import {
   type RefField,
   type Series,
 } from "./recurrence/series";
-import { SUPPORTED_FORMAT_VERSION, type Priority, type Status, type Task } from "./task";
+import {
+  BASE_FORMAT_VERSION,
+  DATE_LIST_FORMAT_VERSION,
+  type Priority,
+  type Status,
+  type Task,
+} from "./task";
 
 export interface ActionContext {
   /** einmal festgehaltener Aktionszeitpunkt */
@@ -80,7 +86,17 @@ export type TaskAction =
       carryExceptions?: string[];
     }
   | { type: "changeReference"; revision: string; field: RefField; offsetDays: number | null }
-  | { type: "removeRecurrence"; revision: string };
+  | { type: "removeRecurrence"; revision: string }
+  /** Importabgleich einer festen Terminliste (4.7, 5.7): `dates` sind die importierten Termine
+   *  dieser Serie, `range` der Zeitraum der ganzen Importdatei (erster bis letzter Termin aller Arten;
+   *  ohne Angabe der dieser Serie); `wasteType` setzt die Abfuhrart neu (Zuordnung bei geändertem Schlüssel). */
+  | {
+      type: "mergeDates";
+      revision: string;
+      dates: string[];
+      range?: { from: string; to: string };
+      wasteType?: string;
+    };
 
 export type Plan =
   | { kind: "noop" }
@@ -115,6 +131,7 @@ function isSeriesAction(a: TaskAction): boolean {
     "changeRule",
     "changeReference",
     "removeRecurrence",
+    "mergeDates",
   ].includes(a.type);
 }
 
@@ -136,8 +153,11 @@ export function planAction(task: Task, action: TaskAction, ctx: ActionContext): 
   plan.remove = plan.remove.filter((k) => k in task.data);
   // Echte ID beim ersten aktiven Schreiben vergeben (3.2).
   if (!task.fields.id && !("id" in plan.set)) plan.set.id = ctx.newId();
-  if (isSeriesAction(action) && !("format_version" in task.data)) {
-    plan.set.format_version = SUPPORTED_FORMAT_VERSION;
+  if (isSeriesAction(action)) {
+    // Feste Terminlisten verlangen Version 2 (3.2, 5.7); nie zurückstufen.
+    const needed = series?.dates ? DATE_LIST_FORMAT_VERSION : BASE_FORMAT_VERSION;
+    const have = task.fields.formatVersion;
+    if (have === null || have < needed) plan.set.format_version = needed;
   }
   plan.set.dateModified = formatTimestamp(ctx.at, ctx.timeZone);
   return plan;
@@ -642,7 +662,12 @@ function planSeries(
         remove,
       };
     }
+    case "mergeDates":
+      return planMergeDates(task, series, action, ctx, now, revisionSet);
     case "changeRule": {
+      if (series.dates) {
+        return blocked("Feste Termine aus dem Kalender – nur Abstand, Ausnahmen oder Wiederholung entfernen");
+      }
       const p = parseRule(action.spec.rule);
       if (p.status !== "ok") return blocked(`Regel ungültig: ${p.message}`);
       const newStart = parseSpecStart(action.spec.start);
@@ -679,6 +704,94 @@ function planSeries(
     default:
       return blocked("Unbekannte Aktion");
   }
+}
+
+/**
+ * Importabgleich einer festen Terminliste (4.7): neue Termine einfügen; künftige, ungelöste Termine
+ * im Zeitraum der Importdatei, die dort fehlen, entfernen (verlegt). Vergangene, erledigte und
+ * übersprungene Termine bleiben. Fällt K weg, wird der nächste ungelöste Termin danach K. Eine beendete
+ * Serie wird fortgesetzt, wenn der Import neue Termine ab dem Aktionstag bringt: K ist dann der erste
+ * ungelöste Termin ab dem Aktionstag, in derselben Revision (5.7). Derselbe Import erneut ist ein No-op.
+ */
+function planMergeDates(
+  task: Task,
+  series: Series,
+  action: Extract<TaskAction, { type: "mergeDates" }>,
+  ctx: ActionContext,
+  now: string,
+  revisionSet: Record<string, YamlValue>,
+): Plan {
+  if (!series.dates) return blocked("Aufgabe hat keine feste Terminliste");
+  if (series.phase !== "active" && series.phase !== "ended") {
+    return blocked(seriesBlockedMessage(series) ?? "Serie ist nicht auswertbar");
+  }
+  const cmp = Temporal.PlainDate.compare;
+  const incoming = new Map<string, Temporal.PlainDate>();
+  for (const raw of action.dates) {
+    const d = parseKey(raw);
+    if (!d || !inDateRange(d)) return blocked(`Ungültiges Datum „${raw}“`);
+    incoming.set(d.toString(), d);
+  }
+  const set: Record<string, YamlValue> = { ...revisionSet };
+  const remove: string[] = [];
+  if (action.wasteType !== undefined) set.waste_type = action.wasteType;
+  if (!incoming.size) return { kind: "edit", set, remove };
+
+  const day = actionDay(ctx);
+  const sorted = [...incoming.values()].sort(cmp);
+  let lo = sorted[0]!;
+  let hi = sorted[sorted.length - 1]!;
+  if (action.range) {
+    const from = parseKey(action.range.from);
+    const to = parseKey(action.range.to);
+    if (!from || !to || cmp(from, lo) > 0 || cmp(to, hi) < 0) return blocked("Ungültiger Zeitraum des Imports");
+    lo = from;
+    hi = to;
+  }
+  const resolved = (d: Temporal.PlainDate) => series.C.has(d.toString()) || series.S.has(d.toString());
+  const list = new Map(series.dates.map((d) => [d.toString(), d]));
+  const moved = new Set<string>();
+  for (const [k, d] of list) {
+    if (cmp(d, day) > 0 && !resolved(d) && cmp(d, lo) >= 0 && cmp(d, hi) <= 0 && !incoming.has(k)) {
+      list.delete(k);
+      moved.add(k);
+    }
+  }
+  const added = [...incoming.values()].filter((d) => !list.has(d.toString()) && !moved.has(d.toString()));
+  for (const [k, d] of incoming) list.set(k, d);
+  const merged = [...list.values()].sort(cmp);
+  set.recurrence_dates = merged.map((d) => d.toString());
+
+  const firstFree = (from: Temporal.PlainDate, inclusive: boolean) =>
+    merged.find((d) => (inclusive ? cmp(d, from) >= 0 : cmp(d, from) > 0) && !resolved(d)) ?? null;
+  const K = series.instance;
+  let next: Temporal.PlainDate | null = null;
+  let body: string | undefined;
+  let note: string | undefined;
+  if (series.phase === "ended") {
+    next = added.some((d) => cmp(d, day) >= 0) ? firstFree(day, true) : null;
+    if (next) {
+      set.status = "open";
+      remove.push("completedDate");
+      const b = resetCheckboxes(task.body);
+      if (b !== task.body) body = b;
+      note = `Serie fortgesetzt, nächster Termin: ${next}`;
+    }
+  } else if (K && moved.has(K.toString())) {
+    next = firstFree(K, false);
+    if (!next) {
+      set.status = "done";
+      set.completedDate = now;
+      note = "Serie beendet – kein weiterer Termin";
+    }
+  }
+  if (next) {
+    const dates = datesForInstance(task, series, next, undefined, ctx.timeZone);
+    if (dates.error) return blocked(dates.error);
+    Object.assign(set, dates.set);
+    set.recurrence_instance = next.toString();
+  }
+  return { kind: "edit", set, remove, ...(body !== undefined ? { body } : {}), ...(note ? { note } : {}) };
 }
 
 function sameTime(a: Temporal.PlainTime | null, b: Temporal.PlainTime | null): boolean {
@@ -769,10 +882,9 @@ function buildSnapshot(
   ctx: ActionContext,
 ): Record<string, YamlValue> {
   const d = task.data;
-  const snap: Record<string, YamlValue> = {
-    recurrence_revision: series.revision ?? ctx.newId(),
-    recurrence: d.recurrence ?? series.raw,
-  };
+  const snap: Record<string, YamlValue> = { recurrence_revision: series.revision ?? ctx.newId() };
+  if (series.dates) snap.recurrence_dates = d.recurrence_dates ?? series.dates.map((x) => x.toString());
+  else snap.recurrence = d.recurrence ?? series.raw;
   const copy = (k: string, fallback?: YamlValue) => {
     if (k in d && d[k] !== undefined) snap[k] = d[k]!;
     else if (fallback !== undefined) snap[k] = fallback;
@@ -822,7 +934,7 @@ export function newTaskText(input: NewTaskInput, ctx: ActionContext): { id: stri
     const text = createFileText(
       [
         ["id", id],
-        ["format_version", SUPPORTED_FORMAT_VERSION],
+        ["format_version", BASE_FORMAT_VERSION],
         ["title", input.title.trim()],
         ["kind", "list"],
         ["status", "open"],
@@ -837,7 +949,7 @@ export function newTaskText(input: NewTaskInput, ctx: ActionContext): { id: stri
   const text = createFileText(
     [
       ["id", id],
-      ["format_version", SUPPORTED_FORMAT_VERSION],
+      ["format_version", BASE_FORMAT_VERSION],
       ["title", input.title.trim()],
       ["status", "open"],
       ["priority", "none"],
@@ -850,6 +962,64 @@ export function newTaskText(input: NewTaskInput, ctx: ActionContext): { id: stri
     body,
   );
   return { id, text };
+}
+
+export interface NewDateSeriesInput {
+  title: string;
+  note?: string;
+  /** Termine der festen Terminliste (`YYYY-MM-DD`), Reihenfolge und Duplikate egal */
+  dates: string[];
+  /** Abstand von `scheduled` zur Frist in Tagen (Vorlauf, negativ = davor); null = kein `scheduled` */
+  offsetDays: number | null;
+  /** Abfuhrart (4.7) */
+  wasteType?: string;
+}
+
+/** Text einer neuen Serie mit fester Terminliste (4.7, 5.7): Kalenderart, Bezugsfeld `due`, nicht im
+ *  Eingang. K ist der erste Termin ab dem Aktionstag; ohne einen solchen null (nichts anlegen). */
+export function newDateSeriesText(
+  input: NewDateSeriesInput,
+  ctx: ActionContext,
+): { id: string; text: string; instance: string } | null {
+  const byKey = new Map<string, Temporal.PlainDate>();
+  for (const raw of input.dates) {
+    const d = parseKey(raw);
+    if (d && inDateRange(d)) byKey.set(d.toString(), d);
+  }
+  const dates = [...byKey.values()].sort(Temporal.PlainDate.compare);
+  const day = actionDay(ctx);
+  const k = dates.find((d) => Temporal.PlainDate.compare(d, day) >= 0);
+  if (!k) return null;
+  const scheduled = input.offsetDays !== null ? k.add({ days: input.offsetDays }) : null;
+  if (scheduled && !inDateRange(scheduled)) return null;
+  const id = ctx.newId();
+  const now = formatTimestamp(ctx.at, ctx.timeZone);
+  const note = input.note ?? "";
+  const body = note === "" ? "" : note.endsWith("\n") ? note : `${note}\n`;
+  const text = createFileText(
+    [
+      ["id", id],
+      ["format_version", DATE_LIST_FORMAT_VERSION],
+      ["title", input.title.trim()],
+      ["status", "open"],
+      ["priority", "none"],
+      ["inbox", false],
+      ["due", k.toString()],
+      ["scheduled", scheduled?.toString()],
+      ["recurrence_dates", dates.map((d) => d.toString())],
+      ["recurrence_revision", ctx.newId()],
+      ["recurrence_start", dates[0]!.toString()],
+      ["recurrence_anchor", "calendar"],
+      ["recurrence_field", "due"],
+      ["recurrence_offset_days", input.offsetDays ?? undefined],
+      ["recurrence_instance", k.toString()],
+      ["waste_type", input.wasteType],
+      ["dateCreated", now],
+      ["dateModified", now],
+    ],
+    body,
+  );
+  return { id, text, instance: k.toString() };
 }
 
 /** „Als Aufgabe übernehmen“: Frontmatter vor eine Datei ohne Frontmatter schreiben (3.1). */
@@ -867,7 +1037,7 @@ export function adoptFileText(name: string, text: string, ctx: ActionContext): s
     createFileText(
       [
         ["id", ctx.newId()],
-        ["format_version", SUPPORTED_FORMAT_VERSION],
+        ["format_version", BASE_FORMAT_VERSION],
         ["title", name.replace(/\.md$/i, "")],
         ["status", "open"],
         ["priority", "none"],

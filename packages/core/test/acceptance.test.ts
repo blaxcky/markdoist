@@ -80,7 +80,7 @@ const ALL_ACTIONS = (rev: string, k: string): TaskAction[] => [
 
 describe("AK-37: Formatversion, Serienstruktur, Migration, Archiv", () => {
   it("höhere format_version: alle Aktionen gesperrt", () => {
-    const text = series("calendar", "FREQ=WEEKLY;BYDAY=MO", "2026-10-12", [], "- [ ] a\n").replace("format_version: 1", "format_version: 2");
+    const text = series("calendar", "FREQ=WEEKLY;BYDAY=MO", "2026-10-12", [], "- [ ] a\n").replace("format_version: 1", "format_version: 3");
     const t = task(text);
     expect(t.readOnly).toBe(true);
     for (const a of ALL_ACTIONS("REV1", "2026-10-12")) {

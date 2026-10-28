@@ -4,7 +4,12 @@ import { parseSimpleFrontmatter } from "./fastyaml";
 import { parseFrontmatter, splitFile, type SplitFile, type YamlValue } from "./frontmatter";
 import { isUlid } from "./ulid";
 
-export const SUPPORTED_FORMAT_VERSION = 1;
+/** Höchste lesbare Formatversion (3.2). Version 2 = Version 1 plus feste Terminlisten (5.7). */
+export const SUPPORTED_FORMAT_VERSION = 2;
+/** Version neu angelegter Dateien ohne feste Terminliste. */
+export const BASE_FORMAT_VERSION = 1;
+/** Version von Dateien mit `recurrence_dates` (5.7). */
+export const DATE_LIST_FORMAT_VERSION = 2;
 
 export type Status = "open" | "in-progress" | "done";
 export type Priority = "none" | "low" | "normal" | "high";
@@ -30,6 +35,7 @@ export type DiagnosticCode =
   | "series-needs-clarification"
   | "series-end-pending"
   | "series-start-mismatch"
+  | "series-instance-not-in-list"
   | "series-conflicting-history"
   | "duplicate-id"
   | "conflict-variant"

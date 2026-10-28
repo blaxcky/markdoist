@@ -1,7 +1,7 @@
 // Index, Ansichten, Filter, Sortierung und Suche (4.1–4.3, 7.4).
 import { Temporal } from "temporal-polyfill";
 import { datePart, isOverdue, sortKey, todayOf, type Clock, type DateValue } from "./dates";
-import { readSeries, parseKey, type Series } from "./recurrence/series";
+import { readSeries, parseKey, remainingListDates, type Series } from "./recurrence/series";
 import {
   PRIORITY_RANK,
   type Diagnostic,
@@ -525,6 +525,45 @@ export function listsView(idx: Index): TaskView[] {
     const kb = modifiedKey(b);
     const c = ka === null || kb === null ? cmpKey(ka, kb) : kb - ka;
     return c !== 0 ? c : collator.compare(a.task.fields.title, b.task.fields.title);
+  });
+}
+
+/** Abfuhrart einer Müllabfuhr-Serie (4.7), sonst null. */
+export function wasteTypeOf(v: TaskView): string | null {
+  const w = v.task.data.waste_type;
+  return !isList(v) && typeof w === "string" && w.trim() ? w : null;
+}
+
+export interface WasteEntry {
+  view: TaskView;
+  wasteType: string;
+  /** aktuelles Vorkommen (kann überfällig sein); null bei beendeter oder gesperrter Serie */
+  next: Temporal.PlainDate | null;
+  /** noch offene Termine ab dem aktuellen einschließlich */
+  remaining: number;
+}
+
+/** Müllabfuhr-Übersicht (4.7): eine Zeile je Abfuhrart, nach nächstem Termin; ohne Termin zuletzt. */
+export function wasteView(idx: Index): WasteEntry[] {
+  const out: WasteEntry[] = [];
+  for (const v of idx.tasks) {
+    const wasteType = wasteTypeOf(v);
+    if (!wasteType) continue;
+    const s = v.series;
+    const active = s && s.phase === "active" && v.task.fields.status !== "done";
+    out.push({
+      view: v,
+      wasteType,
+      next: active ? s.instance : null,
+      remaining: s ? remainingListDates(s).length : 0,
+    });
+  }
+  return out.sort((a, b) => {
+    if (a.next && b.next) {
+      const c = Temporal.PlainDate.compare(a.next, b.next);
+      if (c !== 0) return c;
+    } else if (a.next || b.next) return a.next ? -1 : 1;
+    return collator.compare(a.view.task.fields.title, b.view.task.fields.title);
   });
 }
 
