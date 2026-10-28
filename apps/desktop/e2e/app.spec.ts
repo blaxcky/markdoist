@@ -511,3 +511,54 @@ test("Listen: Reihenfolge ziehen, Haken zurücksetzen, Text ändern, Suche öffn
   await page.keyboard.press("Escape");
   await expect(page.locator('[data-testid="list-row"][data-title="Packliste Urlaub"]')).toContainText("0/3");
 });
+
+test("Müllabfuhr: ICS importieren, Abfuhrart öffnen, Termin überspringen, erneuter Import ändert nichts (4.7)", async () => {
+  // Nachbildung der Vorlage ohne echte Adresse; der Dateidialog des Hauptprozesses liefert sie direkt.
+  const ics = join(__dirname, "../../../packages/app/test/fixtures/abfuhr-2026.ics");
+  await app.evaluate(({ dialog }, p) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [p] })) as never;
+  }, ics);
+  await page.keyboard.press("Control+6");
+  await expect(page.getByText(/Noch keine Abfuhrtermine/)).toBeVisible();
+  await page.getByTestId("waste-import").click();
+  await expect(page.getByTestId("waste-import-dialog")).toBeVisible();
+  await expect(page.getByTestId("waste-import-effect-0")).toHaveText("neu, 5 Termine");
+  await expect(page.getByTestId("waste-import-name-0")).toHaveValue("Bioabfallbehaelter");
+  await page.getByTestId("waste-import-name-0").fill("Biotonne");
+  await page.getByTestId("waste-import-name-2").fill("Restmüll");
+  await page.getByTestId("waste-import-apply").click();
+  await expect(page.getByTestId("toast")).toHaveText("Kalender importiert: 4 Abfuhrarten, 10 Termine");
+  await expect(page.getByTestId("waste-row")).toHaveCount(4);
+  await expect(page.getByTestId("waste-row").first()).toHaveAttribute("data-title", "Biotonne");
+  const rest = await file("Restmüll.md");
+  expect(rest).toContain("format_version: 2\n");
+  expect(rest).toContain("waste_type: Restabfallbehaelter 120 l\n");
+  expect(rest).toContain("scheduled: 2026-11-06\n");
+  expect(rest).not.toMatch(/MUSTERWEG|BEISPIELORT/);
+
+  // Abfuhrart öffnen: aktuelles Vorkommen als Aufgabe, weitere Termine darunter.
+  await page.locator('[data-testid="waste-row"][data-title="Restmüll"]').click();
+  await expect(page.getByTestId("waste-desc")).toHaveText("Feste Termine aus dem Kalender: noch 2, bis Fr 11.12.2026");
+  await expect(row("Restmüll")).toHaveCount(1);
+  await page.getByTestId("waste-date-menu-2026-12-11").click();
+  await page.getByTestId("waste-skip").click();
+  await expect.poll(() => file("Restmüll.md")).toMatch(/skipped_instances:\n {2}- 2026-12-11\n/);
+  await expect(page.getByTestId("waste-desc")).toHaveText("Feste Termine aus dem Kalender: noch 1, bis Fr 11.12.2026");
+  // Vorlauf ändern
+  await page.getByTestId("waste-lead").click();
+  await page.getByTestId("datelist-lead").fill("3");
+  await page.getByTestId("datelist-save").click();
+  await expect.poll(() => file("Restmüll.md")).toContain("scheduled: 2026-11-10\n");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("waste-row")).toHaveCount(4);
+
+  // In „Alle offenen“ steht je Abfuhrart nur der nächste Termin.
+  await page.getByTestId("nav-all").click();
+  await expect(row("Biotonne")).toHaveCount(1);
+
+  // Derselbe Kalender erneut: keine Änderung, nichts zu übernehmen.
+  await page.getByTestId("nav-waste").click();
+  await page.getByTestId("waste-import").click();
+  await expect(page.getByTestId("waste-import-effect-0")).toHaveText("keine Änderung");
+  await expect(page.getByTestId("waste-import-apply")).toBeDisabled();
+});

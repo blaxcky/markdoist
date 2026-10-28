@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("markdoist", {
   info: call("app:info"),
   settings: { get: call("settings:get"), setTheme: call("settings:theme") },
   folder: { choose: call("folder:choose"), set: call("folder:set") },
+  ics: { choose: call("ics:choose") },
   openExternal: call("open:external"),
   storage: Object.fromEntries(methods.map((m) => [m, call(`storage:${m}`)])),
   kv: { get: call("kv:get"), set: call("kv:set"), delete: call("kv:delete") },

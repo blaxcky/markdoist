@@ -73,6 +73,15 @@ export const IconTrash = (p: P) => (
     <path d="M10.5 10.5v6M13.5 10.5v6" />
   </Svg>
 );
+/** Mülltonne mit Rädern (Müllabfuhr, 4.7) */
+export const IconBin = (p: P) => (
+  <Svg {...p}>
+    <path d="M5 7.5h14M10 5.5h4M6.5 7.5l1 11.5h9l1-11.5" />
+    <path d="M10 11v5M14 11v5" />
+    <circle cx="8.5" cy="20" r="1" />
+    <circle cx="15.5" cy="20" r="1" />
+  </Svg>
+);
 export const IconWarning = (p: P) => (
   <Svg {...p}>
     <path d="M12 4.5l8 14H4z" />

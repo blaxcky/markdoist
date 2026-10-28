@@ -15,6 +15,7 @@ export const T = {
     search: "Suche",
     lists: "Listen",
     more: "Mehr",
+    waste: "Müllabfuhr",
   },
   lists: {
     newList: "Neue Liste",
@@ -96,6 +97,18 @@ export const T = {
     done: "Noch nichts erledigt.",
     lists: "Noch keine Listen. Einkaufszettel, Packliste, Gesprächsthemen – alles, was du nur abhaken willst.",
     noFolder: "Bitte einen Aufgabenordner wählen.",
+    waste: "Noch keine Abfuhrtermine. Importiere die ICS-Datei deiner Müllabfuhr, dann steht jeder Abholtag als Aufgabe in Heute.",
+    wasteMobile: "Noch keine Abfuhrtermine. Den Kalender der Müllabfuhr importierst du am Desktop.",
+  },
+  waste: {
+    import: "Kalender importieren …",
+    noMore: "Keine Termine mehr",
+    upcoming: "Weitere Termine",
+    past: "Vergangene Termine",
+    skip: "Überspringen",
+    unskip: "Nicht mehr überspringen",
+    remaining: (n: number) => (n === 1 ? "noch 1 Termin" : `noch ${n} Termine`),
+    leadTime: "Vorlauf",
   },
   unverified: "Anzeige aus dem Zwischenspeicher – wird geprüft …",
   /** Kurzform in der Kopfzeile (Android): ohne eigenes Banner, damit die Liste beim Start nicht springt */

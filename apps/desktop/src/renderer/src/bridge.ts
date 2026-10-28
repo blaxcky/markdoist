@@ -10,6 +10,8 @@ interface Bridge {
   info(): Promise<{ version: string }>;
   settings: { get(): Promise<Settings>; setTheme(t: Settings["theme"]): Promise<Settings> };
   folder: { choose(): Promise<Settings>; set(folder: string): Promise<Settings> };
+  /** ICS-Datei wählen und lesen (Müllabfuhr-Import, 4.7); null = abgebrochen */
+  ics: { choose(): Promise<{ name: string; text?: string; error?: string } | null> };
   openExternal(url: string): Promise<void>;
   /** Speicheroperationen; erstes Argument ist der Ordner des aufrufenden Repositorys (7.1). */
   storage: {

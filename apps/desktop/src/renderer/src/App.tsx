@@ -25,6 +25,7 @@ import { Problems } from "./components/Problems";
 import { Trash } from "./components/Trash";
 import { History } from "./components/History";
 import { ListRow, Lists } from "./components/Lists";
+import { DateListEditor, WasteDates, WasteHead, WasteImportDialog, WasteOverview } from "./components/Waste";
 import { Menu, MenuItem } from "./components/Menu";
 import { useDialog } from "./dialog";
 import {
@@ -36,6 +37,7 @@ import {
   IconFolder,
   IconHelp,
   IconInbox,
+  IconBin,
   IconList,
   IconPlus,
   IconPlusCircle,
@@ -51,7 +53,7 @@ import {
   IconWarning,
 } from "./components/Icons";
 
-type ViewName = "inbox" | "today" | "all" | "done" | "lists" | "problems" | "trash" | "history";
+type ViewName = "inbox" | "today" | "all" | "done" | "lists" | "waste" | "problems" | "trash" | "history";
 type FocusField = "due" | "scheduled" | "priority" | "title" | "note";
 
 interface Toast {
@@ -142,6 +144,10 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const [selected, setSelected] = useState<string | null>(null);
   /** geöffnete Liste in der Ansicht „Listen“ (4.6) */
   const [openList, setOpenList] = useState<string | null>(null);
+  /** geöffnete Abfuhrart in der Ansicht „Müllabfuhr“ (4.7) */
+  const [openWaste, setOpenWaste] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [editLead, setEditLead] = useState(false);
   /** Detaildialog zur ausgewählten Aufgabe offen */
   const [open, setOpen] = useState(false);
   const [capture, setCapture] = useState(false);
@@ -193,11 +199,16 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         return [{ title: null, items: filtered(allOpenView(idx, tz)) }];
       case "done":
         return [{ title: null, items: filtered(doneView(idx).tasks) }];
+      case "waste": {
+        // Geöffnete Abfuhrart: das aktuelle Vorkommen als normale Aufgabenzeile (4.7).
+        const v = openWaste ? idx.tasks.find((t) => t.task.ref === openWaste) : undefined;
+        return [{ title: null, items: v && v.task.fields.status !== "done" ? [v] : [] }];
+      }
       default:
         return [];
     }
      
-  }, [idx, view, query, includeDone, filter, inboxNewest, tz, sort]);
+  }, [idx, view, query, includeDone, filter, inboxNewest, tz, sort, openWaste]);
 
   const flat = sections.flatMap((s) => s.items);
   // Abhaken: Haken sofort, Liste bleibt stehen, bis die Zeile ausgeblendet und eingeklappt ist.
@@ -275,12 +286,13 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         searchRef.current?.focus();
         return;
       }
-      if (ctrl && ["1", "2", "3", "4", "5"].includes(e.key)) {
+      if (ctrl && ["1", "2", "3", "4", "5", "6"].includes(e.key)) {
         e.preventDefault();
         setOpen(false);
         setQuery("");
-        const next = (["inbox", "today", "all", "done", "lists"] as ViewName[])[Number(e.key) - 1]!;
+        const next = (["inbox", "today", "all", "done", "lists", "waste"] as ViewName[])[Number(e.key) - 1]!;
         if (next === "lists") setOpenList(null);
+        if (next === "waste") setOpenWaste(null);
         setView(next);
         return;
       }
@@ -307,6 +319,20 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           setCapture(true);
         }
         return;
+      }
+      // Müllabfuhr: In der Übersicht nur Erfassen; in einer Abfuhrart führt Escape zur Übersicht zurück.
+      if (view === "waste" && !query && !detailOpen) {
+        if (!openWaste) {
+          if (e.key === "n" || e.key === "N") {
+            e.preventDefault();
+            setCapture(true);
+          }
+          return;
+        }
+        if (e.key === "Escape") {
+          setOpenWaste(null);
+          return;
+        }
       }
       // Listen in Suchergebnissen: Enter öffnet, Aufgabenaktionen gelten nicht.
       if (selectedView?.task.fields.isList && !["ArrowDown", "ArrowUp", "j", "k", "Enter", "/", "n", "N"].includes(e.key)) return;
@@ -385,7 +411,9 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const viewTitle = query.trim() ? `${T.views.search}: „${query.trim()}“` : T.views[view];
   const activeDisplay = Object.keys(filter).length + (sort !== "default" ? 1 : 0);
   const listsPage = view === "lists" && !query;
-  const listView = !((view === "problems" || view === "trash" || view === "history" || view === "lists") && !query);
+  const wastePage = view === "waste" && !query;
+  const wasteTask = wastePage && openWaste ? (idx.tasks.find((v) => v.task.ref === openWaste) ?? null) : null;
+  const listView = !((view === "problems" || view === "trash" || view === "history" || view === "lists" || view === "waste") && !query);
 
   const nav = (name: ViewName, label: string, icon: React.ReactNode, count?: number, testid?: string) => (
     <button
@@ -394,6 +422,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         setQuery("");
         setOpen(false);
         if (name === "lists") setOpenList(null);
+        if (name === "waste") setOpenWaste(null);
         setView(name);
       }}
       data-testid={testid ?? `nav-${name}`}
@@ -513,6 +542,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           {nav("all", T.views.all, <IconUpcoming size={24} />)}
           {nav("done", T.views.done, <IconDone size={24} />)}
           {nav("lists", T.views.lists, <IconList size={24} />)}
+          {nav("waste", T.views.waste, <IconBin size={24} />)}
           <div className="side-section" title={repo.folder}>
             {folderName}
           </div>
@@ -662,7 +692,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         </header>
         <div className="scroll">
           <div className="page">
-            {!listsPage && <h1 className="page-title">{viewTitle}</h1>}
+            {!listsPage && !wastePage && <h1 className="page-title">{viewTitle}</h1>}
             {listView && (
               <div className="page-count">
                 <IconTasks size={16} />
@@ -697,6 +727,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                   setOpen(true);
                 }}
               />
+            ) : wastePage && !wasteTask ? (
+              <WasteOverview idx={idx} onOpen={setOpenWaste} onImport={() => setImporting(true)} />
             ) : view === "problems" && !query ? (
               <Problems repo={repo} state={state} onSelect={(r) => openTask(r)} onOutcome={notify} />
             ) : view === "trash" && !query ? (
@@ -704,6 +736,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
             ) : view === "history" && !query ? (
               <History repo={repo} state={state} onOutcome={notify} />
             ) : (
+              <>
+              {wasteTask && <WasteHead view={wasteTask} onBack={() => setOpenWaste(null)} onEditLead={() => setEditLead(true)} />}
               <div className="list" role="listbox" aria-label="Aufgaben" data-testid="list">
                 {shown.map((s, i) =>
                   s.items.length ? (
@@ -742,10 +776,10 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                     </div>
                   ) : null,
                 )}
-                {!state.loading && shown.every((s) => s.items.length === 0) && (
+                {!state.loading && !wasteTask && shown.every((s) => s.items.length === 0) && (
                   <div className="empty">{query ? "Keine Treffer." : T.empty[view as "inbox" | "today" | "all" | "done"]}</div>
                 )}
-                {!query && view !== "done" && (
+                {!query && view !== "done" && view !== "waste" && (
                   <button className="add-inline" onClick={() => setCapture(true)}>
                     <span className="plus">
                       <IconPlus size={18} />
@@ -778,6 +812,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                   </div>
                 )}
               </div>
+              {wasteTask && <WasteDates view={wasteTask} today={idx.today} repo={repo} onOutcome={notify} />}
+              </>
             )}
           </div>
         </div>
@@ -816,6 +852,27 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           }}
         />
       )}
+      {importing && (
+        <WasteImportDialog
+          repo={repo}
+          idx={idx}
+          onClose={() => setImporting(false)}
+          onDone={(text, error) => {
+            setImporting(false);
+            setToast({ text, error, id: Date.now() });
+          }}
+        />
+      )}
+      {editLead && wasteTask?.series && (
+        <DateListEditor
+          series={wasteTask.series}
+          onCancel={() => setEditLead(false)}
+          onSave={(action) => {
+            setEditLead(false);
+            void repo.perform(wasteTask.task.ref, action, "Vorlauf geändert").then((o) => notify(o, "Vorlauf geändert"));
+          }}
+        />
+      )}
       {help && <Help onClose={() => setHelp(false)} />}
       {toast && (
         <div key={toast.id} className={`toast${toast.error ? " error" : ""}${toast.out ? " out" : ""}`} role="status" data-testid="toast">
@@ -839,7 +896,7 @@ const SHORTCUTS: [string, string][] = [
   ["P", "Priorität setzen"],
   ["Entf", "Löschen"],
   ["Ctrl+Z", "Rückgängig"],
-  ["Ctrl+1 … 5", "Eingang, Heute, Alle offenen, Erledigt, Listen"],
+  ["Ctrl+1 … 6", "Eingang, Heute, Alle offenen, Erledigt, Listen, Müllabfuhr"],
   ["F5", "Neu einlesen"],
 ];
 

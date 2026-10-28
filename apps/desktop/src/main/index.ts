@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import { createHash } from "node:crypto";
-import { stat } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { basename, join } from "node:path";
 import icon from "../../build/icons/256x256.png?asset";
 import { FsAdapter } from "./fsAdapter";
 import { LocalStore, loadSettings, saveSettings, type Settings } from "./settings";
@@ -109,6 +109,19 @@ function registerIpc() {
     return setFolder(r.filePaths[0]);
   });
   ipcMain.handle("folder:set", async (_e, folder: string) => setFolder(folder));
+  // Müllabfuhr-Import (4.7): nur lesen, die Datei bleibt, wo sie ist.
+  ipcMain.handle("ics:choose", async () => {
+    const r = await dialog.showOpenDialog(win!, {
+      title: "Kalender der Müllabfuhr importieren",
+      properties: ["openFile"],
+      filters: [{ name: "Kalender (ICS)", extensions: ["ics"] }],
+    });
+    const path = r.filePaths[0];
+    if (r.canceled || !path) return null;
+    const info = await stat(path);
+    if (info.size > 5 * 1024 * 1024) return { name: basename(path), error: "Datei ist größer als 5 MB" };
+    return { name: basename(path), text: await readFile(path, "utf8") };
+  });
   ipcMain.handle("open:external", (_e, url: string) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
   });

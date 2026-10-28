@@ -2110,3 +2110,90 @@ button.strip-day:hover:not(:disabled) .strip-dot {
 .chevron-closed {
   transform: rotate(-90deg);
 }
+
+/* ---------- Müllabfuhr (4.7) ---------- */
+.waste-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.waste-next {
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding-right: 4px;
+  white-space: nowrap;
+}
+.waste-next.none {
+  color: var(--fg-faint);
+}
+.waste-date {
+  align-items: center;
+  padding: 8px 0;
+}
+.waste-date.skipped .title,
+.waste-date.past.übersprungen .title {
+  text-decoration: line-through;
+  color: var(--fg-muted);
+}
+.waste-date .menu-anchor {
+  position: relative;
+}
+.waste-state {
+  color: var(--fg-muted);
+  font-size: 12px;
+  padding-right: 4px;
+}
+.waste-date.past.versäumt .waste-state {
+  color: var(--danger);
+}
+.waste-past > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.waste-past > summary::-webkit-details-marker {
+  display: none;
+}
+.waste-past:not([open]) > summary svg {
+  transform: rotate(-90deg);
+}
+.empty.small {
+  padding: 8px 0;
+  font-size: 13px;
+}
+.modal.waste-import {
+  width: min(720px, 94vw);
+}
+.waste-file {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+.waste-rows {
+  border-collapse: collapse;
+  width: 100%;
+}
+.waste-rows td {
+  padding: 6px 6px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.waste-name input {
+  width: 100%;
+}
+.waste-key {
+  color: var(--fg-muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+.waste-effect {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.waste-effect.unchanged,
+.waste-effect.past-only {
+  color: var(--fg-muted);
+}
+.waste-effect.blocked {
+  color: var(--danger);
+}

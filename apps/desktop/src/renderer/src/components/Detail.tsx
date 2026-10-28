@@ -18,7 +18,7 @@ import {
 } from "@markdoist/app";
 import {
   describeOccurrence,
-  describeRule,
+  describeSeries,
   formatGermanDate,
   parseKey,
   Temporal,
@@ -29,6 +29,7 @@ import {
 } from "@markdoist/core";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { RecurrenceEditor } from "./RecurrenceEditor";
+import { DateListEditor } from "./Waste";
 import { Menu, MenuItem } from "./Menu";
 import {
   IconCalendar,
@@ -255,7 +256,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
   const hidden = [`${T.preview.nextOccurrence}:`, `${T.preview.firstOccurrence}:`, `${T.fields.due}:`, `${T.fields.scheduled}:`];
   const notes = (complete?.lines ?? []).filter((l) => l !== T.preview.ends && !hidden.some((h) => l.startsWith(h)));
   const occ = s?.instance ? describeOccurrence(s.instance) : "";
-  const ruleText = s ? (s.rule ? (describeRule(s.rule, s.anchor) ?? s.raw) : s.raw) : "";
+  const ruleText = s ? (describeSeries(s) ?? s.raw) : "";
   const phaseNote = !s ? "" : s.phase === "ended" ? "beendet" : s.phase === "clarify" ? "Fortschreibung klären" : s.phase === "active" ? "" : "gesperrt";
   const toggleException = (d: string, skipped: boolean) =>
     s && void act({ type: "setException", revision: s.revisionKey, date: d, skipped: !skipped }, skipped ? "Ausnahme entfernt" : "Termin wird übersprungen");
@@ -424,7 +425,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                           </div>
                           <div className="menu-sep" />
                           <MenuItem icon={<IconPencil size={20} />} testId="series-edit" onClick={() => (setMenu(false), setEditRule("edit"))}>
-                            Regel bearbeiten …
+                            {s.dates ? "Termine und Vorlauf …" : "Regel bearbeiten …"}
                           </MenuItem>
                           {seriesActive && s.anchor === "calendar" && (
                             <div className="menu-form">
@@ -566,7 +567,10 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                         Serie wiederöffnen
                       </button>
                     )}
-                    {reopenPreview?.preview.result === "blocked" && (
+                    {reopenPreview?.preview.result === "blocked" && s.dates && (
+                      <div className="series-note" data-testid="series-continue-import">Neue Termine kommen mit dem nächsten Kalenderimport der Müllabfuhr.</div>
+                    )}
+                    {reopenPreview?.preview.result === "blocked" && !s.dates && (
                       <button className="btn" disabled={ro} onClick={() => setEditRule("continue")} data-testid="series-continue">
                         <IconRepeat size={16} />
                         Mit neuer Regel fortsetzen
@@ -801,13 +805,23 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                 <span className="side-text" data-testid="series-desc">
                   {s ? ruleText : "Hinzufügen"}
                 </span>
-                {s && <span className="side-sub">{s.anchor === "calendar" ? "nach Kalender" : "ab Erledigung"}</span>}
+                {s && <span className="side-sub">{s.dates ? "aus dem Kalenderimport" : s.anchor === "calendar" ? "nach Kalender" : "ab Erledigung"}</span>}
               </button>
             </div>
           </aside>
           )}
         </div>
-        {editRule && (
+        {editRule && s?.dates && (
+          <DateListEditor
+            series={s}
+            onCancel={() => setEditRule(false)}
+            onSave={(action) => {
+              setEditRule(false);
+              void act(action, "Vorlauf geändert");
+            }}
+          />
+        )}
+        {editRule && !s?.dates && (
           <RecurrenceEditor
             task={t}
             series={s}
