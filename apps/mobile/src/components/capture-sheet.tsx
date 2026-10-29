@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Keyboard, KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import Animated, { Extrapolation, SlideInDown, interpolate, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, { Easing, SlideInDown, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
 import { PlusIcon } from "./icons";
@@ -40,12 +40,12 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
       hide.remove();
     };
   }, []);
-  // Wird Senden möglich, dreht sich das Plus mit einer Feder eine Vierteldrehung und der Knopf wird voll.
+  // Wird Senden möglich, dreht sich das Plus zügig eine Vierteldrehung und der Knopf wird voll; bremst weich ab, ohne Nachschwingen.
   const armed = useSharedValue(ready ? 1 : 0);
   useEffect(() => {
-    armed.value = withSpring(ready ? 1 : 0, { damping: 11, stiffness: 170 });
+    armed.value = withTiming(ready ? 1 : 0, { duration: 180, easing: Easing.out(Easing.cubic) });
   }, [ready, armed]);
-  const buttonStyle = useAnimatedStyle(() => ({ opacity: interpolate(armed.value, [0, 1], [0.45, 1], Extrapolation.CLAMP) }));
+  const buttonStyle = useAnimatedStyle(() => ({ opacity: interpolate(armed.value, [0, 1], [0.45, 1]) }));
   const plusStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${armed.value * 90}deg` }] }));
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: c.backdrop }}>
