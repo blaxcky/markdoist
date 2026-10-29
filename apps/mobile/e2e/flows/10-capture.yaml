@@ -15,3 +15,17 @@ appId: de.markdoist.aufgaben
 - tapOn:
     id: tab-inbox
 - assertVisible: "Maestro Aufgabe"
+# Bearbeiten ist ohne Titel ausgegraut; mit Titel erfasst es und öffnet das Detail der neuen Aufgabe.
+- tapOn:
+    id: fab-capture
+- assertVisible:
+    id: capture-edit
+    enabled: false
+- tapOn:
+    id: capture-title
+- inputText: "Maestro Bearbeiten"
+- tapOn:
+    id: capture-edit
+- assertVisible:
+    id: field-title
+    text: "Maestro Bearbeiten"

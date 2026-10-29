@@ -86,6 +86,7 @@ if [ $fail = 0 ]; then
   check "Maestro Aufgabe.md" "inbox: true"
   if adb shell "cat '$DIR/Maestro Aufgabe.md'" | grep -qE '^(due|scheduled):'; then echo "FEHL Erfassung hat Termin"; fail=1; else echo "OK   Erfassung ohne Termin"; fi
   check "Per Verknuepfung.md" "inbox: true"
+  check "Maestro Bearbeiten.md" "inbox: true"
   check "Wochenrueckblick.md" "due: $NEXT"
   check "Wochenrueckblick.md" "inbox: false"
   check "Wochenrueckblick.md" "  - $SKIP_KEY"
@@ -123,9 +124,9 @@ if [ $fail = 0 ]; then
   check "Restmuell.md" "recurrence_offset_days: -3"
   check "Restmuell.md" "scheduled: $(date -u -d "$W1 -3 days" +%F)"
   check "Restmuell.md" "format_version: 2"
-  # AK-12: Serienaktionen legen keine Dateien an – 7 Seed-Dateien + 2 Erfassungen + 1 Liste + „Auch weg“.
+  # AK-12: Serienaktionen legen keine Dateien an – 7 Seed-Dateien + 3 Erfassungen + 1 Liste + „Auch weg“.
   n=$(adb shell ls "$DIR" | grep -c '\.md' || true)
-  if [ "$n" = 11 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 11)"; fail=1; fi
+  if [ "$n" = 12 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 12)"; fail=1; fi
   adb shell ls -a "$DIR" | grep -q 'todo-tmp' && { echo "FEHL Temp-Datei übrig"; fail=1; } || true
 fi
 exit $fail

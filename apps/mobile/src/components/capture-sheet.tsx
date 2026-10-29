@@ -1,12 +1,12 @@
-// Eingabeblatt der Erfassung (4.1): Blatt über der Liste, Titelzeile, darunter Chips und Senden-Knopf über der Tastatur.
+// Eingabeblatt der Erfassung (4.1): Blatt über der Liste, Titelzeile, darunter Chips und Plus-Knopf über der Tastatur.
 // Gemeinsam für neue Aufgaben, neue Listen und Listeneinträge (4.6); läuft als kopfloses transparentModal.
 import { useEffect, useState, type ReactNode } from "react";
 import { Keyboard, KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import Animated, { SlideInDown } from "react-native-reanimated";
+import Animated, { Extrapolation, SlideInDown, interpolate, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../theme";
-import { Glyph } from "./icons";
+import { PlusIcon } from "./icons";
 
 interface Props {
   value: string;
@@ -40,6 +40,13 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
       hide.remove();
     };
   }, []);
+  // Wird Senden möglich, dreht sich das Plus mit einer Feder eine Vierteldrehung und der Knopf wird voll.
+  const armed = useSharedValue(ready ? 1 : 0);
+  useEffect(() => {
+    armed.value = withSpring(ready ? 1 : 0, { damping: 11, stiffness: 170 });
+  }, [ready, armed]);
+  const buttonStyle = useAnimatedStyle(() => ({ opacity: interpolate(armed.value, [0, 1], [0.45, 1], Extrapolation.CLAMP) }));
+  const plusStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${armed.value * 90}deg` }] }));
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: c.backdrop }}>
       <Pressable style={{ flex: 1 }} onPress={() => nav.goBack()} accessibilityLabel="Schließen" testID="sheet-close" />
@@ -65,16 +72,21 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
           <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={{ gap: 8, paddingRight: 8 }} style={{ flex: 1 }}>
             {chips}
           </ScrollView>
-          <Pressable
-            onPress={onSubmit}
-            disabled={!ready}
-            testID={testID.submit}
-            accessibilityLabel={submitLabel}
-            accessibilityRole="button"
-            style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: c.primary, opacity: ready ? 1 : 0.45, alignItems: "center", justifyContent: "center" }}
-          >
-            <Glyph color={c.onPrimary} size={22} bold>↑</Glyph>
-          </Pressable>
+          <Animated.View style={buttonStyle}>
+            <Pressable
+              onPress={onSubmit}
+              disabled={!ready}
+              testID={testID.submit}
+              accessibilityLabel={submitLabel}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !ready }}
+              style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: c.primary, alignItems: "center", justifyContent: "center" }}
+            >
+              <Animated.View style={plusStyle}>
+                <PlusIcon color={c.onPrimary} size={18} weight={2.4} />
+              </Animated.View>
+            </Pressable>
+          </Animated.View>
         </View>
       </Animated.View>
     </KeyboardAvoidingView>

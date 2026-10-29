@@ -1,5 +1,5 @@
 // Schnellerfassung (4.1, AK-26): Titel genügt; landet im Eingang ohne Termin.
-// Gestaltung nach Vorlage: Blatt über der Liste, Titelzeile, Chips und roter Senden-Knopf über der Tastatur (CaptureSheet).
+// Blatt über der Liste mit Titelzeile, den Chips Beschreibung und Bearbeiten und rotem Plus-Knopf über der Tastatur (CaptureSheet).
 // Das Blatt schließt sofort, die Aufgabe steht schon in der Liste; geschrieben wird im Hintergrund (4.4).
 import { useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, TextInput } from "react-native";
@@ -9,7 +9,7 @@ import { T } from "@markdoist/app";
 import { useRepo } from "../repo";
 import { useNotify } from "../notify";
 import { useTheme } from "../theme";
-import { Glyph, InboxIcon, LinesIcon } from "../components/icons";
+import { Glyph, LinesIcon } from "../components/icons";
 import { CaptureSheet } from "../components/capture-sheet";
 import { navigationRef, type RootStack } from "../navigation";
 
@@ -42,13 +42,15 @@ export function CaptureScreen() {
         else if (o.status !== "ok" && o.status !== "noop" && navigationRef.isReady()) navigationRef.navigate("Capture", input);
       });
   };
-  const chip = (label: string, icon: ReactNode, onPress: (() => void) | undefined, testID?: string, active = false) => (
+  // Ohne `onPress` (Bearbeiten ohne Titel) ist der Chip sichtbar ausgegraut.
+  const chip = (label: string, icon: ReactNode, onPress: (() => void) | undefined, testID: string, active = false) => (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       testID={testID}
-      accessibilityRole={onPress ? "button" : "text"}
-      style={{ flexDirection: "row", alignItems: "center", gap: 7, height: 34, paddingHorizontal: 11, borderRadius: 8, borderWidth: 1, borderColor: active ? c.primary : c.outline, backgroundColor: active ? c.primaryContainer : c.surface }}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !onPress, selected: active }}
+      style={{ flexDirection: "row", alignItems: "center", gap: 7, height: 34, paddingHorizontal: 11, borderRadius: 8, borderWidth: 1, borderColor: active ? c.primary : c.outline, backgroundColor: active ? c.primaryContainer : c.surface, opacity: onPress ? 1 : 0.45 }}
     >
       {icon}
       <Text style={{ color: c.fg, fontSize: 14 }}>{label}</Text>
@@ -81,7 +83,6 @@ export function CaptureScreen() {
       }
       chips={
         <>
-          {chip(T.views.inbox, <InboxIcon color={c.muted} size={15} />, undefined)}
           {chip("Beschreibung", <LinesIcon color={c.muted} size={14} />, () => setShowNote((x) => !x), "capture-toggle-note", showNote)}
           {chip("Bearbeiten", <Glyph color={c.muted} size={15}>✎</Glyph>, ready ? () => submit(true) : undefined, "capture-edit")}
         </>
