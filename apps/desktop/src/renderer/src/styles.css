@@ -2025,9 +2025,14 @@ button.strip-day:hover:not(:disabled) .strip-dot {
 .item-row:hover .title {
   padding-right: 0;
 }
+/* Das X steht ganz rechts neben der Zeile: Der Innenabstand überbrückt die Lücke zur Zeile, und es
+   reagiert auch unsichtbar auf die Maus, damit es aus jeder Richtung erreichbar ist. */
 .item-row .row-actions {
-  top: 50%;
-  transform: translateY(-50%);
+  top: 0;
+  bottom: 0;
+  align-items: center;
+  padding-left: 8px;
+  pointer-events: auto;
 }
 .item-row .grip {
   position: absolute;

@@ -512,6 +512,27 @@ test("Listen: Reihenfolge ziehen, Haken zurücksetzen, Text ändern, Suche öffn
   await expect(page.locator('[data-testid="list-row"][data-title="Packliste Urlaub"]')).toContainText("0/3");
 });
 
+test("Listen: X zum Löschen bleibt erreichbar, wenn die Maus aus der Zeile hinüberfährt (4.6)", async () => {
+  await page.getByTestId("nav-lists").click();
+  await page.locator('[data-testid="list-row"][data-title="Packliste Urlaub"]').click();
+  const item = page.locator('[data-testid="item-row"][data-text="Zahnbürste"]');
+  const box = (await item.boundingBox())!;
+  const y = box.y + box.height / 2;
+  // Wie eine echte Maus: aus der Zeile über den schmalen Spalt rechts daneben bis zum X.
+  const x = (await item.getByTestId("item-remove").boundingBox())!;
+  for (const px of [box.x + box.width - 2, box.x + box.width + 2, x.x + x.width / 2]) await page.mouse.move(px, y);
+  await expect(item.locator(".row-actions")).toHaveCSS("opacity", "1");
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect.poll(() => file("Packliste.md")).not.toContain("Zahnbürste");
+  // Von unten aus dem Rand angefahren erscheint das X ebenfalls.
+  const next = page.locator('[data-testid="item-row"][data-text="Ladekabel"]');
+  const nx = (await next.getByTestId("item-remove").boundingBox())!;
+  await page.mouse.move(nx.x + nx.width / 2, nx.y + nx.height + 40);
+  await page.mouse.move(nx.x + nx.width / 2, nx.y + nx.height / 2);
+  await expect(next.locator(".row-actions")).toHaveCSS("opacity", "1");
+});
+
 test("Müllabfuhr: ICS importieren, Abfuhrart öffnen, Termin überspringen, erneuter Import ändert nichts (4.7)", async () => {
   // Nachbildung der Vorlage ohne echte Adresse; der Dateidialog des Hauptprozesses liefert sie direkt.
   const ics = join(__dirname, "../../../packages/app/test/fixtures/abfuhr-2026.ics");
