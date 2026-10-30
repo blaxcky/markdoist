@@ -2,6 +2,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { join } from "node:path";
+import { clampZoom } from "./zoom";
 
 let tmpCounter = 0;
 
@@ -76,13 +77,16 @@ export class LocalStore {
 export interface Settings {
   folder: string | null;
   theme: "system" | "light" | "dark";
+  /** Zoomfaktor des Fensters, 1 = 100 % */
+  zoom: number;
 }
 
 export async function loadSettings(dir: string): Promise<Settings> {
   try {
-    return { folder: null, theme: "system", ...JSON.parse(await fs.readFile(join(dir, "settings.json"), "utf8")) };
+    const s = { folder: null, theme: "system", ...JSON.parse(await fs.readFile(join(dir, "settings.json"), "utf8")) };
+    return { ...s, zoom: clampZoom(s.zoom ?? 1) };
   } catch {
-    return { folder: null, theme: "system" };
+    return { folder: null, theme: "system", zoom: 1 };
   }
 }
 

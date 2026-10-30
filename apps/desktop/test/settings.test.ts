@@ -65,11 +65,31 @@ describe("saveSettings gleichzeitige Aufrufe (R3)", () => {
   it("20 gleichzeitige saveSettings(): alle erfüllt, letzter Aufruf gewinnt, keine Temp-Reste", async () => {
     const themes: Settings["theme"][] = ["system", "light", "dark"];
     const results = await Promise.allSettled(
-      Array.from({ length: 20 }, (_, i) => saveSettings(base, { folder: `/ordner/${i}`, theme: themes[i % 3]! })),
+      Array.from({ length: 20 }, (_, i) => saveSettings(base, { folder: `/ordner/${i}`, theme: themes[i % 3]!, zoom: 1 })),
     );
     expect(results.filter((r) => r.status === "rejected")).toEqual([]);
-    expect(await loadSettings(base)).toEqual({ folder: "/ordner/19", theme: themes[19 % 3] });
+    expect(await loadSettings(base)).toEqual({ folder: "/ordner/19", theme: themes[19 % 3], zoom: 1 });
     expect(JSON.parse(await readFile(join(base, "settings.json"), "utf8")).folder).toBe("/ordner/19");
     expect(await tmpFiles(base)).toEqual([]);
+  });
+});
+
+describe("Ansichtsgröße in settings.json (4.5)", () => {
+  it("fehlt die Datei oder der Wert, gilt 100 %", async () => {
+    expect((await loadSettings(base)).zoom).toBe(1);
+    await writeFile(join(base, "settings.json"), JSON.stringify({ folder: "/a", theme: "dark" }));
+    expect(await loadSettings(base)).toEqual({ folder: "/a", theme: "dark", zoom: 1 });
+  });
+
+  it("unbrauchbare Werte werden 1, Ausreißer begrenzt", async () => {
+    await writeFile(join(base, "settings.json"), JSON.stringify({ folder: null, theme: "system", zoom: "x" }));
+    expect((await loadSettings(base)).zoom).toBe(1);
+    await writeFile(join(base, "settings.json"), JSON.stringify({ folder: null, theme: "system", zoom: 5 }));
+    expect((await loadSettings(base)).zoom).toBe(2);
+  });
+
+  it("gespeicherter Wert kommt unverändert zurück", async () => {
+    await saveSettings(base, { folder: "/a", theme: "light", zoom: 1.3 });
+    expect(await loadSettings(base)).toEqual({ folder: "/a", theme: "light", zoom: 1.3 });
   });
 });

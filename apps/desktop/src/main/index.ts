@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import icon from "../../build/icons/256x256.png?asset";
 import { FsAdapter } from "./fsAdapter";
 import { LocalStore, loadSettings, saveSettings, type Settings } from "./settings";
+import { stepZoom, zoomCommand, type ZoomCommand } from "./zoom";
 
 // Datenverzeichnis: ~/.config/markdoist (Plan 3.1). Für Tests überschreibbar.
 const dataDir = process.env.MARKDOIST_DATA_DIR ?? join(app.getPath("appData"), "markdoist");
@@ -16,7 +17,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win: BrowserWindow | null = null;
-let settings: Settings = { folder: null, theme: "system" };
+let settings: Settings = { folder: null, theme: "system", zoom: 1 };
 let adapter: FsAdapter | null = null;
 let unwatch: (() => void) | null = null;
 const store = new LocalStore(dataDir);
@@ -67,9 +68,21 @@ function createWindow(): void {
       sandbox: true,
       nodeIntegration: false,
       backgroundThrottling: !hidden,
+      zoomFactor: settings.zoom,
     },
   });
   if (!hidden) win.on("ready-to-show", () => win?.show());
+  // Ansichtsgröße (4.5): Ctrl+Plus/Minus/0 und Ctrl+Mausrad, gespeichert in settings.json.
+  // Nach jedem Laden erneut setzen, damit Chromiums eigene Zoom-Erinnerung nicht abweicht.
+  win.webContents.on("did-finish-load", () => win?.webContents.setZoomFactor(settings.zoom));
+  win.webContents.on("before-input-event", (e, input) => {
+    const cmd = zoomCommand(input);
+    if (!cmd) return;
+    // Verhindert auch die Zoom-Kürzel des Standardmenüs.
+    e.preventDefault();
+    applyZoom(cmd);
+  });
+  win.webContents.on("zoom-changed", (_e, dir) => applyZoom(dir));
   // Links nur extern und nur http(s) öffnen (2.2).
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
@@ -88,6 +101,14 @@ function createWindow(): void {
     for (const [k, v] of Object.entries(query)) u.searchParams.set(k, v);
     void win.loadURL(u.toString());
   } else void win.loadFile(join(__dirname, "../renderer/index.html"), { query });
+}
+
+function applyZoom(cmd: ZoomCommand) {
+  const zoom = stepZoom(settings.zoom, cmd);
+  win?.webContents.setZoomFactor(zoom);
+  if (zoom === settings.zoom) return;
+  settings = { ...settings, zoom };
+  void saveSettings(dataDir, settings);
 }
 
 function registerIpc() {

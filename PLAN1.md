@@ -526,9 +526,10 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (ge
   - Tasten:
     - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…6 für Eingang, Heute, Alle offenen, Erledigt, Listen und Müllabfuhr; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
     - Aufgabenaktionen: Leertaste erledigt/öffnet wieder, `E` sortiert ein, `D` setzt die Frist, `S` plant ein, `P` setzt die Priorität, Entf löscht.
-    - Sonstiges: Ctrl+Z macht rückgängig, F5 liest neu ein.
+    - Sonstiges: Ctrl+Z macht rückgängig, F5 liest neu ein, Ctrl+Plus/Ctrl+Minus vergrößern/verkleinern die Ansicht (auch Ctrl+Mausrad), Ctrl+0 stellt die Normalgröße her.
   - In Eingabefeldern/Editoren sind Buchstaben-, Leertasten- und Entf-Aktionen deaktiviert. Ctrl+Z wirkt dort auf die Texteingabe; Aufgaben-Undo bleibt als eigener Befehl erreichbar. Fokus, Tastaturbedienung und Screenreader-Beschriftungen werden auch für Konflikt- und Wiederholungsdialoge geprüft.
   - Hell/dunkel folgt dem System, mit manueller Umschaltung.
+  - Ansichtsgröße (Entscheidung 30.10.2026): Zoom des ganzen Fensters in 10-%-Schritten von 70 bis 200 %. Der Wert ist gerätelokal und steht als `zoom` in `settings.json`; beim Start wird er wieder angewandt.
   - Keine systemweite Schnellerfassung [F, F008]. Erfasst wird im App-Fenster (`N`/Ctrl+N).
 - **Android:**
   - Untere Navigation mit vier Reitern: Eingang, Heute, Alle, ⋯ Mehr (Entscheidung 28.10.2026; vorher fünf Reiter mit Erledigt und Listen). Suche in der Kopfzeile, Plus-Button zum Erfassen, Ziehen nach unten zum Neueinlesen.

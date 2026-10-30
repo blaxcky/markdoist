@@ -562,3 +562,36 @@ test("Müllabfuhr: ICS importieren, Abfuhrart öffnen, Termin überspringen, ern
   await expect(page.getByTestId("waste-import-effect-0")).toHaveText("keine Änderung");
   await expect(page.getByTestId("waste-import-apply")).toBeDisabled();
 });
+
+test("Ansicht mit Ctrl+Plus vergrößern, Größe bleibt nach Neustart (4.5)", async () => {
+  // Tasten über den Main-Prozess: Playwright-Tastendrücke erreichen before-input-event nicht.
+  const press = (keyCode: string) =>
+    app.evaluate(({ BrowserWindow }, keyCode) => {
+      const wc = BrowserWindow.getAllWindows()[0]!.webContents;
+      wc.sendInputEvent({ type: "keyDown", keyCode, modifiers: ["control"] });
+      wc.sendInputEvent({ type: "keyUp", keyCode, modifiers: ["control"] });
+    }, keyCode);
+  const zoom = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.getZoomFactor());
+  const saved = async () => JSON.parse(await readFile(join(base, "data", "settings.json"), "utf8").catch(() => "{}")).zoom;
+
+  expect(await zoom()).toBe(1);
+  await press("Plus");
+  await press("numadd");
+  await expect.poll(zoom).toBeCloseTo(1.2);
+  await press("-");
+  await expect.poll(zoom).toBeCloseTo(1.1);
+  await expect.poll(saved).toBe(1.1);
+
+  await app.close();
+  app = await electron.launch({
+    args: [join(appDir, "out/main/index.js")],
+    env: { ...process.env, ...hide, MARKDOIST_FOLDER: folder, MARKDOIST_DATA_DIR: join(base, "data"), MARKDOIST_TEST_NOW: "2026-10-12T10:00" },
+  });
+  page = await app.firstWindow();
+  await page.getByTestId("list").waitFor();
+  await expect.poll(zoom).toBeCloseTo(1.1);
+
+  await press("0");
+  await expect.poll(zoom).toBe(1);
+  await expect.poll(saved).toBe(1);
+});

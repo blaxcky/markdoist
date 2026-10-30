@@ -898,6 +898,7 @@ const SHORTCUTS: [string, string][] = [
   ["Ctrl+Z", "Rückgängig"],
   ["Ctrl+1 … 6", "Eingang, Heute, Alle offenen, Erledigt, Listen, Müllabfuhr"],
   ["F5", "Neu einlesen"],
+  ["Ctrl + / Ctrl − / Ctrl+0", "Ansicht größer, kleiner, Normalgröße"],
 ];
 
 function Help({ onClose }: { onClose(): void }) {

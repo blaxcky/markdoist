@@ -28,13 +28,14 @@ Jeder Push auf `main` erzeugt ein [GitHub-Release](https://github.com/blaxcky/ma
 | `N` / `Ctrl+N` | neue Aufgabe erfassen |
 | `/` / `Ctrl+F` | suchen |
 | `↑` `↓` / `j` `k` | Aufgabe wählen, `Enter` öffnet den Titel |
-| `Ctrl+1` … `Ctrl+4` | Eingang, Heute, Alle offenen, Erledigt |
+| `Ctrl+1` … `Ctrl+6` | Eingang, Heute, Alle offenen, Erledigt, Listen, Müllabfuhr |
 | `Leertaste` | erledigen / wiederöffnen |
 | `E` | einsortieren (aus dem Eingang) |
 | `D` / `S` / `P` | Frist / Planung / Priorität setzen |
 | `Entf` | in den Papierkorb |
 | `Ctrl+Z` | Aufgabe rückgängig (im Editor: Text rückgängig; `Ctrl+Alt+Z` immer Aufgabe) |
 | `F5` | neu einlesen |
+| `Ctrl` `+` / `Ctrl` `-` / `Ctrl+0` | Ansicht größer, kleiner, Normalgröße (auch `Ctrl`+Mausrad); bleibt gespeichert |
 
 **Android:** Wischen nach rechts erledigt, nach links öffnet Aktionen (auch per langem Drücken). Ziehen nach unten liest neu ein. Langes Drücken auf das App-Symbol zeigt „Neue Aufgabe“. Einstellungen (⋮): Ordner wechseln, Papierkorb, Darstellung, Version.
 
