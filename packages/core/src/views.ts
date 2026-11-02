@@ -1,5 +1,6 @@
 // Index, Ansichten, Filter, Sortierung und Suche (4.1–4.3, 7.4).
 import { Temporal } from "temporal-polyfill";
+import { findCheckboxes } from "./checklist";
 import { datePart, isOverdue, sortKey, todayOf, type Clock, type DateValue } from "./dates";
 import { readSeries, parseKey, remainingListDates, type Series } from "./recurrence/series";
 import {
@@ -518,14 +519,100 @@ function modifiedKey(v: TaskView): number | null {
   return v.task.mtime;
 }
 
-/** Alle Listen, zuletzt geänderte zuerst; der Status spielt keine Rolle. */
-export function listsView(idx: Index): TaskView[] {
-  return idx.tasks.filter(isList).sort((a, b) => {
-    const ka = modifiedKey(a);
-    const kb = modifiedKey(b);
-    const c = ka === null || kb === null ? cmpKey(ka, kb) : kb - ka;
-    return c !== 0 ? c : collator.compare(a.task.fields.title, b.task.fields.title);
-  });
+export interface ListProgress {
+  done: number;
+  total: number;
+  open: number;
+}
+
+// Je Datei-Objekt zwischengespeichert, damit Sortieren und Filtern markdown-it nicht wiederholt.
+const progressCache = new WeakMap<Task, ListProgress>();
+
+/** Fortschritt „abgehakt/gesamt“ einer Liste */
+export function listProgress(v: TaskView): ListProgress {
+  let p = progressCache.get(v.task);
+  if (!p) {
+    const items = findCheckboxes(v.task.body);
+    const done = items.filter((c) => c.checked).length;
+    p = { done, total: items.length, open: items.length - done };
+    progressCache.set(v.task, p);
+  }
+  return p;
+}
+
+export type ListSort = "modified" | "open" | "title" | "created";
+/** „none-open“: ganz abgehakte und leere Listen */
+export type ListFilter = "all" | "open" | "none-open";
+
+export interface ListOptions {
+  sort: ListSort;
+  /** absteigend (größter Wert bzw. neueste zuerst; beim Titel Z–A) */
+  desc: boolean;
+  filter: ListFilter;
+}
+
+export const LIST_SORT_LABELS: Record<ListSort, string> = {
+  modified: "Zuletzt geändert",
+  open: "Offene Einträge",
+  title: "Titel",
+  created: "Erstellt",
+};
+
+/** Standardrichtung je Merkmal: neueste bzw. meiste offene zuerst, Titel A–Z */
+export const LIST_DEFAULT_DESC: Record<ListSort, boolean> = {
+  modified: true,
+  open: true,
+  title: false,
+  created: true,
+};
+
+export const LIST_FILTER_LABELS: Record<ListFilter, string> = {
+  all: "alle",
+  open: "mit offenen Einträgen",
+  "none-open": "ohne offene Einträge",
+};
+
+export const DEFAULT_LIST_OPTIONS: ListOptions = { sort: "modified", desc: true, filter: "all" };
+
+function listKey(v: TaskView, sort: ListSort): number | null {
+  switch (sort) {
+    case "modified":
+      return modifiedKey(v);
+    case "created":
+      return createdKey(v);
+    case "open":
+      return listProgress(v).open;
+    case "title":
+      return null;
+  }
+}
+
+/** Alle Listen, standardmäßig zuletzt geänderte zuerst; der Status spielt keine Rolle. */
+export function listsView(idx: Index, opts: ListOptions = DEFAULT_LIST_OPTIONS): TaskView[] {
+  const byTitle = (a: TaskView, b: TaskView) => collator.compare(a.task.fields.title, b.task.fields.title);
+  return idx.tasks
+    .filter((v) => {
+      if (!isList(v)) return false;
+      if (opts.filter === "open") return listProgress(v).open > 0;
+      if (opts.filter === "none-open") return listProgress(v).open === 0;
+      return true;
+    })
+    .sort((a, b) => {
+      let c: number;
+      if (opts.sort === "title") c = byTitle(a, b);
+      else {
+        const ka = listKey(a, opts.sort);
+        const kb = listKey(b, opts.sort);
+        // Fehlende Werte stehen in beiden Richtungen zuletzt.
+        if (ka === null || kb === null) {
+          c = cmpKey(ka, kb);
+          if (c !== 0) return c;
+        } else c = ka - kb;
+      }
+      if (c !== 0) return opts.desc ? -c : c;
+      // Gleichstand: immer nach Titel A–Z
+      return byTitle(a, b);
+    });
 }
 
 /** Abfuhrart einer Müllabfuhr-Serie (4.7), sonst null. */

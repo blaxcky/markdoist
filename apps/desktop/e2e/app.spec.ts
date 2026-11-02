@@ -494,6 +494,44 @@ test("Listen: anlegen, Einträge hinzufügen, abhaken, Abgehakte entfernen (4.6)
   await expect(row("Packliste Urlaub")).toHaveCount(0);
 });
 
+test("Listen: nach offenen Einträgen sortieren, Richtung umschalten, filtern (4.6)", async () => {
+  await writeFile(
+    join(folder, "Baumarkt.md"),
+    fm(["id: 01K7LISTE0000000000000000B", "title: Baumarkt", "kind: list", "status: open", "inbox: false", "dateModified: 2026-10-10T08:00:00+02:00"], "- [ ] Schrauben\n- [x] Dübel\n"),
+  );
+  await writeFile(
+    join(folder, "Geschenke.md"),
+    fm(["id: 01K7LISTE0000000000000000G", "title: Geschenke", "kind: list", "status: open", "inbox: false", "dateModified: 2026-10-09T08:00:00+02:00"], "- [x] Buch\n- [x] Schal\n"),
+  );
+  await page.getByTestId("rescan").click();
+  await page.getByTestId("nav-lists").click();
+  const titles = () => page.locator('[data-testid="list-row"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-title")));
+  await expect.poll(titles).toEqual(["Packliste Urlaub", "Baumarkt", "Geschenke"]);
+  await page.getByTestId("filter-toggle").click();
+  await page.getByTestId("list-sort").selectOption("open");
+  await expect(page.getByTestId("list-sort-dir")).toHaveValue("desc");
+  await expect.poll(titles).toEqual(["Packliste Urlaub", "Baumarkt", "Geschenke"]);
+  await page.getByTestId("list-sort-dir").selectOption("asc");
+  await expect.poll(titles).toEqual(["Geschenke", "Baumarkt", "Packliste Urlaub"]);
+  await page.getByTestId("list-filter").selectOption("open");
+  await expect.poll(titles).toEqual(["Baumarkt", "Packliste Urlaub"]);
+  await expect(page.locator(".page-count").first()).toContainText("2 Listen");
+  await expect(page.getByTestId("filter-toggle")).toContainText("Anzeige: 3");
+  // Einstellung bleibt nach Öffnen und Schließen einer Liste
+  await page.keyboard.press("Escape");
+  await page.locator('[data-testid="list-row"][data-title="Baumarkt"]').click();
+  await expect(page.getByTestId("list-title")).toHaveText("Baumarkt");
+  // Erstes Escape verlässt das fokussierte Eingabefeld, zweites führt zur Übersicht.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect.poll(titles).toEqual(["Baumarkt", "Packliste Urlaub"]);
+  await page.getByTestId("filter-toggle").click();
+  await page.getByTestId("list-filter").selectOption("none-open");
+  await expect.poll(titles).toEqual(["Geschenke"]);
+  await page.getByTestId("list-options-reset").click();
+  await expect.poll(titles).toEqual(["Packliste Urlaub", "Baumarkt", "Geschenke"]);
+});
+
 test("Listen: Reihenfolge ziehen, Haken zurücksetzen, Text ändern, Suche öffnet Liste (4.6)", async () => {
   await page.getByTestId("search").fill("packliste");
   await page.locator('[data-testid="list-row"][data-title="Packliste Urlaub"]').click();

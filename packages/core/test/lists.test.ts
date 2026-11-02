@@ -4,10 +4,12 @@ import {
   appendItem,
   buildIndex,
   clockAtLocal,
+  DEFAULT_LIST_OPTIONS,
   doneView,
   findCheckboxes,
   hashText,
   inboxView,
+  listProgress,
   listsView,
   moveItem,
   newTaskText,
@@ -18,6 +20,7 @@ import {
   setItemText,
   todayView,
   type IndexedFile,
+  type ListOptions,
 } from "../src";
 import { ctxAt, fm, run, TZ } from "./helpers";
 
@@ -53,6 +56,48 @@ describe("Listen: Dateiformat und Ansichten (4.6)", () => {
     const c = fm(["id: 01C0000000000000000000000C", "title: C", "kind: list"]);
     const idx = buildIndex([file("A.md", a), file("B.md", b), file("C.md", c)], clock);
     expect(listsView(idx).map((v) => v.task.fields.title)).toEqual(["B", "A", "C"]);
+  });
+});
+
+describe("Listen: sortieren und filtern (4.6)", () => {
+  const l = (title: string, extra: string[], body: string) =>
+    file(`${title}.md`, fm([`id: 01${title.toUpperCase().padEnd(24, "0").slice(0, 24)}`, `title: ${title}`, "kind: list", ...extra], body));
+  const idx = buildIndex(
+    [
+      l("Einkauf", ["dateCreated: 2026-10-01T10:00:00+02:00", "dateModified: 2026-10-05T10:00:00+02:00"], "- [ ] Milch\n- [x] Brot\n- [ ] Eier\n- [ ] Käse\n"),
+      l("Packliste", ["dateCreated: 2026-10-03T10:00:00+02:00", "dateModified: 2026-10-11T10:00:00+02:00"], "- [ ] Zelt\n- [X] Schlafsack\n"),
+      l("Baumarkt", ["dateCreated: 2026-10-02T10:00:00+02:00", "dateModified: 2026-10-09T10:00:00+02:00"], "- [ ] Schrauben\n"),
+      l("Erledigt", ["dateCreated: 2026-10-04T10:00:00+02:00", "dateModified: 2026-10-10T10:00:00+02:00"], "- [x] A\n- [x] B\n"),
+      l("Leer", ["dateCreated: 2026-09-30T10:00:00+02:00", "dateModified: 2026-10-01T10:00:00+02:00"], "Nur eine Notiz\n\n```\n- [ ] im Code-Block\n```\n"),
+    ],
+    clock,
+  );
+  const titles = (opts: Partial<ListOptions>) => listsView(idx, { ...DEFAULT_LIST_OPTIONS, ...opts }).map((v) => v.task.fields.title);
+  const byTitle = (t: string) => idx.tasks.find((v) => v.task.fields.title === t)!;
+
+  it("Fortschritt zählt offene und abgehakte Einträge, Code-Blöcke nicht", () => {
+    expect(listProgress(byTitle("Einkauf"))).toEqual({ done: 1, total: 4, open: 3 });
+    expect(listProgress(byTitle("Erledigt"))).toEqual({ done: 2, total: 2, open: 0 });
+    expect(listProgress(byTitle("Leer"))).toEqual({ done: 0, total: 0, open: 0 });
+  });
+  it("Standard bleibt: zuletzt geändert zuerst", () => {
+    expect(listsView(idx).map((v) => v.task.fields.title)).toEqual(["Packliste", "Erledigt", "Baumarkt", "Einkauf", "Leer"]);
+    expect(titles({ desc: false })).toEqual(["Leer", "Einkauf", "Baumarkt", "Erledigt", "Packliste"]);
+  });
+  it("offene Einträge ab und auf, Gleichstand nach Titel", () => {
+    expect(titles({ sort: "open", desc: true })).toEqual(["Einkauf", "Baumarkt", "Packliste", "Erledigt", "Leer"]);
+    expect(titles({ sort: "open", desc: false })).toEqual(["Erledigt", "Leer", "Baumarkt", "Packliste", "Einkauf"]);
+  });
+  it("Titel und Erstellt in beiden Richtungen", () => {
+    expect(titles({ sort: "title", desc: false })).toEqual(["Baumarkt", "Einkauf", "Erledigt", "Leer", "Packliste"]);
+    expect(titles({ sort: "title", desc: true })).toEqual(["Packliste", "Leer", "Erledigt", "Einkauf", "Baumarkt"]);
+    expect(titles({ sort: "created", desc: true })).toEqual(["Erledigt", "Packliste", "Baumarkt", "Einkauf", "Leer"]);
+    expect(titles({ sort: "created", desc: false })).toEqual(["Leer", "Einkauf", "Baumarkt", "Packliste", "Erledigt"]);
+  });
+  it("Filter: mit offenen Einträgen, ohne offene (abgehakt und leer)", () => {
+    expect(titles({ filter: "open" })).toEqual(["Packliste", "Baumarkt", "Einkauf"]);
+    expect(titles({ filter: "none-open" })).toEqual(["Erledigt", "Leer"]);
+    expect(titles({ filter: "all" })).toHaveLength(5);
   });
 });
 

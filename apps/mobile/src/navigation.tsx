@@ -26,7 +26,7 @@ import { RecurrenceScreen } from "./screens/recurrence-screen";
 import { SeriesHistoryScreen } from "./screens/series-history-screen";
 import { useRepoState } from "./repo";
 import { useTheme } from "./theme";
-import { FilterProvider, FilterSheet } from "./filter";
+import { FilterProvider, FilterSheet, ListOptionsSheet } from "./filter";
 import { GroupedSheet } from "./components/series-sheet";
 import { BinIcon, CalendarIcon, CheckCircleIcon, ChecklistIcon, GridIcon, InboxIcon, MoreIcon } from "./components/icons";
 import { wasteView } from "@markdoist/core";
@@ -226,7 +226,12 @@ export function RootNavigator() {
 
 function FilterSheetHost() {
   const state = useRepoState();
-  return <FilterSheet today={state.index.today} />;
+  return (
+    <>
+      <FilterSheet today={state.index.today} />
+      <ListOptionsSheet />
+    </>
+  );
 }
 
 function RootStackNavigator() {

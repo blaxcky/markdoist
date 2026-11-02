@@ -1,4 +1,4 @@
-// Listen (4.6): Übersicht aller Listen, zuletzt geänderte zuerst. Plus-Button öffnet das Eingabeblatt für eine neue Liste.
+// Listen (4.6): Übersicht aller Listen, sortier- und filterbar (Standard: zuletzt geänderte zuerst). Plus-Button öffnet das Eingabeblatt für eine neue Liste.
 import { useMemo, useState } from "react";
 import { Pressable, RefreshControl, Text, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
@@ -8,6 +8,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { T } from "@markdoist/app";
 import { listsView } from "@markdoist/core";
 import { ListHeader } from "../components/list-header";
+import { listOptionsActive, useFilter } from "../filter";
 import { ListRow } from "../components/list-row";
 import { PlusIcon } from "../components/icons";
 import { useRepo, useRepoState } from "../repo";
@@ -22,14 +23,15 @@ export function ListsScreen() {
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
   const [pulling, setPulling] = useState(false);
   useSnackbarInset(useBottomTabBarHeight() + 20 + 56 + 12);
-  const lists = useMemo(() => listsView(state.index), [state.index]);
+  const { listOpts, setListsOpen } = useFilter();
+  const lists = useMemo(() => listsView(state.index, listOpts), [state.index, listOpts]);
   const unverified = state.unverified && !state.loading && !state.scanProgress;
   const subtitle =
     [lists.length ? (lists.length === 1 ? "1 Liste" : `${lists.length} Listen`) : "", unverified ? T.unverifiedShort : ""].filter(Boolean).join(" · ") || undefined;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <ListHeader title={T.views.lists} subtitle={subtitle} filter={false} />
+      <ListHeader title={T.views.lists} subtitle={subtitle} onOptions={() => setListsOpen(true)} optionsActive={listOptionsActive(listOpts)} />
       <FlashList
         data={lists}
         keyExtractor={(v) => v.task.ref}
@@ -48,7 +50,7 @@ export function ListsScreen() {
         ListEmptyComponent={
           state.loading ? null : (
             <Text style={{ color: c.muted, textAlign: "center", padding: 40 }} testID="empty">
-              {T.empty.lists}
+              {listOpts.filter === "open" ? T.empty.listsOpen : listOpts.filter === "none-open" ? T.empty.listsNoneOpen : T.empty.lists}
             </Text>
           )
         }

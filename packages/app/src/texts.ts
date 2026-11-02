@@ -96,6 +96,8 @@ export const T = {
     all: "Keine offenen Aufgaben.",
     done: "Noch nichts erledigt.",
     lists: "Noch keine Listen. Einkaufszettel, Packliste, Gesprächsthemen – alles, was du nur abhaken willst.",
+    listsOpen: "Keine Listen mit offenen Einträgen.",
+    listsNoneOpen: "Keine Listen ohne offene Einträge.",
     noFolder: "Bitte einen Aufgabenordner wählen.",
     waste: "Noch keine Abfuhrtermine. Importiere die ICS-Datei deiner Müllabfuhr, dann steht jeder Abholtag als Aufgabe in Heute.",
     wasteMobile: "Noch keine Abfuhrtermine. Den Kalender der Müllabfuhr importierst du am Desktop.",

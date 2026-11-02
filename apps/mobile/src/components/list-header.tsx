@@ -13,7 +13,11 @@ import type { RootStack } from "../navigation";
 import { Menu } from "./menu";
 import { DotsIcon, Glyph, SearchIcon, ViewOptionsIcon } from "./icons";
 
-export function ListHeader({ title, subtitle, filter = true }: { title: string; subtitle?: string; filter?: boolean }) {
+/**
+ * `onOptions` ersetzt den Aufgabenfilter durch eigene Anzeige-Optionen (Listenübersicht, 4.6);
+ * `optionsActive` setzt dann den Punkt am Symbol.
+ */
+export function ListHeader({ title, subtitle, filter = true, onOptions, optionsActive }: { title: string; subtitle?: string; filter?: boolean; onOptions?: () => void; optionsActive?: boolean }) {
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
   const state = useRepoState();
   const repo = useRepo();
@@ -25,7 +29,8 @@ export function ListHeader({ title, subtitle, filter = true }: { title: string; 
     () => problemsView(state.index).length + state.recovery.length + repo.pendingDrafts(5000).length,
     [state.index, state.recovery, state.drafts, state.files, repo],
   );
-  const active = filterActive(f.filter, f.sort, f.inboxNewest);
+  const active = onOptions ? !!optionsActive : filterActive(f.filter, f.sort, f.inboxNewest);
+  const openOptions = onOptions ?? (() => f.setOpen(true));
   const iconBtn = (child: ReactNode, onPress: () => void, testID: string, label: string) => (
     <Pressable onPress={onPress} hitSlop={6} testID={testID} accessibilityLabel={label} accessibilityRole="button" style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 20 }} android_ripple={{ color: c.surfaceHigh, borderless: true }}>
       {child}
@@ -46,7 +51,7 @@ export function ListHeader({ title, subtitle, filter = true }: { title: string; 
         </Pressable>
       )}
       {iconBtn(<SearchIcon color={c.fg} size={19} />, () => nav.navigate("Search"), "nav-search", T.views.search)}
-      {filter && iconBtn(<ViewOptionsIcon color={c.fg} size={21} dot={active ? c.primary : undefined} />, () => f.setOpen(true), "nav-filter", "Filter und Sortierung")}
+      {filter && iconBtn(<ViewOptionsIcon color={c.fg} size={21} dot={active ? c.primary : undefined} />, openOptions, "nav-filter", onOptions ? "Sortierung und Filter" : "Filter und Sortierung")}
       {iconBtn(<DotsIcon color={c.fg} size={18} />, () => setMenu(true), "nav-menu", "Weitere Optionen")}
       <Menu
         open={menu}
@@ -54,7 +59,7 @@ export function ListHeader({ title, subtitle, filter = true }: { title: string; 
         placement="top"
         top={52}
         items={[
-          filter && { label: "Filter und Sortierung", onPress: () => f.setOpen(true) },
+          filter && { label: onOptions ? "Sortierung und Filter" : "Filter und Sortierung", onPress: openOptions },
           { label: T.actions.rescan, onPress: () => void repo.scan({ full: true }) },
           { label: problems > 0 ? `${T.views.problems} (${problems})` : T.views.problems, onPress: () => nav.navigate("Problems") },
           { label: T.views.history, onPress: () => nav.navigate("History"), testID: "nav-history" },

@@ -1,7 +1,7 @@
 // Listen (4.6): einfache Abhaklisten ohne Termine. Übersicht und geöffnete Liste.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { COMPLETE_COLLAPSE_MS, T, type CompletionPhase, type Outcome, type Repository } from "@markdoist/app";
-import { findCheckboxes, listsView, type Checkbox, type Index, type TaskAction, type TaskView } from "@markdoist/core";
+import { findCheckboxes, listProgress, listsView, type Checkbox, type Index, type ListOptions, type TaskAction, type TaskView } from "@markdoist/core";
 import { Menu, MenuItem } from "./Menu";
 import { reducedMotion, useCompletionFlow } from "../completion";
 import { IconChevronDown, IconClose, IconDots, IconGrip, IconList, IconPencil, IconPlus, IconTrash, IconUndo } from "./Icons";
@@ -9,6 +9,8 @@ import { IconChevronDown, IconClose, IconDots, IconGrip, IconList, IconPencil, I
 interface Props {
   repo: Repository;
   idx: Index;
+  /** Sortierung und Filter der Übersicht */
+  opts: ListOptions;
   /** geöffnete Liste oder null für die Übersicht */
   openRef: string | null;
   onOpen(ref: string | null): void;
@@ -16,20 +18,14 @@ interface Props {
   onEditMarkdown(ref: string): void;
 }
 
-export function Lists({ repo, idx, openRef, onOpen, onOutcome, onEditMarkdown }: Props) {
-  const lists = listsView(idx);
-  const open = openRef ? lists.find((v) => v.task.ref === openRef) : undefined;
+export function Lists({ repo, idx, opts, openRef, onOpen, onOutcome, onEditMarkdown }: Props) {
+  // Eine geöffnete Liste bleibt offen, auch wenn der Filter sie inzwischen ausblendet.
+  const open = openRef ? listsView(idx).find((v) => v.task.ref === openRef) : undefined;
   if (open) return <ListDetail key={open.task.ref} repo={repo} view={open} onBack={() => onOpen(null)} onOutcome={onOutcome} onEditMarkdown={onEditMarkdown} />;
-  return <ListOverview repo={repo} lists={lists} onOpen={onOpen} onOutcome={onOutcome} />;
+  return <ListOverview repo={repo} lists={listsView(idx, opts)} filter={opts.filter} onOpen={onOpen} onOutcome={onOutcome} />;
 }
 
-/** Fortschritt „abgehakt/gesamt“ einer Liste */
-export function listProgress(v: TaskView): { done: number; total: number } {
-  const items = findCheckboxes(v.task.body);
-  return { done: items.filter((c) => c.checked).length, total: items.length };
-}
-
-function ListOverview({ repo, lists, onOpen, onOutcome }: { repo: Repository; lists: TaskView[]; onOpen(ref: string): void; onOutcome(o: Outcome, label?: string): void }) {
+function ListOverview({ repo, lists, filter, onOpen, onOutcome }: { repo: Repository; lists: TaskView[]; filter: ListOptions["filter"]; onOpen(ref: string): void; onOutcome(o: Outcome, label?: string): void }) {
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const create = () => {
@@ -53,7 +49,11 @@ function ListOverview({ repo, lists, onOpen, onOutcome }: { repo: Repository; li
         {lists.map((v) => (
           <ListRow key={v.task.ref} view={v} onOpen={() => onOpen(v.task.ref)} />
         ))}
-        {!lists.length && !adding && <div className="empty">{T.empty.lists}</div>}
+        {!lists.length && !adding && (
+          <div className="empty" data-testid="lists-empty">
+            {filter === "open" ? T.empty.listsOpen : filter === "none-open" ? T.empty.listsNoneOpen : T.empty.lists}
+          </div>
+        )}
         {adding ? (
           <form
             className="item-add"

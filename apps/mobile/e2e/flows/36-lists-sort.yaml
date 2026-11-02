@@ -1,0 +1,48 @@
+# Listen (4.6): Sortierung und Filter der Übersicht. Nach 35-lists hat „Einkauf“ zwei offene Einträge,
+# die Seed-Liste „Geschenke“ ist ganz abgehakt.
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: more-lists
+- assertVisible:
+    id: "list-Einkauf"
+- assertVisible:
+    id: "list-Geschenke"
+- tapOn:
+    id: nav-filter
+- tapOn:
+    id: "list-filter-mit offenen Einträgen"
+- tapOn:
+    id: list-options-close
+- assertVisible:
+    id: "list-Einkauf"
+- assertNotVisible:
+    id: "list-Geschenke"
+- tapOn:
+    id: nav-filter
+- tapOn:
+    id: "list-filter-ohne offene Einträge"
+- tapOn:
+    id: list-options-close
+- assertVisible:
+    id: "list-Geschenke"
+- assertNotVisible:
+    id: "list-Einkauf"
+# Sortierung wählen, Richtung umschalten, dann alles zurücksetzen
+- tapOn:
+    id: nav-filter
+- tapOn:
+    id: "list-sort-Offene Einträge"
+- tapOn:
+    id: list-dir-aufsteigend
+- tapOn:
+    id: list-options-reset
+- tapOn:
+    id: list-options-close
+- assertVisible:
+    id: "list-Einkauf"
+- assertVisible:
+    id: "list-Geschenke"

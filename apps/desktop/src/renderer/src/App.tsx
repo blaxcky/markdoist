@@ -2,9 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { T, type Outcome, type Repository } from "@markdoist/app";
 import {
   allOpenView,
+  DEFAULT_LIST_OPTIONS,
   doneView,
   describeOccurrence,
   inboxView,
+  LIST_DEFAULT_DESC,
+  LIST_FILTER_LABELS,
+  LIST_SORT_LABELS,
   matchesFilter,
   problemsView,
   search,
@@ -12,6 +16,9 @@ import {
   sortViews,
   todayView,
   type Filter,
+  type ListFilter,
+  type ListOptions,
+  type ListSort,
   type SortChoice,
   type TaskView,
 } from "@markdoist/core";
@@ -144,6 +151,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const [selected, setSelected] = useState<string | null>(null);
   /** geöffnete Liste in der Ansicht „Listen“ (4.6) */
   const [openList, setOpenList] = useState<string | null>(null);
+  /** Sortierung und Filter der Listenübersicht (4.6), für die Sitzung */
+  const [listOpts, setListOpts] = useState<ListOptions>(DEFAULT_LIST_OPTIONS);
   /** geöffnete Abfuhrart in der Ansicht „Müllabfuhr“ (4.7) */
   const [openWaste, setOpenWaste] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
@@ -414,6 +423,12 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const wastePage = view === "waste" && !query;
   const wasteTask = wastePage && openWaste ? (idx.tasks.find((v) => v.task.ref === openWaste) ?? null) : null;
   const listView = !((view === "problems" || view === "trash" || view === "history" || view === "lists" || view === "waste") && !query);
+  const listsOverview = listsPage && !openList;
+  const listsDisplay =
+    (listOpts.sort !== DEFAULT_LIST_OPTIONS.sort ? 1 : 0) +
+    (listOpts.desc !== LIST_DEFAULT_DESC[listOpts.sort] ? 1 : 0) +
+    (listOpts.filter !== DEFAULT_LIST_OPTIONS.filter ? 1 : 0);
+  const displayCount = listsOverview ? listsDisplay : activeDisplay;
 
   const nav = (name: ViewName, label: string, icon: React.ReactNode, count?: number, testid?: string) => (
     <button
@@ -570,19 +585,65 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           <button className="icon-btn" onClick={() => void repo.scan({ full: true })} title="Neu einlesen (F5)" aria-label="Neu einlesen" data-testid="rescan">
             <IconRefresh size={24} />
           </button>
-          {listView && (
+          {(listView || listsOverview) && (
             <span className="menu-anchor">
               <button
-                className={`display-btn${showFilters || activeDisplay ? " active" : ""}`}
+                className={`display-btn${showFilters || displayCount ? " active" : ""}`}
                 onClick={() => setShowFilters((x) => !x)}
                 data-menu-anchor
                 aria-expanded={showFilters}
                 data-testid="filter-toggle"
               >
                 <IconDisplay size={24} />
-                <span>Anzeige{activeDisplay ? `: ${activeDisplay}` : ""}</span>
+                <span>Anzeige{displayCount ? `: ${displayCount}` : ""}</span>
               </button>
-              {showFilters && (
+              {showFilters && listsOverview && (
+                <Menu label="Anzeige" className="display-menu" onClose={() => setShowFilters(false)} testId="list-options">
+                  <div className="display-title">Sortierung</div>
+                  <label className="display-row">
+                    <span>Sortieren nach</span>
+                    <select
+                      value={listOpts.sort}
+                      onChange={(e) => {
+                        const s = e.target.value as ListSort;
+                        setListOpts((o) => ({ ...o, sort: s, desc: LIST_DEFAULT_DESC[s] }));
+                      }}
+                      aria-label="Sortierung der Listen"
+                      data-testid="list-sort"
+                    >
+                      {(Object.keys(LIST_SORT_LABELS) as ListSort[]).map((k) => (
+                        <option key={k} value={k}>
+                          {LIST_SORT_LABELS[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="display-row">
+                    <span>Richtung</span>
+                    <select value={listOpts.desc ? "desc" : "asc"} onChange={(e) => setListOpts((o) => ({ ...o, desc: e.target.value === "desc" }))} aria-label="Sortierrichtung der Listen" data-testid="list-sort-dir">
+                      <option value="asc">aufsteigend</option>
+                      <option value="desc">absteigend</option>
+                    </select>
+                  </label>
+                  <div className="display-title">Filter</div>
+                  <label className="display-row">
+                    <span>Einträge</span>
+                    <select value={listOpts.filter} onChange={(e) => setListOpts((o) => ({ ...o, filter: e.target.value as ListFilter }))} aria-label="Listen filtern" data-testid="list-filter">
+                      {(Object.keys(LIST_FILTER_LABELS) as ListFilter[]).map((k) => (
+                        <option key={k} value={k}>
+                          {LIST_FILTER_LABELS[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {listsDisplay > 0 && (
+                    <button className="display-reset" onClick={() => setListOpts(DEFAULT_LIST_OPTIONS)} data-testid="list-options-reset">
+                      Zurücksetzen
+                    </button>
+                  )}
+                </Menu>
+              )}
+              {showFilters && !listsOverview && (
                 <Menu label="Anzeige" className="display-menu" onClose={() => setShowFilters(false)} testId="filters">
                   <div className="display-title">Sortierung</div>
                   <label className="display-row">
@@ -718,6 +779,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
               <Lists
                 repo={repo}
                 idx={idx}
+                opts={listOpts}
                 openRef={openList}
                 onOpen={setOpenList}
                 onOutcome={notify}

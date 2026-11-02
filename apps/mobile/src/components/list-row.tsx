@@ -1,14 +1,9 @@
 // Zeile einer Liste (4.6) in der Listenübersicht und in der Suche.
 import { Pressable, Text } from "react-native";
 import { T } from "@markdoist/app";
-import { findCheckboxes, type TaskView } from "@markdoist/core";
+import { listProgress, type TaskView } from "@markdoist/core";
 import { useTheme } from "../theme";
 import { ChecklistIcon } from "./icons";
-
-export function listProgress(v: TaskView): { done: number; total: number } {
-  const items = findCheckboxes(v.task.body);
-  return { done: items.filter((c) => c.checked).length, total: items.length };
-}
 
 export function ListRow({ view, first, last, onOpen }: { view: TaskView; first?: boolean; last?: boolean; onOpen(): void }) {
   const c = useTheme();
