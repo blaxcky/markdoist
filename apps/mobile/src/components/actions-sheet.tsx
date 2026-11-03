@@ -14,7 +14,10 @@ export function pickDate(initial: string | null, onPick: (date: string) => void)
     value: base,
     mode: "date",
     firstDayOfWeek: 1,
+    // „Heute“ schließt den Dialog; er öffnet gleich wieder auf dem heutigen Tag, bestätigt wird weiter mit OK.
+    neutralButton: { label: "Heute" },
     onChange: (e, d) => {
+      if (e.type === "neutralButtonPressed") return pickDate(null, onPick);
       if (e.type !== "set" || !d) return;
       const pd = Temporal.PlainDate.from({ year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() });
       onPick(pd.toString());
