@@ -1973,6 +1973,16 @@ button.strip-day:hover:not(:disabled) .strip-dot {
 .list-progress.complete {
   color: var(--accent);
 }
+/* Programmieren (4.8): Hinweis auf eine Notiz am Eintrag */
+.dev-note {
+  display: inline-flex;
+  color: var(--fg-muted);
+  padding-right: 4px;
+}
+.item-row .dev-item-main,
+.item-row .dev-item-main .title {
+  cursor: pointer;
+}
 .list-head {
   margin-bottom: 4px;
 }

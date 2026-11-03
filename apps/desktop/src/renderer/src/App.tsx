@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { T, type Outcome, type Repository } from "@markdoist/app";
 import {
   allOpenView,
+  DEFAULT_DEV_ITEM_OPTIONS,
   DEFAULT_LIST_OPTIONS,
+  DEV_ITEM_DEFAULT_DESC,
+  DEV_ITEM_SORT_LABELS,
   doneView,
   describeOccurrence,
   inboxView,
@@ -15,6 +18,8 @@ import {
   SORT_LABELS,
   sortViews,
   todayView,
+  type DevItemOptions,
+  type DevItemSort,
   type Filter,
   type ListFilter,
   type ListOptions,
@@ -32,6 +37,7 @@ import { Problems } from "./components/Problems";
 import { Trash } from "./components/Trash";
 import { History } from "./components/History";
 import { ListRow, Lists } from "./components/Lists";
+import { Dev, DevListRow } from "./components/Dev";
 import { DateListEditor, WasteDates, WasteHead, WasteImportDialog, WasteOverview } from "./components/Waste";
 import { Menu, MenuItem } from "./components/Menu";
 import { useDialog } from "./dialog";
@@ -45,6 +51,7 @@ import {
   IconHelp,
   IconInbox,
   IconBin,
+  IconCode,
   IconList,
   IconPlus,
   IconPlusCircle,
@@ -60,7 +67,7 @@ import {
   IconWarning,
 } from "./components/Icons";
 
-type ViewName = "inbox" | "today" | "all" | "done" | "lists" | "waste" | "problems" | "trash" | "history";
+type ViewName = "inbox" | "today" | "all" | "done" | "lists" | "waste" | "dev" | "problems" | "trash" | "history";
 type FocusField = "due" | "scheduled" | "priority" | "title" | "note";
 
 interface Toast {
@@ -153,6 +160,11 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const [openList, setOpenList] = useState<string | null>(null);
   /** Sortierung und Filter der Listenübersicht (4.6), für die Sitzung */
   const [listOpts, setListOpts] = useState<ListOptions>(DEFAULT_LIST_OPTIONS);
+  /** geöffnete Programmier-Liste (4.8); `DEV_ORPHANS` = Einträge ohne Liste */
+  const [openDev, setOpenDev] = useState<string | null>(null);
+  /** Sortierung und Filter der Programmier-Übersicht und Sortierung der Einträge (4.8), für die Sitzung */
+  const [devOpts, setDevOpts] = useState<ListOptions>(DEFAULT_LIST_OPTIONS);
+  const [devItemOpts, setDevItemOpts] = useState<DevItemOptions>(DEFAULT_DEV_ITEM_OPTIONS);
   /** geöffnete Abfuhrart in der Ansicht „Müllabfuhr“ (4.7) */
   const [openWaste, setOpenWaste] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
@@ -249,11 +261,12 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   };
   /** Aufgabe auswählen und im Detaildialog öffnen, optional mit Fokus auf ein Feld; eine Liste öffnet die Listenansicht */
   const openTask = (ref: string, field?: FocusField) => {
-    if (idx.tasks.find((v) => v.task.ref === ref)?.task.fields.isList) {
+    const f = idx.tasks.find((v) => v.task.ref === ref)?.task.fields;
+    if (f?.isList || f?.isDevList) {
       setQuery("");
       setOpen(false);
-      setView("lists");
-      setOpenList(ref);
+      setView(f.isList ? "lists" : "dev");
+      (f.isList ? setOpenList : setOpenDev)(ref);
       return;
     }
     setSelected(ref);
@@ -295,13 +308,14 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         searchRef.current?.focus();
         return;
       }
-      if (ctrl && ["1", "2", "3", "4", "5", "6"].includes(e.key)) {
+      if (ctrl && ["1", "2", "3", "4", "5", "6", "7"].includes(e.key)) {
         e.preventDefault();
         setOpen(false);
         setQuery("");
-        const next = (["inbox", "today", "all", "done", "lists", "waste"] as ViewName[])[Number(e.key) - 1]!;
+        const next = (["inbox", "today", "all", "done", "lists", "waste", "dev"] as ViewName[])[Number(e.key) - 1]!;
         if (next === "lists") setOpenList(null);
         if (next === "waste") setOpenWaste(null);
+        if (next === "dev") setOpenDev(null);
         setView(next);
         return;
       }
@@ -329,6 +343,15 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         }
         return;
       }
+      // Programmieren wie Listen: keine Aufgabenkürzel, Escape führt zur Übersicht zurück.
+      if (view === "dev" && !query && !detailOpen) {
+        if (e.key === "Escape" && openDev) setOpenDev(null);
+        if (e.key === "n" || e.key === "N") {
+          e.preventDefault();
+          setCapture(true);
+        }
+        return;
+      }
       // Müllabfuhr: In der Übersicht nur Erfassen; in einer Abfuhrart führt Escape zur Übersicht zurück.
       if (view === "waste" && !query && !detailOpen) {
         if (!openWaste) {
@@ -344,7 +367,9 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         }
       }
       // Listen in Suchergebnissen: Enter öffnet, Aufgabenaktionen gelten nicht.
-      if (selectedView?.task.fields.isList && !["ArrowDown", "ArrowUp", "j", "k", "Enter", "/", "n", "N"].includes(e.key)) return;
+      if ((selectedView?.task.fields.isList || selectedView?.task.fields.isDevList) && !["ArrowDown", "ArrowUp", "j", "k", "Enter", "/", "n", "N"].includes(e.key)) return;
+      // Programmier-Einträge (4.8) haben weder Eingang noch Termine oder Priorität.
+      if (selectedView?.task.fields.isDevItem && ["e", "E", "d", "D", "s", "S", "p", "P"].includes(e.key)) return;
       const cur = selectedView;
       const i = selIndex;
       switch (e.key) {
@@ -421,14 +446,21 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const activeDisplay = Object.keys(filter).length + (sort !== "default" ? 1 : 0);
   const listsPage = view === "lists" && !query;
   const wastePage = view === "waste" && !query;
+  const devPage = view === "dev" && !query;
   const wasteTask = wastePage && openWaste ? (idx.tasks.find((v) => v.task.ref === openWaste) ?? null) : null;
-  const listView = !((view === "problems" || view === "trash" || view === "history" || view === "lists" || view === "waste") && !query);
-  const listsOverview = listsPage && !openList;
+  const listView = !((view === "problems" || view === "trash" || view === "history" || view === "lists" || view === "waste" || view === "dev") && !query);
+  const devOverview = devPage && !openDev;
+  const devList = devPage && !!openDev;
+  // Die Listen-Übersicht und die Programmier-Übersicht teilen das Anzeige-Menü, jede mit eigener Wahl.
+  const listsOverview = (listsPage && !openList) || devOverview;
+  const [lOpts, setLOpts] = devOverview ? [devOpts, setDevOpts] : [listOpts, setListOpts];
   const listsDisplay =
-    (listOpts.sort !== DEFAULT_LIST_OPTIONS.sort ? 1 : 0) +
-    (listOpts.desc !== LIST_DEFAULT_DESC[listOpts.sort] ? 1 : 0) +
-    (listOpts.filter !== DEFAULT_LIST_OPTIONS.filter ? 1 : 0);
-  const displayCount = listsOverview ? listsDisplay : activeDisplay;
+    (lOpts.sort !== DEFAULT_LIST_OPTIONS.sort ? 1 : 0) +
+    (lOpts.desc !== LIST_DEFAULT_DESC[lOpts.sort] ? 1 : 0) +
+    (lOpts.filter !== DEFAULT_LIST_OPTIONS.filter ? 1 : 0);
+  const devItemsDisplay =
+    (devItemOpts.sort !== DEFAULT_DEV_ITEM_OPTIONS.sort ? 1 : 0) + (devItemOpts.desc !== DEV_ITEM_DEFAULT_DESC[devItemOpts.sort] ? 1 : 0);
+  const displayCount = listsOverview ? listsDisplay : devList ? devItemsDisplay : activeDisplay;
 
   const nav = (name: ViewName, label: string, icon: React.ReactNode, count?: number, testid?: string) => (
     <button
@@ -438,6 +470,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         setOpen(false);
         if (name === "lists") setOpenList(null);
         if (name === "waste") setOpenWaste(null);
+        if (name === "dev") setOpenDev(null);
         setView(name);
       }}
       data-testid={testid ?? `nav-${name}`}
@@ -558,6 +591,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           {nav("done", T.views.done, <IconDone size={24} />)}
           {nav("lists", T.views.lists, <IconList size={24} />)}
           {nav("waste", T.views.waste, <IconBin size={24} />)}
+          {nav("dev", T.views.dev, <IconCode size={24} />)}
           <div className="side-section" title={repo.folder}>
             {folderName}
           </div>
@@ -585,7 +619,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           <button className="icon-btn" onClick={() => void repo.scan({ full: true })} title="Neu einlesen (F5)" aria-label="Neu einlesen" data-testid="rescan">
             <IconRefresh size={24} />
           </button>
-          {(listView || listsOverview) && (
+          {(listView || listsOverview || devList) && (
             <span className="menu-anchor">
               <button
                 className={`display-btn${showFilters || displayCount ? " active" : ""}`}
@@ -603,10 +637,10 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                   <label className="display-row">
                     <span>Sortieren nach</span>
                     <select
-                      value={listOpts.sort}
+                      value={lOpts.sort}
                       onChange={(e) => {
                         const s = e.target.value as ListSort;
-                        setListOpts((o) => ({ ...o, sort: s, desc: LIST_DEFAULT_DESC[s] }));
+                        setLOpts((o) => ({ ...o, sort: s, desc: LIST_DEFAULT_DESC[s] }));
                       }}
                       aria-label="Sortierung der Listen"
                       data-testid="list-sort"
@@ -620,7 +654,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                   </label>
                   <label className="display-row">
                     <span>Richtung</span>
-                    <select value={listOpts.desc ? "desc" : "asc"} onChange={(e) => setListOpts((o) => ({ ...o, desc: e.target.value === "desc" }))} aria-label="Sortierrichtung der Listen" data-testid="list-sort-dir">
+                    <select value={lOpts.desc ? "desc" : "asc"} onChange={(e) => setLOpts((o) => ({ ...o, desc: e.target.value === "desc" }))} aria-label="Sortierrichtung der Listen" data-testid="list-sort-dir">
                       <option value="asc">aufsteigend</option>
                       <option value="desc">absteigend</option>
                     </select>
@@ -628,7 +662,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                   <div className="display-title">Filter</div>
                   <label className="display-row">
                     <span>Einträge</span>
-                    <select value={listOpts.filter} onChange={(e) => setListOpts((o) => ({ ...o, filter: e.target.value as ListFilter }))} aria-label="Listen filtern" data-testid="list-filter">
+                    <select value={lOpts.filter} onChange={(e) => setLOpts((o) => ({ ...o, filter: e.target.value as ListFilter }))} aria-label="Listen filtern" data-testid="list-filter">
                       {(Object.keys(LIST_FILTER_LABELS) as ListFilter[]).map((k) => (
                         <option key={k} value={k}>
                           {LIST_FILTER_LABELS[k]}
@@ -637,13 +671,48 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                     </select>
                   </label>
                   {listsDisplay > 0 && (
-                    <button className="display-reset" onClick={() => setListOpts(DEFAULT_LIST_OPTIONS)} data-testid="list-options-reset">
+                    <button className="display-reset" onClick={() => setLOpts(DEFAULT_LIST_OPTIONS)} data-testid="list-options-reset">
                       Zurücksetzen
                     </button>
                   )}
                 </Menu>
               )}
-              {showFilters && !listsOverview && (
+              {showFilters && devList && (
+                <Menu label="Anzeige" className="display-menu" onClose={() => setShowFilters(false)} testId="dev-item-options">
+                  <div className="display-title">Sortierung</div>
+                  <label className="display-row">
+                    <span>Sortieren nach</span>
+                    <select
+                      value={devItemOpts.sort}
+                      onChange={(e) => {
+                        const s = e.target.value as DevItemSort;
+                        setDevItemOpts({ sort: s, desc: DEV_ITEM_DEFAULT_DESC[s] });
+                      }}
+                      aria-label="Sortierung der Einträge"
+                      data-testid="dev-item-sort"
+                    >
+                      {(Object.keys(DEV_ITEM_SORT_LABELS) as DevItemSort[]).map((k) => (
+                        <option key={k} value={k}>
+                          {DEV_ITEM_SORT_LABELS[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="display-row">
+                    <span>Richtung</span>
+                    <select value={devItemOpts.desc ? "desc" : "asc"} onChange={(e) => setDevItemOpts((o) => ({ ...o, desc: e.target.value === "desc" }))} aria-label="Sortierrichtung der Einträge" data-testid="dev-item-sort-dir">
+                      <option value="asc">aufsteigend</option>
+                      <option value="desc">absteigend</option>
+                    </select>
+                  </label>
+                  {devItemsDisplay > 0 && (
+                    <button className="display-reset" onClick={() => setDevItemOpts(DEFAULT_DEV_ITEM_OPTIONS)} data-testid="dev-item-options-reset">
+                      Zurücksetzen
+                    </button>
+                  )}
+                </Menu>
+              )}
+              {showFilters && !listsOverview && !devList && (
                 <Menu label="Anzeige" className="display-menu" onClose={() => setShowFilters(false)} testId="filters">
                   <div className="display-title">Sortierung</div>
                   <label className="display-row">
@@ -753,7 +822,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         </header>
         <div className="scroll">
           <div className="page">
-            {!listsPage && !wastePage && <h1 className="page-title">{viewTitle}</h1>}
+            {!listsPage && !wastePage && !devPage && <h1 className="page-title">{viewTitle}</h1>}
             {listView && (
               <div className="page-count">
                 <IconTasks size={16} />
@@ -789,6 +858,21 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                   setOpen(true);
                 }}
               />
+            ) : devPage ? (
+              <Dev
+                repo={repo}
+                idx={idx}
+                opts={devOpts}
+                itemOpts={devItemOpts}
+                openRef={openDev}
+                onOpen={setOpenDev}
+                onOpenItem={(ref) => {
+                  setSelected(ref);
+                  setFocusField(null);
+                  setOpen(true);
+                }}
+                onOutcome={notify}
+              />
             ) : wastePage && !wasteTask ? (
               <WasteOverview idx={idx} onOpen={setOpenWaste} onImport={() => setImporting(true)} />
             ) : view === "problems" && !query ? (
@@ -813,6 +897,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                       {s.items.map((v) =>
                         v.task.fields.isList ? (
                           <ListRow key={v.task.ref} view={v} selected={v.task.ref === selected} onOpen={() => openTask(v.task.ref)} />
+                        ) : v.task.fields.isDevList ? (
+                          <DevListRow key={v.task.ref} idx={idx} view={v} selected={v.task.ref === selected} onOpen={() => openTask(v.task.ref)} />
                         ) : (
                         <TaskRow
                           key={v.task.ref}
@@ -958,7 +1044,7 @@ const SHORTCUTS: [string, string][] = [
   ["P", "Priorität setzen"],
   ["Entf", "Löschen"],
   ["Ctrl+Z", "Rückgängig"],
-  ["Ctrl+1 … 6", "Eingang, Heute, Alle offenen, Erledigt, Listen, Müllabfuhr"],
+  ["Ctrl+1 … 7", "Eingang, Heute, Alle offenen, Erledigt, Listen, Müllabfuhr, Programmieren"],
   ["F5", "Neu einlesen"],
   ["Ctrl + / Ctrl − / Ctrl+0", "Ansicht größer, kleiner, Normalgröße"],
 ];

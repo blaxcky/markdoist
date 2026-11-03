@@ -19,6 +19,7 @@ import {
 import {
   describeOccurrence,
   describeSeries,
+  devIndex,
   formatGermanDate,
   parseKey,
   Temporal,
@@ -35,6 +36,7 @@ import {
   IconCalendar,
   IconCheck,
   IconChevronDown,
+  IconCode,
   IconChevronUp,
   IconClose,
   IconDescription,
@@ -313,6 +315,9 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
   };
   const checkLabel = s ? `Vorkommen ${occ} erledigen` : f.status === "done" ? T.actions.reopen : T.actions.complete;
   const folderName = repo.folder.split("/").filter(Boolean).pop() ?? repo.folder;
+  // Programmieren (4.8): Liste des Eintrags in der Kopfzeile
+  const devListTitle = f.isDevItem ? devIndex(repo.getState().index).lists.find((l) => l.task.fields.id === f.devList)?.task.fields.title : undefined;
+  const devCrumb = f.isDevItem ? `${T.views.dev} · ${devListTitle ?? T.dev.orphans}` : T.views.dev;
 
   return (
     <div
@@ -324,8 +329,8 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
       <div ref={dialogRef} className="detail" role="dialog" aria-modal="true" data-detail aria-label={f.title || T.fields.title} data-testid="detail" tabIndex={-1}>
         <header className="detail-head">
           <div className="crumb">
-            {f.isList ? <IconList size={16} /> : f.inbox ? <IconInbox size={16} /> : <IconFolder size={16} />}
-            <span>{f.isList ? T.views.lists : f.inbox ? T.views.inbox : folderName}</span>
+            {f.isList ? <IconList size={16} /> : f.isDevItem || f.isDevList ? <IconCode size={16} /> : f.inbox ? <IconInbox size={16} /> : <IconFolder size={16} />}
+            <span>{f.isList ? T.views.lists : f.isDevItem || f.isDevList ? devCrumb : f.inbox ? T.views.inbox : folderName}</span>
           </div>
           <div className="detail-tools">
             <button className="icon-btn" onClick={onPrev} disabled={!onPrev} title="Vorherige Aufgabe (↑)" aria-label="Vorherige Aufgabe">
@@ -340,7 +345,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
               </button>
               {menu === "task" && (
                 <Menu label="Aufgabenaktionen" onClose={() => setMenu(false)}>
-                  {!s && !f.isList && (
+                  {!s && !f.isList && !f.isDevList && (
                     <MenuItem icon={<IconDone size={20} />} disabled={ro} onClick={() => (setMenu(false), onToggle())}>
                       {f.status === "done" ? T.actions.reopen : T.actions.complete}
                     </MenuItem>
@@ -363,7 +368,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
         <div className="detail-body">
           <div className="detail-main">
             <div className="detail-title">
-              {!f.isList && (
+              {!f.isList && !f.isDevList && (
               <button
                 className={`check big prio-${f.priority}${f.status === "done" ? " checked" : ""}`}
                 role="checkbox"
@@ -732,8 +737,8 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
               <div className="preview" data-testid="preview" onClick={onPreviewClick} dangerouslySetInnerHTML={{ __html: html }} />
             )}
           </div>
-          {/* Listen haben keine Termine, Priorität oder Eingang (4.6). */}
-          {!f.isList && (
+          {/* Listen und Programmieren haben keine Termine, Priorität oder Eingang (4.6, 4.8). */}
+          {!f.isList && !f.isDevItem && !f.isDevList && (
           <aside className="detail-side" aria-label="Eigenschaften">
             <div className="side-field">
               <div className="side-label">{T.fields.inbox}</div>

@@ -243,3 +243,8 @@ export const IconGrip = (p: P) => (
     ))}
   </svg>
 );
+export const IconCode = (p: P) => (
+  <Svg {...p}>
+    <path d="M8.5 7.5L4 12l4.5 4.5M15.5 7.5L20 12l-4.5 4.5M13.5 5.5l-3 13" />
+  </Svg>
+);

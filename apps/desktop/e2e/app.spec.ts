@@ -571,6 +571,96 @@ test("Listen: X zum Löschen bleibt erreichbar, wenn die Maus aus der Zeile hin�
   await expect(next.locator(".row-actions")).toHaveCSS("opacity", "1");
 });
 
+test("Programmieren: Liste anlegen, Eintrag mit Notiz, erledigen, Erledigte entfernen, Liste löschen (4.8)", async () => {
+  await page.keyboard.press("Control+7");
+  await expect(page.getByTestId("dev-empty")).toBeVisible();
+  await page.getByTestId("new-dev-list").click();
+  await page.getByTestId("new-dev-list-title").fill("Markdoist");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("dev-title")).toHaveText("Markdoist");
+  const add = page.getByTestId("dev-add-item");
+  await expect(add).toBeFocused();
+  await add.fill("Bug: Absturz unter Mesa");
+  await add.press("Enter");
+  await add.fill("Idee: Programmieren-Bereich");
+  await add.press("Enter");
+  const item = (t: string) => page.locator(`[data-testid="dev-item-row"][data-text="${t}"]`);
+  await expect(item("Bug: Absturz unter Mesa")).toBeVisible();
+  const listId = /\nid: (\S+)\n/.exec(await file("Markdoist.md"))![1];
+  await expect.poll(() => file("Bug Absturz unter Mesa.md")).toContain(`kind: dev-item\ndev_list: ${listId}\n`);
+
+  // Notiz wie bei Aufgaben; Termine, Eingang und Priorität gibt es nicht.
+  await item("Bug: Absturz unter Mesa").getByTestId("dev-item-open").click();
+  await expect(page.getByTestId("detail")).toBeVisible();
+  await expect(page.locator(".detail-head .crumb")).toHaveText("Programmieren · Markdoist");
+  await expect(page.getByTestId("field-inbox")).toHaveCount(0);
+  await page.locator(".cm-content").click();
+  await page.keyboard.type("Nur mit Mesa 26.");
+  await expect(page.getByTestId("save-state")).toHaveText("Gespeichert", { timeout: 5000 });
+  expect(await file("Bug Absturz unter Mesa.md")).toMatch(/---\nNur mit Mesa 26\.\n?$/);
+  await page.getByTestId("detail").getByRole("button", { name: "Schließen", exact: true }).click();
+  await expect(item("Bug: Absturz unter Mesa").getByTestId("dev-item-note")).toBeVisible();
+
+  // Erledigen: wandert nach „Erledigt“, erscheint nirgends zwischen den Aufgaben.
+  await item("Bug: Absturz unter Mesa").getByTestId("dev-item-check").click();
+  await expect.poll(() => file("Bug Absturz unter Mesa.md")).toContain("status: done");
+  await expect(page.getByTestId("dev-done-toggle")).toContainText("1");
+  await page.getByTestId("dev-menu").click();
+  await page.getByTestId("dev-remove-done").click();
+  await expect.poll(() => readdir(folder)).not.toContain("Bug Absturz unter Mesa.md");
+  for (const nav of ["nav-inbox", "nav-all", "nav-done", "nav-lists"]) {
+    await page.getByTestId(nav).click();
+    await expect(page.getByText("Idee: Programmieren-Bereich")).toHaveCount(0);
+  }
+
+  // Suche findet Einträge und Listen.
+  await page.getByTestId("search").fill("markdoist");
+  await page.locator('[data-testid="dev-list-row"][data-title="Markdoist"]').click();
+  await expect(page.getByTestId("dev-title")).toHaveText("Markdoist");
+
+  // Liste löschen: Liste und Einträge in den Papierkorb.
+  await page.getByTestId("dev-menu").click();
+  await page.getByTestId("dev-delete-list").click();
+  await page.getByTestId("dev-confirm-delete").click();
+  await expect.poll(() => readdir(folder)).not.toContain("Markdoist.md");
+  expect(await readdir(folder)).not.toContain("Idee Programmieren-Bereich.md");
+  await expect(page.getByTestId("dev-empty")).toBeVisible();
+});
+
+test("Programmieren: Übersicht sortieren und filtern, Einträge sortieren (4.8)", async () => {
+  const list = (name: string, id: string, modified: string) =>
+    writeFile(join(folder, `${name}.md`), fm([`id: ${id}`, "format_version: 1", `title: ${name}`, "kind: dev-list", "status: open", "inbox: false", `dateModified: ${modified}`]));
+  const entry = (name: string, devList: string, status: string, created: string) =>
+    writeFile(join(folder, `${name}.md`), fm(["format_version: 1", `title: ${name}`, "kind: dev-item", `dev_list: ${devList}`, `status: ${status}`, "inbox: false", `dateCreated: ${created}`]));
+  await list("App", "01K7DEV0000000000000000APP", "2026-10-11T08:00:00+02:00");
+  await list("Web", "01K7DEV0000000000000000WEB", "2026-10-10T08:00:00+02:00");
+  await entry("Export", "01K7DEV0000000000000000APP", "open", "2026-10-01T08:00:00+02:00");
+  await entry("Absturz", "01K7DEV0000000000000000APP", "open", "2026-10-05T08:00:00+02:00");
+  await entry("Login", "01K7DEV0000000000000000WEB", "done", "2026-10-02T08:00:00+02:00");
+  await entry("Verwaist", "01K7DEV00000000000000GONE0", "open", "2026-10-02T08:00:00+02:00");
+  await page.getByTestId("rescan").click();
+  await page.getByTestId("nav-dev").click();
+  const titles = () => page.locator('[data-testid="dev-list-row"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-title")));
+  await expect.poll(titles).toEqual(["App", "Web"]);
+  await expect(page.getByTestId("dev-orphans")).toContainText("0/1");
+  await page.getByTestId("filter-toggle").click();
+  await page.getByTestId("list-filter").selectOption("none-open");
+  await expect.poll(titles).toEqual(["Web"]);
+  await page.getByTestId("list-options-reset").click();
+  await page.keyboard.press("Escape");
+  await page.locator('[data-testid="dev-list-row"][data-title="App"]').click();
+  const items = () => page.locator('[data-testid="dev-item-row"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-text")));
+  await expect.poll(items).toEqual(["Absturz", "Export"]);
+  await page.getByTestId("filter-toggle").click();
+  await page.getByTestId("dev-item-sort").selectOption("title");
+  await page.getByTestId("dev-item-sort-dir").selectOption("desc");
+  await expect.poll(items).toEqual(["Export", "Absturz"]);
+  // Die Listen-Übersicht behält ihre eigene Wahl.
+  await page.keyboard.press("Escape");
+  await page.getByTestId("nav-lists").click();
+  await expect(page.getByTestId("filter-toggle")).toHaveText("Anzeige");
+});
+
 test("Müllabfuhr: ICS importieren, Abfuhrart öffnen, Termin überspringen, erneuter Import ändert nichts (4.7)", async () => {
   // Nachbildung der Vorlage ohne echte Adresse; der Dateidialog des Hauptprozesses liefert sie direkt.
   const ics = join(__dirname, "../../../packages/app/test/fixtures/abfuhr-2026.ics");
