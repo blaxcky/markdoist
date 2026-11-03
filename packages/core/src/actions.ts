@@ -916,27 +916,41 @@ export interface NewTaskInput {
   note?: string;
   due?: string | null;
   scheduled?: string | null;
-  /** neue Liste (4.6) statt Aufgabe; Termine werden dann ignoriert */
-  kind?: "list";
+  /**
+   * neue Liste (4.6), Programmier-Liste oder Eintrag einer Programmier-Liste (4.8) statt
+   * Aufgabe; Termine werden dann ignoriert
+   */
+  kind?: "list" | "dev-list" | "dev-item";
+  /** bei `dev-item`: ID der Programmier-Liste */
+  devList?: string;
 }
 
 /** Felder, die eine neue Liste über die Aufgabenstandards hinaus bzw. abweichend erhält (4.6). */
 export const NEW_LIST_DATA = { kind: "list", inbox: false } as const;
 
-/** Text einer neuen Eingangsaufgabe (4.1, 3.2 Feldreihenfolge) bzw. Liste (4.6). */
+/** Wie `NEW_LIST_DATA` für eine neue Programmier-Liste bzw. einen Eintrag (4.8). */
+export function newDevData(input: NewTaskInput): Record<string, string | boolean> | null {
+  if (input.kind === "dev-list") return { kind: "dev-list", inbox: false };
+  if (input.kind === "dev-item") return { kind: "dev-item", dev_list: input.devList ?? "", inbox: false };
+  return null;
+}
+
+/** Text einer neuen Eingangsaufgabe (4.1, 3.2 Feldreihenfolge) bzw. Liste (4.6, 4.8). */
 export function newTaskText(input: NewTaskInput, ctx: ActionContext): { id: string; text: string } {
   const id = ctx.newId();
   const now = formatTimestamp(ctx.at, ctx.timeZone);
   const note = input.note ?? "";
   const body = note === "" ? "" : note.endsWith("\n") ? note : `${note}\n`;
-  if (input.kind === "list") {
+  if (input.kind === "dev-item" && !input.devList) throw new Error("Eintrag ohne Programmier-Liste");
+  if (input.kind) {
     // `status` und `inbox: false` stehen nur für ältere App-Stände da, die `kind` nicht kennen.
     const text = createFileText(
       [
         ["id", id],
         ["format_version", BASE_FORMAT_VERSION],
         ["title", input.title.trim()],
-        ["kind", "list"],
+        ["kind", input.kind],
+        ["dev_list", input.kind === "dev-item" ? input.devList : undefined],
         ["status", "open"],
         ["inbox", false],
         ["dateCreated", now],

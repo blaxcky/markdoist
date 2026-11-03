@@ -71,6 +71,12 @@ export interface TaskFields {
   recurrence: string | null;
   /** einfache Liste (`kind: list`, 4.6) statt Aufgabe */
   isList: boolean;
+  /** Programmier-Liste (`kind: dev-list`, 4.8) */
+  isDevList: boolean;
+  /** Eintrag einer Programmier-Liste (`kind: dev-item`, 4.8) */
+  isDevItem: boolean;
+  /** `dev_list` eines Eintrags: ID seiner Programmier-Liste */
+  devList: string | null;
 }
 
 export interface Task extends FileRef {
@@ -294,6 +300,9 @@ export function readTaskFile(input: ReadInput): IndexedFile {
     completedDate: str("completedDate"),
     recurrence: "recurrence" in data && data.recurrence !== null ? String(data.recurrence) : null,
     isList: data.kind === "list",
+    isDevList: data.kind === "dev-list",
+    isDevItem: data.kind === "dev-item",
+    devList: data.kind === "dev-item" && typeof data.dev_list === "string" && data.dev_list.trim() ? data.dev_list.trim() : null,
   };
 
   return {

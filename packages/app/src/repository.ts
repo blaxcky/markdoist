@@ -11,6 +11,7 @@ import {
   newDateSeriesText,
   newTaskText,
   NEW_LIST_DATA,
+  newDevData,
   planAction,
   readSeries,
   readTaskFile,
@@ -830,7 +831,7 @@ export class Repository {
   }
 
   /**
-   * Neue Eingangsaufgabe (4.1) bzw. Liste (4.6). Übernimmt keinen Termin aus der Ansicht.
+   * Neue Eingangsaufgabe (4.1) bzw. Liste (4.6, 4.8). Übernimmt keinen Termin aus der Ansicht.
    * Die Aufgabe erscheint sofort; `shown` meldet ihre Referenz, bevor geschrieben wird (4.4).
    * Schlägt das Schreiben fehl, verschwindet sie wieder und das Ergebnis nennt den Titel.
    */
@@ -845,13 +846,13 @@ export class Repository {
       id,
       title: input.title.trim(),
       body: note === "" ? "" : note.endsWith("\n") ? note : `${note}\n`,
-      data:
-        input.kind === "list"
-          ? { ...NEW_LIST_DATA, priority: undefined, due: undefined, scheduled: undefined }
-          : { due: input.due ?? undefined, scheduled: input.scheduled ?? undefined },
+      data: input.kind
+        ? { ...(newDevData(input) ?? NEW_LIST_DATA), priority: undefined, due: undefined, scheduled: undefined }
+        : { due: input.due ?? undefined, scheduled: input.scheduled ?? undefined },
     });
     if (problem) return { status: "error", message: `Selbstprüfung fehlgeschlagen: ${problem} – nichts geschrieben` };
-    return this.createText(input.title, id, text, input.kind === "list" ? "Neue Liste" : "Neue Aufgabe", shown);
+    const label = input.kind === "dev-item" ? "Neuer Eintrag" : input.kind ? "Neue Liste" : "Neue Aufgabe";
+    return this.createText(input.title, id, text, label, shown);
   }
 
   /** Neue Serie mit fester Terminliste (Müllabfuhr-Import, 4.7, 5.7); ohne Termin ab heute blocked. */

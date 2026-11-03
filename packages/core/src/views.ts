@@ -272,8 +272,10 @@ export function compareBy(
 // ---------------------------------------------------------------------------
 // Ansichten
 
-const isList = (v: TaskView) => v.task.fields.isList;
-/** offene Aufgabe; Listen (4.6) erscheinen in keiner Aufgabenansicht */
+const isDev = (v: TaskView) => v.task.fields.isDevList || v.task.fields.isDevItem;
+/** Listen (4.6) und Programmieren (4.8) erscheinen in keiner Aufgabenansicht. */
+const isList = (v: TaskView) => v.task.fields.isList || isDev(v);
+/** offene Aufgabe */
 const isOpen = (v: TaskView) => v.task.fields.status !== "done" && !isList(v);
 
 export function inboxView(idx: Index, tz: string, newestFirst = true): TaskView[] {
@@ -589,20 +591,29 @@ function listKey(v: TaskView, sort: ListSort): number | null {
 
 /** Alle Listen, standardmäßig zuletzt geänderte zuerst; der Status spielt keine Rolle. */
 export function listsView(idx: Index, opts: ListOptions = DEFAULT_LIST_OPTIONS): TaskView[] {
+  return sortLists(
+    idx.tasks.filter((v) => v.task.fields.isList),
+    opts,
+    listProgress,
+  );
+}
+
+/** Filtert und sortiert Listen nach den Übersichtsoptionen (4.6, 4.8). */
+function sortLists(lists: TaskView[], opts: ListOptions, progress: (v: TaskView) => ListProgress): TaskView[] {
   const byTitle = (a: TaskView, b: TaskView) => collator.compare(a.task.fields.title, b.task.fields.title);
-  return idx.tasks
+  const key = (v: TaskView): number | null => (opts.sort === "open" ? progress(v).open : listKey(v, opts.sort));
+  return lists
     .filter((v) => {
-      if (!isList(v)) return false;
-      if (opts.filter === "open") return listProgress(v).open > 0;
-      if (opts.filter === "none-open") return listProgress(v).open === 0;
+      if (opts.filter === "open") return progress(v).open > 0;
+      if (opts.filter === "none-open") return progress(v).open === 0;
       return true;
     })
     .sort((a, b) => {
       let c: number;
       if (opts.sort === "title") c = byTitle(a, b);
       else {
-        const ka = listKey(a, opts.sort);
-        const kb = listKey(b, opts.sort);
+        const ka = key(a);
+        const kb = key(b);
         // Fehlende Werte stehen in beiden Richtungen zuletzt.
         if (ka === null || kb === null) {
           c = cmpKey(ka, kb);
@@ -613,6 +624,127 @@ export function listsView(idx: Index, opts: ListOptions = DEFAULT_LIST_OPTIONS):
       // Gleichstand: immer nach Titel A–Z
       return byTitle(a, b);
     });
+}
+
+// ---------------------------------------------------------------------------
+// Programmieren (4.8): Listen (`kind: dev-list`) mit Einträgen als eigene Dateien
+// (`kind: dev-item`, `dev_list: <ID der Liste>`). Der Body eines Eintrags ist seine Notiz.
+
+export interface DevIndex {
+  lists: TaskView[];
+  /** Einträge je Listen-ID */
+  items: Map<string, TaskView[]>;
+  /** Einträge ohne oder mit unbekannter Liste */
+  orphans: TaskView[];
+}
+
+const devCache = new WeakMap<Index, DevIndex>();
+
+/** Programmier-Listen und ihre Einträge eines Index (zwischengespeichert). */
+export function devIndex(idx: Index): DevIndex {
+  let d = devCache.get(idx);
+  if (d) return d;
+  const lists: TaskView[] = [];
+  const ids = new Set<string>();
+  for (const v of idx.tasks) {
+    if (!v.task.fields.isDevList) continue;
+    lists.push(v);
+    if (v.task.fields.id) ids.add(v.task.fields.id);
+  }
+  const items = new Map<string, TaskView[]>();
+  const orphans: TaskView[] = [];
+  for (const v of idx.tasks) {
+    if (!v.task.fields.isDevItem) continue;
+    const l = v.task.fields.devList;
+    if (l && ids.has(l)) {
+      const arr = items.get(l);
+      if (arr) arr.push(v);
+      else items.set(l, [v]);
+    } else orphans.push(v);
+  }
+  d = { lists, items, orphans };
+  devCache.set(idx, d);
+  return d;
+}
+
+/** Einträge einer Programmier-Liste; `null` = Einträge ohne Liste. */
+export function devItemsOf(idx: Index, list: TaskView | null): TaskView[] {
+  const d = devIndex(idx);
+  if (!list) return d.orphans;
+  const id = list.task.fields.id;
+  return (id && d.items.get(id)) || [];
+}
+
+/** Fortschritt „erledigt/gesamt“ einer Programmier-Liste bzw. (`null`) der Einträge ohne Liste */
+export function devListProgress(idx: Index, list: TaskView | null): ListProgress {
+  const items = devItemsOf(idx, list);
+  const done = items.filter((v) => v.task.fields.status === "done").length;
+  return { done, total: items.length, open: items.length - done };
+}
+
+/** Programmier-Listen mit denselben Optionen wie die Listen-Übersicht (4.6). */
+export function devListsView(idx: Index, opts: ListOptions = DEFAULT_LIST_OPTIONS): TaskView[] {
+  return sortLists(devIndex(idx).lists, opts, (v) => devListProgress(idx, v));
+}
+
+export type DevItemSort = "created" | "modified" | "title";
+
+export interface DevItemOptions {
+  sort: DevItemSort;
+  /** absteigend (neueste zuerst; beim Titel Z–A) */
+  desc: boolean;
+}
+
+export const DEV_ITEM_SORT_LABELS: Record<DevItemSort, string> = {
+  created: "Erstellt",
+  modified: "Zuletzt geändert",
+  title: "Titel",
+};
+
+/** Standardrichtung je Merkmal: neueste zuerst, Titel A–Z */
+export const DEV_ITEM_DEFAULT_DESC: Record<DevItemSort, boolean> = {
+  created: true,
+  modified: true,
+  title: false,
+};
+
+export const DEFAULT_DEV_ITEM_OPTIONS: DevItemOptions = { sort: "created", desc: true };
+
+/**
+ * Einträge einer Programmier-Liste (`null` = ohne Liste), offen und erledigt getrennt.
+ * Erledigte stehen unabhängig von der Wahl zuletzt erledigt zuerst.
+ */
+export function devItemsView(
+  idx: Index,
+  list: TaskView | null,
+  opts: DevItemOptions = DEFAULT_DEV_ITEM_OPTIONS,
+): { open: TaskView[]; done: TaskView[] } {
+  const byTitle = (a: TaskView, b: TaskView) => collator.compare(a.task.fields.title, b.task.fields.title);
+  const open: TaskView[] = [];
+  const done: TaskView[] = [];
+  for (const v of devItemsOf(idx, list)) (v.task.fields.status === "done" ? done : open).push(v);
+  open.sort((a, b) => {
+    let c: number;
+    if (opts.sort === "title") c = byTitle(a, b);
+    else {
+      const ka = opts.sort === "created" ? createdKey(a) : modifiedKey(a);
+      const kb = opts.sort === "created" ? createdKey(b) : modifiedKey(b);
+      if (ka === null || kb === null) {
+        c = cmpKey(ka, kb);
+        if (c !== 0) return c;
+      } else c = ka - kb;
+    }
+    if (c !== 0) return opts.desc ? -c : c;
+    return byTitle(a, b);
+  });
+  done.sort((a, b) => {
+    const ka = completedKey(a);
+    const kb = completedKey(b);
+    // ohne Erledigungszeit zuletzt
+    const c = ka === null || kb === null ? cmpKey(ka, kb) : kb - ka;
+    return c || byTitle(a, b);
+  });
+  return { open, done };
 }
 
 /** Abfuhrart einer Müllabfuhr-Serie (4.7), sonst null. */
