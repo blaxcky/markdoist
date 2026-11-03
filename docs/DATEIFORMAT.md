@@ -38,7 +38,8 @@ Reihenfolge beim Neuanlegen: `id`, `format_version`, `title`, `status`, `priorit
 | `dateCreated` | Zeitstempel | Erstellung | unbekannt (Sortierung nach mtime) |
 | `dateModified` | Zeitstempel | letzte Änderung durch die App | unbekannt |
 | `completedDate` | Zeitstempel | Abschluss bzw. Serienende | `dateModified`, sonst mtime |
-| `kind` | `list` | einfache Abhakliste statt Aufgabe (siehe „Listen“) | Aufgabe; ein anderer Wert bleibt erhalten und wird ignoriert |
+| `kind` | `list` \| `dev-list` \| `dev-item` | einfache Abhakliste (siehe „Listen“), Programmier-Liste bzw. deren Eintrag (siehe „Programmieren“) statt Aufgabe | Aufgabe; ein anderer Wert bleibt erhalten und wird ignoriert |
+| `dev_list` | ULID | bei `kind: dev-item`: ID der Programmier-Liste | fehlt oder unbekannt: Eintrag steht unter „Ohne Liste“ |
 | `waste_type` | String | Abfuhrart einer Müllabfuhr-Serie, so wie sie im Titel der importierten ICS-Termine steht (Leerraum zusammengefasst), z. B. `Restabfallbehaelter 120 l`; Schlüssel für den nächsten Import | keine Müllabfuhr-Serie |
 
 **Datums- und Zeitwerte:**
@@ -64,6 +65,38 @@ dateModified: 2026-10-26T23:12:41+01:00
 ---
 - [ ] Milch
 - [x] Brot
+```
+
+## Programmieren
+
+Eine Datei mit `kind: dev-list` ist eine Programmier-Liste, z. B. eine je App. Ihre Einträge sind **eigene Dateien** mit `kind: dev-item` und `dev_list: <id der Liste>`; der Body eines Eintrags ist seine Notiz. Erledigen setzt wie bei Aufgaben `status: done` und `completedDate`. Termine, Priorität und Eingang gibt es nicht. Beides erscheint nur unter „Programmieren“ und in der Suche, nie in Eingang, Heute, Alle offenen, Erledigt oder Listen. `status: open` und `inbox: false` beim Anlegen sind wie bei Listen für ältere Versionen da; dort erscheinen Einträge höchstens unter „Alle offenen“. Ein Eintrag ohne oder mit unbekanntem `dev_list` steht unter „Ohne Liste“.
+
+```markdown
+---
+id: 01K9A2B3C4D5E6F7G8H9J0K1M2
+format_version: 1
+title: Markdoist
+kind: dev-list
+status: open
+inbox: false
+dateCreated: 2026-11-03T20:40:00+01:00
+dateModified: 2026-11-03T20:40:00+01:00
+---
+```
+
+```markdown
+---
+id: 01K9A2B3C4D5E6F7G8H9J0K1M3
+format_version: 1
+title: "Bug: Absturz unter Mesa"
+kind: dev-item
+dev_list: 01K9A2B3C4D5E6F7G8H9J0K1M2
+status: open
+inbox: false
+dateCreated: 2026-11-03T20:41:00+01:00
+dateModified: 2026-11-03T20:45:12+01:00
+---
+Tritt nur mit Mesa 26 auf.
 ```
 
 ## Wiederholungen

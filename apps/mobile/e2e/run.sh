@@ -113,7 +113,8 @@ if [ $fail = 0 ]; then
     echo "OK   Einkauf.md: Brot vor Milch, beide offen"
   else echo "FEHL Einkauf.md: Reihenfolge oder Haken falsch"; fail=1; fi
   # Löschen (4.4): „Wegwerfen“ aus Flow 12 liegt im Papierkorb, „Auch weg“ hat der Verlauf zurückgeholt.
-  for f in "Wegwerfen.md"; do
+  # Programmieren (4.8, Flow 38): Erledigte entfernt, dann Liste samt Eintrag gelöscht.
+  for f in "Wegwerfen.md" "Absturz unter Mesa.md" "Dunkles Design.md" "Markdoist.md"; do
     if adb shell ls "$DIR/.todo-trash" | tr -d '\r' | grep -qxF -- "$f"; then echo "OK   im Papierkorb: $f"; else echo "FEHL nicht im Papierkorb: $f"; fail=1; fi
   done
   # Müllabfuhr (4.7): übersprungener Termin, Vorlauf geändert, Formatversion bleibt 2.

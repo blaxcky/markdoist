@@ -184,3 +184,24 @@ PLAN1 4.5, 4.7, 5.7; Entscheidungen in `.fragen/2026-10-28-1849-muellabfuhr.md`.
 - **Nachtrag 28.10.2026:** Die Beschreibung der ICS-Termine (`DESCRIPTION`) wird nicht mehr als Notiz übernommen; neue Abfuhrarten haben einen leeren Body. Der Einleser liest das Feld gar nicht mehr.
 - **[V]-Abweichungen:** Verlegte Termine werden im Zeitraum der ganzen Importdatei erkannt, nicht nur der Abfuhrart (sonst bliebe ein verlegter erster Termin doppelt stehen). Eine beendete Serie wird nur bei neuen künftigen Terminen fortgesetzt, damit derselbe Import zweimal nichts ändert. Der Vorlauf gilt beim Import für neu angelegte Arten; bestehende behalten ihren Abstand.
 - **Nicht geprüft:** Ein App-Stand, der nur Formatversion 1 kennt, ist nicht mehr im Test; geprüft ist stellvertretend, dass Version 3 schreibgeschützt ist. Am Handy fehlt der Eintrag „Müllabfuhr“ im Mehr-Blatt ohne Müllabfuhr-Serie; das ist nur im Code geprüft, weil die Android-Testdaten immer eine Serie enthalten. Kein echtes Gerät.
+
+## Programmieren (03.11.2026)
+
+PLAN1 4.8; Entscheidungen in `.fragen/2026-11-03-2036-programmieren.md`. Drei Commits auf dem Zweig `programmieren` (gepusht nach `ci-check`): Kern und App-Schicht, Desktop, Android. Dazu die Doku.
+
+- **Kern und App (AK-48):** `packages/core/test/dev.test.ts` prüft:
+  - Dateiformat von Liste und Eintrag
+  - Ausschluss aus allen Aufgaben- und Listenansichten, Treffer in der Suche (auch über die Notiz und bei erledigten Einträgen)
+  - Sortierung der Einträge, Gruppe „Ohne Liste“, Sortierung und Filter der Übersicht
+
+  `packages/app/test/dev.test.ts` prüft:
+  - Anlegen, Notiz über Entwurf, Erledigen und Undo
+  - Liste ohne ID erhält beim ersten Eintrag eine
+  - „Erledigte entfernen“
+  - „Liste löschen“ samt Wiederherstellen eines Eintrags unter „Ohne Liste“
+- **Prüfstand:** `pnpm typecheck` und `pnpm lint` grün. In `pnpm test` laufen alle neuen Tests grün. Unter hoher Rechnerlast (Load ~7,7) liefen 2–4 rechenlastige Wiederholungstests in die 5-s-Grenze; das passierte genauso auf dem unveränderten Stand (`dateList`, `dateutil`, `engine`, `review-2026-10-24`), einzeln laufen sie grün.
+- **Nicht geprüft:**
+  - Desktop-E2E: zwei neue Playwright-Tests in `apps/desktop/e2e/app.spec.ts`.
+  - Android: Maestro-Flow `38-programmieren.yaml` und Papierkorbprüfungen in `run.sh`.
+
+  Beides ist geschrieben, aber nicht gelaufen, weil die App lokal wegen Mesa abstürzt. Deshalb liegt der Stand nicht auf `main` und ist nicht veröffentlicht. Keine Sichtprüfung der Oberfläche.

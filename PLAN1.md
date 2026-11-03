@@ -8,6 +8,8 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 28.10.2026 (M9):** Müllabfuhr mit ICS-Import (4.7), Serien mit fester Terminliste (5.7) und die kompaktere untere Leiste am Handy (4.5). Abnahmenotiz in `docs/ABNAHME.md`.
 
+**Umgesetzt am 03.11.2026, noch nicht auf `main`:** Bereich „Programmieren“ (4.8). Liegt auf dem Zweig `programmieren` bzw. `ci-check`; die E2E-Läufe (Desktop und Android) stehen aus, weil die App lokal wegen Mesa abstürzt.
+
 ## Auftrag an die Umsetzung
 
 **Die Umsetzung ist beauftragt.** Dieses Dokument ist die verbindliche Spezifikation. Vorgehen:
@@ -290,6 +292,8 @@ Nicht genutzt: alle `eas-*`-Skills (kein EAS Build, Update, Hosting, Workflows o
 | `complete_instances` | Liste von Vorkommensschlüsseln | optional | erledigte Vorkommen des aktiven Abschnitts | leer. Reihenfolge und Duplikate haben keine Bedeutung. | [F]-Prinzip |
 | `skipped_instances` | Liste von Vorkommensschlüsseln | optional | übersprungene Vorkommen. Zukünftige Einträge wirken als Ausnahmen. | leer | [F]-Prinzip |
 | `last_completed_at` | Zeitstempel mit Offset | optional | tatsächlicher Zeitpunkt der letzten Vorkommenserledigung im aktiven Abschnitt; wird nur bei neuer Erledigung gesetzt | fehlt. Erster Termin einer neuen Serie = `recurrence_start`; bei inkonsistenter Historie keine erfundene Erledigungsbasis (5.2). | [F] (in deiner Ausgangsbeschreibung vorgeschlagen; bleibt trotz F006, siehe 5.5) |
+| `kind` | `list` \| `dev-list` \| `dev-item` | bei Listen und Programmieren | Liste (4.6), Programmier-Liste bzw. deren Eintrag (4.8) statt Aufgabe | Aufgabe; ein anderer Wert bleibt erhalten und wird ignoriert | [V], Entscheidungen 26.10. und 03.11.2026 |
+| `dev_list` | ULID-String | bei `kind: dev-item` | ID der Programmier-Liste, zu der der Eintrag gehört (4.8) | fehlt oder unbekannt: Eintrag steht unter „Ohne Liste“ | [V], Entscheidung 03.11.2026 |
 | `waste_type` | String | bei Müllabfuhr-Serien | Abfuhrart so, wie sie im Titel der ICS-Termine steht (Leerraum zusammengefasst), z. B. `Restabfallbehaelter 120 l`. Kennzeichnet die Serie für die Müllabfuhr-Ansicht und ist der Schlüssel für den nächsten Import (4.7). | keine Müllabfuhr-Serie | [V], Entscheidung 28.10.2026 |
 | `dateCreated` | Zeitstempel mit Offset | geschrieben immer | Erstellzeitpunkt | unbekannt. Sortierung fällt auf die Datei-mtime zurück. | [V] |
 | `dateModified` | Zeitstempel mit Offset | geschrieben immer | letzte Änderung **durch die App** | unbekannt | [V] |
@@ -524,7 +528,7 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (ge
 - **Desktop:**
   - Aufbau: Seitenleiste (Erfassen, Suche, Eingang mit Zähler, Heute mit Zähler, Alle offenen, Erledigt, Listen, Müllabfuhr, Probleme, Papierkorb), zentrierte Liste, Details als Dialog über der Liste (Klick oder Enter öffnet, Escape schließt, ↑/↓ blättert). Gestaltung nach den Vorlage-Screenshots vom 18.10.2026 (Todoist-ähnlich): warme Seitenleiste, große Ansichtsüberschrift mit Aufgabenzahl, runde Haken in Prioritätsfarbe, Sortierung und Filter im Menü „Anzeige“.
   - Tasten:
-    - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…6 für Eingang, Heute, Alle offenen, Erledigt, Listen und Müllabfuhr; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
+    - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…7 für Eingang, Heute, Alle offenen, Erledigt, Listen, Müllabfuhr und Programmieren; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
     - Aufgabenaktionen: Leertaste erledigt/öffnet wieder, `E` sortiert ein, `D` setzt die Frist, `S` plant ein, `P` setzt die Priorität, Entf löscht.
     - Sonstiges: Ctrl+Z macht rückgängig, F5 liest neu ein, Ctrl+Plus/Ctrl+Minus vergrößern/verkleinern die Ansicht (auch Ctrl+Mausrad), Ctrl+0 stellt die Normalgröße her.
   - In Eingabefeldern/Editoren sind Buchstaben-, Leertasten- und Entf-Aktionen deaktiviert. Ctrl+Z wirkt dort auf die Texteingabe; Aufgaben-Undo bleibt als eigener Befehl erreichbar. Fokus, Tastaturbedienung und Screenreader-Beschriftungen werden auch für Konflikt- und Wiederholungsdialoge geprüft.
@@ -591,6 +595,34 @@ Entscheidungen vom 28.10.2026 (`.fragen/2026-10-28-1849-muellabfuhr.md`) [F]; Um
   - Derselbe Import ein zweites Mal ändert nichts (No-op). Jede geänderte Datei steht als eigener Eintrag im Verlauf und ist einzeln zurücknehmbar (4.4).
   - Vor dem Schreiben prüft der Abgleich wie jede Aktion den Datei-Hash (7.3). Hat sich eine Datei seit der Vorschau geändert, wird diese Art nicht geschrieben und gemeldet; die übrigen werden übernommen.
 - **Nicht vorgesehen:** Import am Handy, Kalender-Abo per URL, Erinnerungen, Uhrzeiten, Termine von Hand zur Terminliste hinzufügen, Import beliebiger anderer Kalender als eigene Funktion.
+
+### 4.8 Programmieren [F]/[V]
+
+Wunsch und Entscheidungen vom 03.11.2026 (`.fragen/2026-11-03-2036-programmieren.md`) [F]; Umsetzung [V].
+
+- **Zweck:** eigene Listen je App für Ideen, Bugs und Aufgaben. Eintragen und Abhaken so schnell wie in „Listen“ (4.6), aber jeder Eintrag hat eine Notiz wie eine normale Aufgabe.
+- **Dateien [F]:** Jede Programmier-Liste und jeder Eintrag ist eine eigene Datei in der obersten Ordnerebene.
+  - Die Liste trägt `kind: dev-list`. Sie wird angelegt mit `id`, `format_version`, `title`, `kind`, `status: open`, `inbox: false`, `dateCreated` und `dateModified`.
+  - Ein Eintrag trägt `kind: dev-item` und `dev_list: <ID der Liste>`, sonst dieselben Felder. Erledigen setzt wie bei Aufgaben `status: done` und `completedDate`.
+  - Der Body eines Eintrags ist seine Notiz. Editor, Vorschau, Entwürfe, Konfliktschutz, Undo und Papierkorb gelten unverändert. `status` und `inbox: false` stehen nur für ältere App-Stände da; dort erscheinen Einträge höchstens unter „Alle offenen“.
+  - Eine Liste ohne ID erhält beim ersten neuen Eintrag eine. Einträge ohne oder mit unbekanntem `dev_list` stehen unter „Ohne Liste“, z. B. nach dem Löschen der Liste oder bei einem Sync-Rückstand.
+- **Kein weiteres Merkmal [F]:** keine Art (Idee/Bug/Aufgabe), sie steht bei Bedarf im Titel. Keine Termine, keine Priorität, kein Eingang, keine Wiederholung. Programmier-Listen und Einträge erscheinen nie in Eingang, Heute, Alle offenen, Erledigt oder Listen, wohl aber in der Suche (auch erledigte Einträge).
+- **Übersicht:** alle Programmier-Listen mit Fortschritt „erledigt/gesamt“, darunter „Ohne Liste“, wenn es solche Einträge gibt. Sortierung und Filter wie die Listen-Übersicht (4.6), mit eigener Wahl je Sitzung; „Offene Einträge“ zählt offene Eintragsdateien.
+- **Geöffnete Liste:**
+  - Offene Einträge stehen oben. Die Sortierung ist wählbar nach „Erstellt“ (Standard, neueste zuerst), „Zuletzt geändert“ oder „Titel“, jeweils auf- oder absteigend; Gleichstand nach Titel. Ziehen gibt es nicht [F].
+  - Erledigte Einträge stehen im einklappbaren Bereich „Erledigt (n)“, zuletzt erledigte zuerst [F].
+  - Der Kreis erledigt einen Eintrag oder öffnet ihn wieder, mit demselben Ablauf wie in Listen. Ein Erfolg wird nicht gemeldet.
+  - Antippen bzw. Klicken des Texts öffnet das Detail mit der Notiz. Das Detail zeigt „Programmieren · <Liste>“ statt Eingang; Termine, Priorität, Status „In Arbeit“ und Wiederholung sind ausgeblendet. Ein Eintrag mit Notiz trägt ein Notiz-Symbol.
+  - Neue Einträge: Desktop über die Eingabezeile, Android über den Plus-Knopf mit dem Eingabeblatt der Erfassung; beide bleiben nach jedem Eintrag offen.
+- **Aktionen der Liste:**
+  - „Umbenennen“.
+  - „Erledigte entfernen“ [F]: legt alle erledigten Einträge in den Papierkorb.
+  - „Liste löschen“: legt nach einer Rückfrage erst alle Einträge, dann die Liste in den Papierkorb.
+  - Jede Datei ist ein eigener Verlaufseintrag und einzeln wiederherstellbar.
+- **Bedienung:**
+  - Desktop: Seitenleiste „Programmieren“, Ctrl+7. Escape führt von der Liste zur Übersicht zurück. „Anzeige“ gilt in der Übersicht für Sortierung und Filter, in einer Liste für die Sortierung der Einträge.
+  - Android: „⋯ Mehr → Programmieren“ [F]. Anzeige-Knopf in der Übersicht und in der Kopfzeile der Liste. Langes Drücken auf einen Eintrag für Öffnen und Löschen.
+- **Nicht vorgesehen:** Art oder Schlagworte, Termine, Priorität, Ziehen, Eintrag in eine andere Liste verschieben, automatisches Aufräumen erledigter Einträge.
 
 ## 5. Wiederholungen
 
@@ -962,6 +994,7 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | AK-45 | Feste Terminliste (5.7): Liste 13.11./11.12.2026, Bezugsfeld `due`, Abstand −7. Am 06.11. steht die Aufgabe unter „Heute eingeplant“, am 10.11. unter „Früher eingeplant“, am 13.11. unter Fällig. Erledigen am 15.11. ergibt K = 11.12. und `scheduled` = 04.12.; Erledigen am 20.12. beendet die Serie regulär. Verspätetes Erledigen überspringt einen dazwischen verstrichenen Termin, ohne ihn in C oder S einzutragen. Permutationen und Duplikate in `recurrence_dates` ergeben dasselbe nächste Vorkommen. Eine Datei mit `format_version: 2` ist für einen Leser, der nur Version 1 kennt, schreibgeschützt (wie AK-37). |
 | AK-46 | ICS-Import (4.7) mit einer anonymisierten Nachbildung der Vorlage (CRLF, `SUMMARY;LANGUAGE=de`, doppelte Leerzeichen, 10 Termine in 4 Arten): legt 4 Dateien mit zusammen 10 Terminen an, `inbox: false`, Abstand −7, Namen aus der Vorschau. Derselbe Import erneut: 0 Schreibvorgänge. Eine Folgedatei mit neuen UIDs, zusätzlichen Terminen und einem verlegten Termin ergänzt, entfernt nur den verlegten, ungelösten Zukunftstermin und setzt eine ausgeschöpfte wie eine von Hand beendete Serie in derselben Revision fort; vergangene, erledigte und übersprungene Daten bleiben. Die Adresse aus `LOCATION` steht in keiner Datei. Eine seit der Vorschau geänderte Datei wird nicht überschrieben. |
 | AK-47 | Android-Leiste (4.5): genau vier Reiter (Eingang, Heute, Alle, ⋯ Mehr). Mehr öffnet das Blatt mit Erledigt, Listen und, nur wenn eine Müllabfuhr-Serie existiert, Müllabfuhr; jeder Eintrag öffnet seine Übersicht, die Pille liegt dann auf „Mehr“, Zurück führt zur letzten Hauptansicht. Alle bisherigen Maestro-Flows laufen über den neuen Weg grün. |
+| AK-48 | Programmieren (4.8): Eine neue Programmier-Liste hat `kind: dev-list`, `inbox: false` und keine Termine. Ein Eintrag hat `kind: dev-item` und `dev_list` mit der ID der Liste. Beide erscheinen in keiner Aufgaben- oder Listenansicht, aber in der Suche. Notiz, Erledigen und Undo funktionieren wie bei Aufgaben. „Erledigte entfernen“ und „Liste löschen“ legen genau die betroffenen Dateien in den Papierkorb. Einträge ohne vorhandene Liste stehen unter „Ohne Liste“. Übersicht und Einträge lassen sich sortieren, die Übersicht wie Listen filtern. |
 
 ## 10. Build-Plan
 
