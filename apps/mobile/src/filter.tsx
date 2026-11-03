@@ -1,13 +1,18 @@
 // Filter und Sortierung (4.3), gemeinsam für alle Aufgabenansichten; serialisierbares Filtermodell aus dem Kern.
-// Dazu Sortierung und Filter der Listenübersicht (4.6) mit eigenem Blatt.
+// Dazu Sortierung und Filter der Listenübersicht (4.6) und von Programmieren (4.8) mit eigenen Blättern.
 import { createContext, use, useState, type ReactNode } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import {
+  DEFAULT_DEV_ITEM_OPTIONS,
   DEFAULT_LIST_OPTIONS,
+  DEV_ITEM_DEFAULT_DESC,
+  DEV_ITEM_SORT_LABELS,
   LIST_DEFAULT_DESC,
   LIST_FILTER_LABELS,
   LIST_SORT_LABELS,
   SORT_LABELS,
+  type DevItemOptions,
+  type DevItemSort,
   type Filter,
   type ListFilter,
   type ListOptions,
@@ -33,6 +38,15 @@ interface FilterState {
   setListOpts(o: ListOptions): void;
   listsOpen: boolean;
   setListsOpen(o: boolean): void;
+  /** Programmieren (4.8): Übersicht wie Listen, Einträge einer Liste nach eigener Sortierung */
+  devOpts: ListOptions;
+  setDevOpts(o: ListOptions): void;
+  devOpen: boolean;
+  setDevOpen(o: boolean): void;
+  devItemOpts: DevItemOptions;
+  setDevItemOpts(o: DevItemOptions): void;
+  devItemsOpen: boolean;
+  setDevItemsOpen(o: boolean): void;
 }
 
 const Ctx = createContext<FilterState | null>(null);
@@ -49,8 +63,35 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   const [inboxNewest, setInboxNewest] = useState(true);
   const [listOpts, setListOpts] = useState<ListOptions>(DEFAULT_LIST_OPTIONS);
   const [listsOpen, setListsOpen] = useState(false);
+  const [devOpts, setDevOpts] = useState<ListOptions>(DEFAULT_LIST_OPTIONS);
+  const [devOpen, setDevOpen] = useState(false);
+  const [devItemOpts, setDevItemOpts] = useState<DevItemOptions>(DEFAULT_DEV_ITEM_OPTIONS);
+  const [devItemsOpen, setDevItemsOpen] = useState(false);
   return (
-    <Ctx value={{ filter, setFilter, sort, setSort, open, setOpen, inboxNewest, setInboxNewest, listOpts, setListOpts, listsOpen, setListsOpen }}>
+    <Ctx
+      value={{
+        filter,
+        setFilter,
+        sort,
+        setSort,
+        open,
+        setOpen,
+        inboxNewest,
+        setInboxNewest,
+        listOpts,
+        setListOpts,
+        listsOpen,
+        setListsOpen,
+        devOpts,
+        setDevOpts,
+        devOpen,
+        setDevOpen,
+        devItemOpts,
+        setDevItemOpts,
+        devItemsOpen,
+        setDevItemsOpen,
+      }}
+    >
       {children}
     </Ctx>
   );
@@ -62,6 +103,10 @@ export function filterActive(f: Filter, s: SortChoice, inboxNewest = true): bool
 
 export function listOptionsActive(o: ListOptions): boolean {
   return o.sort !== DEFAULT_LIST_OPTIONS.sort || o.desc !== LIST_DEFAULT_DESC[o.sort] || o.filter !== DEFAULT_LIST_OPTIONS.filter;
+}
+
+export function devItemOptionsActive(o: DevItemOptions): boolean {
+  return o.sort !== DEFAULT_DEV_ITEM_OPTIONS.sort || o.desc !== DEV_ITEM_DEFAULT_DESC[o.sort];
 }
 
 type Opt<V> = [V, string];
@@ -116,12 +161,13 @@ function OptionsSheet({ onClose, onReset, testID, resetTestID, closeTestID, chil
   );
 }
 
-/** Sortierung und Filter der Listenübersicht (4.6) */
-export function ListOptionsSheet() {
-  const { listOpts: o, setListOpts, listsOpen, setListsOpen } = useFilter();
-  if (!listsOpen) return null;
+/** Sortierung und Filter der Listenübersicht (4.6) bzw. der Programmier-Übersicht (4.8, `dev`) */
+export function ListOptionsSheet({ dev }: { dev?: boolean }) {
+  const f = useFilter();
+  const [o, setListOpts, open, setOpen] = dev ? [f.devOpts, f.setDevOpts, f.devOpen, f.setDevOpen] : [f.listOpts, f.setListOpts, f.listsOpen, f.setListsOpen];
+  if (!open) return null;
   return (
-    <OptionsSheet onClose={() => setListsOpen(false)} onReset={() => setListOpts(DEFAULT_LIST_OPTIONS)} testID="list-options-sheet" resetTestID="list-options-reset" closeTestID="list-options-close">
+    <OptionsSheet onClose={() => setOpen(false)} onReset={() => setListOpts(DEFAULT_LIST_OPTIONS)} testID="list-options-sheet" resetTestID="list-options-reset" closeTestID="list-options-close">
       <ChipRow
         label="Sortierung"
         value={o.sort}
@@ -137,6 +183,24 @@ export function ListOptionsSheet() {
         onChange={(filter) => setListOpts({ ...o, filter })}
         testID="list-filter"
       />
+    </OptionsSheet>
+  );
+}
+
+/** Sortierung der Einträge einer Programmier-Liste (4.8) */
+export function DevItemOptionsSheet() {
+  const { devItemOpts: o, setDevItemOpts, devItemsOpen, setDevItemsOpen } = useFilter();
+  if (!devItemsOpen) return null;
+  return (
+    <OptionsSheet onClose={() => setDevItemsOpen(false)} onReset={() => setDevItemOpts(DEFAULT_DEV_ITEM_OPTIONS)} testID="dev-item-options-sheet" resetTestID="dev-item-options-reset" closeTestID="dev-item-options-close">
+      <ChipRow
+        label="Sortierung"
+        value={o.sort}
+        opts={(Object.keys(DEV_ITEM_SORT_LABELS) as DevItemSort[]).map((k) => [k, DEV_ITEM_SORT_LABELS[k]] as Opt<DevItemSort>)}
+        onChange={(sort) => setDevItemOpts({ sort, desc: DEV_ITEM_DEFAULT_DESC[sort] })}
+        testID="dev-item-sort"
+      />
+      <ChipRow label="Richtung" value={o.desc} opts={[[false, "aufsteigend"], [true, "absteigend"]]} onChange={(desc) => setDevItemOpts({ ...o, desc })} testID="dev-item-dir" />
     </OptionsSheet>
   );
 }

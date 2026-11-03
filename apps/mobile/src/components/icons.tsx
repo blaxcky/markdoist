@@ -298,3 +298,12 @@ export function GripIcon({ color, size = 18 }: P) {
     </View>
   );
 }
+
+/** Spitze Klammern für „Programmieren“ (4.8). */
+export function CodeIcon({ color, size = 14 }: P) {
+  return (
+    <View style={{ width: size * 1.3, height: size, alignItems: "center", justifyContent: "center" }}>
+      <Glyph color={color} size={size * 0.85} bold>{"</>"}</Glyph>
+    </View>
+  );
+}

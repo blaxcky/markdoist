@@ -1,5 +1,5 @@
-// Navigation (Plan 4.5, 4.6): untere Leiste Eingang/Heute/Alle/⋯ Mehr, Stack für Detail und Dialoge.
-// „Mehr“ öffnet ein Blatt mit Erledigt, Listen und Müllabfuhr; diese bleiben Reiter des Tab-Navigators, nur ohne eigenen Knopf.
+// Navigation (Plan 4.5, 4.6, 4.8): untere Leiste Eingang/Heute/Alle/⋯ Mehr, Stack für Detail und Dialoge.
+// „Mehr“ öffnet ein Blatt mit Erledigt, Listen, Müllabfuhr und Programmieren; diese bleiben Reiter des Tab-Navigators, nur ohne eigenen Knopf.
 // Kopfzeilen der Listen zeichnet die Liste selbst (components/list-header).
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 import { BackHandler, View } from "react-native";
@@ -13,6 +13,8 @@ import { ListScreen } from "./screens/list-screen";
 import { ListsScreen } from "./screens/lists-screen";
 import { WasteScreen, WasteTypeScreen } from "./screens/waste-screen";
 import { ChecklistScreen } from "./screens/checklist-screen";
+import { DevListsScreen } from "./screens/dev-lists-screen";
+import { DevListScreen } from "./screens/dev-list-screen";
 import { DetailScreen } from "./screens/detail-screen";
 import { CaptureScreen } from "./screens/capture-screen";
 import { AddItemScreen } from "./screens/add-item-screen";
@@ -26,26 +28,31 @@ import { RecurrenceScreen } from "./screens/recurrence-screen";
 import { SeriesHistoryScreen } from "./screens/series-history-screen";
 import { useRepoState } from "./repo";
 import { useTheme } from "./theme";
-import { FilterProvider, FilterSheet, ListOptionsSheet } from "./filter";
+import { DevItemOptionsSheet, FilterProvider, FilterSheet, ListOptionsSheet } from "./filter";
 import { GroupedSheet } from "./components/series-sheet";
-import { BinIcon, CalendarIcon, CheckCircleIcon, ChecklistIcon, GridIcon, InboxIcon, MoreIcon } from "./components/icons";
+import { BinIcon, CalendarIcon, CheckCircleIcon, ChecklistIcon, CodeIcon, GridIcon, InboxIcon, MoreIcon } from "./components/icons";
 import { wasteView } from "@markdoist/core";
 
-export type Tabs = { Inbox: undefined; Today: undefined; All: undefined; More: undefined; Done: undefined; Lists: undefined; Waste: undefined };
+export type Tabs = { Inbox: undefined; Today: undefined; All: undefined; More: undefined; Done: undefined; Lists: undefined; Waste: undefined; Dev: undefined };
 type MainTab = "Inbox" | "Today" | "All";
 const MAIN_TABS: readonly string[] = ["Inbox", "Today", "All"];
 /** Ansichten hinter „Mehr“ (4.5): eigene Reiter ohne Knopf in der Leiste. */
-const MORE_TABS: readonly string[] = ["Done", "Lists", "Waste"];
+const MORE_TABS: readonly string[] = ["Done", "Lists", "Waste", "Dev"];
+/** Route `DevList` für die Einträge ohne vorhandene Liste (4.8) */
+export const DEV_ORPHANS = "::ohne-liste";
 export type RootStack = {
   Main: NavigatorScreenParams<Tabs> | undefined;
   Detail: { ref: string };
   Checklist: { ref: string };
+  /** Programmier-Liste (4.8); `DEV_ORPHANS` = Einträge ohne Liste */
+  DevList: { ref: string };
   /** eine Abfuhrart (4.7) */
   WasteType: { ref: string };
   /** Startwerte: Erfassung erneut öffnen, wenn das Schreiben im Hintergrund scheiterte (7.6) */
   Capture: { title?: string; note?: string } | undefined;
-  AddItem: { ref: string };
-  NewList: { title?: string } | undefined;
+  /** `dev`: Eintrag einer Programmier-Liste (4.8) statt Listeneintrag */
+  AddItem: { ref: string; dev?: boolean };
+  NewList: { title?: string; dev?: boolean } | undefined;
   Search: undefined;
   Problems: undefined;
   Trash: undefined;
@@ -196,6 +203,9 @@ function TabsNav({ navigation }: NativeStackScreenProps<RootStack, "Main">) {
         <Tab.Screen name="Waste" options={{ title: T.views.waste, ...hidden }}>
           {() => <MoreTarget><WasteScreen /></MoreTarget>}
         </Tab.Screen>
+        <Tab.Screen name="Dev" options={{ title: T.views.dev, ...hidden }}>
+          {() => <MoreTarget><DevListsScreen /></MoreTarget>}
+        </Tab.Screen>
       </Tab.Navigator>
       <GroupedSheet
         open={moreOpen}
@@ -207,6 +217,7 @@ function TabsNav({ navigation }: NativeStackScreenProps<RootStack, "Main">) {
               { label: T.views.done, icon: <CheckCircleIcon color={c.muted} size={18} />, testID: "more-done", onPress: () => openTab("Done") },
               { label: T.views.lists, icon: <ChecklistIcon color={c.muted} size={17} />, testID: "more-lists", onPress: () => openTab("Lists") },
               hasWaste && { label: T.views.waste, icon: <BinIcon color={c.muted} size={18} />, testID: "more-waste", onPress: () => openTab("Waste") },
+              { label: T.views.dev, icon: <CodeIcon color={c.muted} size={14} />, testID: "more-dev", onPress: () => openTab("Dev") },
             ],
           },
         ]}
@@ -230,6 +241,8 @@ function FilterSheetHost() {
     <>
       <FilterSheet today={state.index.today} />
       <ListOptionsSheet />
+      <ListOptionsSheet dev />
+      <DevItemOptionsSheet />
     </>
   );
 }
@@ -248,6 +261,7 @@ function RootStackNavigator() {
       <Stack.Screen name="AddItem" component={AddItemScreen} options={sheet} />
       <Stack.Screen name="NewList" component={NewListScreen} options={sheet} />
       <Stack.Screen name="Checklist" component={ChecklistScreen} options={{ title: T.views.lists }} />
+      <Stack.Screen name="DevList" component={DevListScreen} options={{ title: T.views.dev }} />
       <Stack.Screen name="WasteType" component={WasteTypeScreen} options={{ title: T.views.waste }} />
       <Stack.Screen name="Search" component={SearchScreen} options={{ title: T.views.search }} />
       <Stack.Screen name="Problems" component={ProblemsScreen} options={{ title: T.views.problems }} />

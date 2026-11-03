@@ -1,0 +1,95 @@
+# Programmieren (4.8): Liste anlegen, Eintrag mit Notiz, erledigen, Erledigte entfernen, Liste löschen.
+# Einträge sind eigene Dateien und erscheinen nicht zwischen den Aufgaben.
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: more-dev
+- tapOn:
+    id: fab-new-dev-list
+- inputText: "Markdoist"
+- tapOn:
+    id: new-list-create
+# Einträge über das Eingabeblatt der Erfassung; es bleibt nach jedem Eintrag offen.
+- tapOn:
+    id: fab-add-dev-item
+- inputText: "Absturz unter Mesa"
+- pressKey: Enter
+- assertVisible:
+    id: add-item
+- inputText: "Dunkles Design"
+- pressKey: Enter
+- tapOn:
+    id: sheet-close
+- extendedWaitUntil:
+    visible:
+      id: "check-Absturz unter Mesa"
+    timeout: 3000
+# Notiz wie bei Aufgaben; Termine, Eingang und Priorität gibt es nicht.
+- tapOn:
+    id: "text-Absturz unter Mesa"
+- assertVisible:
+    id: detail-badge
+    text: "Programmieren · Markdoist"
+- assertNotVisible:
+    id: field-inbox
+- assertNotVisible:
+    id: field-due
+- tapOn:
+    id: show-note
+- inputText: "Nur mit Mesa 26."
+- scrollUntilVisible:
+    element:
+      id: save-state
+    direction: UP
+    timeout: 6000
+    optional: true
+- extendedWaitUntil:
+    visible: "Gespeichert"
+    timeout: 8000
+- back
+- back
+- extendedWaitUntil:
+    visible:
+      id: "note-Absturz unter Mesa"
+    timeout: 3000
+# Erledigen: wandert nach „Erledigt“.
+- tapOn:
+    id: "check-Absturz unter Mesa"
+- extendedWaitUntil:
+    visible:
+      id: dev-done-toggle
+    timeout: 3000
+- assertVisible: "1 von 2 erledigt"
+- tapOn:
+    id: dev-menu
+- tapOn:
+    id: dev-remove-done
+- assertVisible: "0 von 1 erledigt"
+- pressKey: back
+- assertVisible:
+    id: "dev-progress-Markdoist"
+    text: "0/1"
+# Nicht zwischen den Aufgaben
+- tapOn:
+    id: tab-all
+- assertNotVisible: "Dunkles Design"
+# Liste löschen: Liste und Einträge in den Papierkorb.
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: more-dev
+- tapOn:
+    id: "dev-list-Markdoist"
+- tapOn:
+    id: dev-menu
+- tapOn:
+    id: delete-dev-list
+# Android schreibt Dialogknöpfe je nach Version groß.
+- tapOn: "(?i)in den papierkorb"
+- extendedWaitUntil:
+    visible:
+      id: empty
+    timeout: 3000

@@ -8,6 +8,7 @@ import { matchesFilter, search, sortViews, type TaskView } from "@markdoist/core
 import { useFilter } from "../filter";
 import { TaskRow } from "../components/task-row";
 import { ListRow } from "../components/list-row";
+import { DevListRow } from "../components/dev-list-row";
 import { ActionsSheet } from "../components/actions-sheet";
 import { useRepo, useRepoState, systemClock } from "../repo";
 import { useNotify } from "../notify";
@@ -57,6 +58,8 @@ export function SearchScreen() {
           renderItem={({ item, index }) =>
             item.task.fields.isList ? (
               <ListRow view={item} first={index === 0} last={index === shown.length - 1} onOpen={() => nav.navigate("Checklist", { ref: item.task.ref })} />
+            ) : item.task.fields.isDevList ? (
+              <DevListRow idx={state.index} view={item} first={index === 0} last={index === shown.length - 1} onOpen={() => nav.navigate("DevList", { ref: item.task.ref })} />
             ) : (
             <TaskRow
               view={item}

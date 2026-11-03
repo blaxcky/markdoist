@@ -15,6 +15,7 @@ import { pastSkippedCount, previewAction, renderMarkdown, seriesStrip, skippedBe
 import {
   describeOccurrence,
   describeSeries,
+  devIndex,
   formatGermanDate,
   parseKey,
   Temporal,
@@ -35,6 +36,7 @@ import {
   ChecklistIcon,
   ChevronIcon,
   ClockIcon,
+  CodeIcon,
   DotsIcon,
   FlagIcon,
   Glyph,
@@ -258,6 +260,11 @@ export function DetailScreen() {
   const f = t.fields;
   const ro = view.readOnly;
   const s = view.series;
+  // Listen und Programmieren (4.6, 4.8) haben keine Termine, Priorität, Eingang oder Wiederholung;
+  // Programmier-Einträge lassen sich aber erledigen.
+  const plain = f.isList || f.isDevList || f.isDevItem;
+  const noCheck = f.isList || f.isDevList;
+  const devListTitle = f.isDevItem ? devIndex(state.index).lists.find((l) => l.task.fields.id === f.devList)?.task.fields.title : undefined;
   const K = s?.instance?.toString() ?? "";
   const act = (a: TaskAction, label: string) => void repo.perform(ref, a, label).then((o: Outcome) => notify(o, label));
   // Vorschau vor dem Abschluss (5.2, 5.4)
@@ -383,10 +390,12 @@ export function DetailScreen() {
     <Sheet onClose={() => nav.goBack()}>
       {/* Kopf des Blatts: Eingang/Einsortiert links, ⋮-Menü rechts */}
       <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 12, paddingRight: 6, paddingTop: 4, paddingBottom: 8 }}>
-        {f.isList ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 40, paddingLeft: 12, paddingRight: 12, borderRadius: 20, backgroundColor: c.surfaceHigh }}>
-            <ChecklistIcon color={c.muted} size={14} />
-            <Text style={{ color: c.fg, fontSize: 14, fontWeight: "500" }}>{T.lists.badge}</Text>
+        {plain ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 40, paddingLeft: 12, paddingRight: 12, borderRadius: 20, backgroundColor: c.surfaceHigh, flexShrink: 1 }} testID="detail-badge">
+            {f.isList ? <ChecklistIcon color={c.muted} size={14} /> : <CodeIcon color={c.muted} size={13} />}
+            <Text numberOfLines={1} style={{ color: c.fg, fontSize: 14, fontWeight: "500", flexShrink: 1 }}>
+              {f.isList ? T.lists.badge : f.isDevItem ? `${T.dev.badge} · ${devListTitle ?? T.dev.orphans}` : T.dev.badge}
+            </Text>
           </View>
         ) : (
         <Pressable
@@ -409,7 +418,7 @@ export function DetailScreen() {
         {/* Eigenschaftskarte */}
         <View style={card}>
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, paddingLeft: 8, paddingRight: 16, paddingTop: 10, paddingBottom: 10 }}>
-            {f.isList ? <View style={{ width: 8 }} /> : (
+            {noCheck ? <View style={{ width: 8 }} /> : (
             <Pressable
               onPress={ro ? undefined : onCheck}
               testID={s ? (s.phase === "active" ? "series-complete" : undefined) : "toggle-done"}
@@ -441,8 +450,8 @@ export function DetailScreen() {
             </Text>
           ))}
           {/* Listen haben keine Termine, Priorität oder Wiederholung (4.6). */}
-          {!f.isList && dateRow("due")}
-          {!f.isList && dateRow("scheduled")}
+          {!plain && dateRow("due")}
+          {!plain && dateRow("scheduled")}
           {s && (
             <>
               {divider()}
@@ -476,7 +485,7 @@ export function DetailScreen() {
           )}
           {/* Fehlende Eigenschaften als Chips */}
           {(() => {
-            const list = f.isList;
+            const list = plain;
             const chips = [
               !list && f.status === "in-progress" && <AddChip key="status" c={c} disabled={ro} active icon={<Glyph color={c.p3} size={12}>▶</Glyph>} label={T.status["in-progress"]} onPress={() => act({ type: "setStatus", status: "open" }, "Status geändert")} testID="status-open" />,
               !list && f.priority === "none" && <AddChip key="prio" c={c} disabled={ro} icon={<FlagIcon color={c.muted} size={14} />} label={T.fields.priority} onPress={() => setMenu("priority")} testID="field-priority" />,
@@ -721,9 +730,9 @@ export function DetailScreen() {
         title={f.title}
         items={[
           // Bei Serien kein „Erledigt“: Erledigen und Beenden nur über die Serienaktionen (Entscheidung 18.10.2026).
-          !ro && !f.isList && f.status !== "in-progress" && !done && { label: `Status: ${T.status["in-progress"]}`, testID: "status-in-progress", icon: <Glyph color={c.p3} size={14}>▶</Glyph>, onPress: () => act({ type: "setStatus", status: "in-progress" }, "Status geändert") },
-          !ro && !f.isList && f.status === "in-progress" && { label: `Status: ${T.status.open}`, testID: "status-open-menu", icon: <Glyph color={c.muted} size={14}>○</Glyph>, onPress: () => act({ type: "setStatus", status: "open" }, "Status geändert") },
-          !ro && !s && !f.isList && { label: "Wiederholung …", icon: <RepeatIcon color={c.muted} size={15} />, onPress: () => nav.navigate("Recurrence", { ref }) },
+          !ro && !plain && f.status !== "in-progress" && !done && { label: `Status: ${T.status["in-progress"]}`, testID: "status-in-progress", icon: <Glyph color={c.p3} size={14}>▶</Glyph>, onPress: () => act({ type: "setStatus", status: "in-progress" }, "Status geändert") },
+          !ro && !plain && f.status === "in-progress" && { label: `Status: ${T.status.open}`, testID: "status-open-menu", icon: <Glyph color={c.muted} size={14}>○</Glyph>, onPress: () => act({ type: "setStatus", status: "open" }, "Status geändert") },
+          !ro && !s && !plain && { label: "Wiederholung …", icon: <RepeatIcon color={c.muted} size={15} />, onPress: () => nav.navigate("Recurrence", { ref }) },
           !ro && { label: T.actions.renameToTitle, icon: <Glyph color={c.muted} size={15}>✎</Glyph>, onPress: () => void repo.renameToTitle(ref).then((o) => notify(o, "Umbenannt")) },
           !ro && {
             label: T.actions.delete,
