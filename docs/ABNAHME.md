@@ -187,7 +187,7 @@ PLAN1 4.5, 4.7, 5.7; Entscheidungen in `.fragen/2026-10-28-1849-muellabfuhr.md`.
 
 ## Programmieren (03.11.2026)
 
-PLAN1 4.8; Entscheidungen in `.fragen/2026-11-03-2036-programmieren.md`. Drei Commits auf dem Zweig `programmieren` (gepusht nach `ci-check`): Kern und App-Schicht, Desktop, Android. Dazu die Doku.
+PLAN1 4.8; Entscheidungen in `.fragen/2026-11-03-2036-programmieren.md`. Drei Commits für Kern und App-Schicht, Desktop und Android, dazu die Doku.
 
 - **Kern und App (AK-48):** `packages/core/test/dev.test.ts` prüft:
   - Dateiformat von Liste und Eintrag
@@ -200,8 +200,9 @@ PLAN1 4.8; Entscheidungen in `.fragen/2026-11-03-2036-programmieren.md`. Drei Co
   - „Erledigte entfernen“
   - „Liste löschen“ samt Wiederherstellen eines Eintrags unter „Ohne Liste“
 - **Prüfstand:** `pnpm typecheck` und `pnpm lint` grün. In `pnpm test` laufen alle neuen Tests grün. Unter hoher Rechnerlast (Load ~7,7) liefen 2–4 rechenlastige Wiederholungstests in die 5-s-Grenze; das passierte genauso auf dem unveränderten Stand (`dateList`, `dateutil`, `engine`, `review-2026-10-24`), einzeln laufen sie grün.
+- **Desktop-E2E:** `pnpm e2e:desktop` mit 37 Playwright-Tests grün. Davon sind zwei neu:
+  - Liste anlegen, Eintrag mit Notiz, Erledigen, „Erledigte entfernen“, Suche und „Liste löschen“
+  - Übersicht filtern, „Ohne Liste“ und Einträge sortieren
 - **Nicht geprüft:**
-  - Desktop-E2E: zwei neue Playwright-Tests in `apps/desktop/e2e/app.spec.ts`.
-  - Android: Maestro-Flow `38-programmieren.yaml` und Papierkorbprüfungen in `run.sh`.
-
-  Beides ist geschrieben, aber nicht gelaufen, weil die App lokal wegen Mesa abstürzt. Deshalb liegt der Stand nicht auf `main` und ist nicht veröffentlicht. Keine Sichtprüfung der Oberfläche.
+  - Android-E2E: Der Maestro-Flow `38-programmieren.yaml` und die Papierkorbprüfungen in `run.sh` sind geschrieben, aber nicht gelaufen, weil kein Emulator gestartet wurde.
+  - Keine Sichtprüfung der Oberfläche.
