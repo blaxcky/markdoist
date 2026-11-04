@@ -2,6 +2,7 @@
 // Dazu Sortierung und Filter der Listenübersicht (4.6) und von Programmieren (4.8) mit eigenen Blättern.
 import { createContext, use, useState, type ReactNode } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   DEFAULT_DEV_ITEM_OPTIONS,
   DEFAULT_LIST_OPTIONS,
@@ -139,15 +140,18 @@ function ChipRow<V>({ label, value, opts, onChange, testID }: { label: string; v
 /** Blatt von unten mit fester Fußzeile (Zurücksetzen, Fertig) */
 function OptionsSheet({ onClose, onReset, testID, resetTestID, closeTestID, children }: { onClose(): void; onReset(): void; testID: string; resetTestID: string; closeTestID: string; children: ReactNode }) {
   const c = useTheme();
+  const insets = useSafeAreaInsets();
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+    // Wie Menü und Serienblatt: unter die Systemleisten zeichnen und unten den Abstand der Navigationsleiste halten,
+    // sonst liegt die Fußzeile bei der Leiste mit drei Knöpfen darunter.
+    <Modal transparent animationType="fade" visible onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }} onPress={onClose}>
         <Pressable onPress={() => {}} style={{ backgroundColor: c.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: "85%" }}>
           <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} testID={testID}>
             {children}
           </ScrollView>
           {/* Feste Fußzeile: bleibt sichtbar, auch wenn die Optionen scrollen */}
-          <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: c.outline }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 14, paddingBottom: insets.bottom + 14, borderTopWidth: 1, borderTopColor: c.outline }}>
             <Pressable onPress={onReset} testID={resetTestID}>
               <Text style={{ color: c.danger }}>Zurücksetzen</Text>
             </Pressable>

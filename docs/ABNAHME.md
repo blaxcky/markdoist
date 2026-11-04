@@ -207,5 +207,6 @@ PLAN1 4.8; Entscheidungen in `.fragen/2026-11-03-2036-programmieren.md`. Drei Co
   - Flow 38 prüft `detail-badge` und den Text getrennt, weil der Text im Kind-Element steht.
   - Die Papierkorbprüfung ignoriert Groß- und Kleinschreibung, weil die Emulator-Tastatur „unter“ teils zu „Unter“ korrigiert.
 - **Emulator unter Mesa 26.2.6 (Intel UHD):** Nicht stabil. Mit `-gpu host` stürzte er in einem von drei Läufen ab (gfxstream, „null ctx“). `swiftshader_indirect`, `guest` und `-no-window` stürzen schon beim Start ab.
+- **Genymotion (04.11.2026):** Genymotion 3.11.0, „Google Pixel 7“, Android 15 (API 35), Leiste mit drei Knöpfen: `run.sh` grün, alle 20 Flows und 32 Dateiprüfungen, kein Absturz. Der erste Lauf fand einen echten Fehler: Die Fußzeile des Optionsblatts (Sortierung und Filter der Listen und von Programmieren) lag unter der Navigationsleiste und war nicht antippbar. Das Blatt hält jetzt wie Menü und Serienblatt unten den Abstand der Navigationsleiste. Der Android-Emulator mit Gestensteuerung hatte das verdeckt.
 - **Nicht geprüft:**
   - Keine Sichtprüfung der Oberfläche.
