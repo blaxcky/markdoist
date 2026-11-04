@@ -8,7 +8,7 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 28.10.2026 (M9):** Müllabfuhr mit ICS-Import (4.7), Serien mit fester Terminliste (5.7) und die kompaktere untere Leiste am Handy (4.5). Abnahmenotiz in `docs/ABNAHME.md`.
 
-**Umgesetzt am 03.11.2026:** Bereich „Programmieren“ (4.8). Desktop-E2E grün; der Android-E2E-Lauf (Flow 38) steht noch aus.
+**Umgesetzt am 03.11.2026:** Bereich „Programmieren“ (4.8). Desktop-E2E grün; Android-E2E (alle 20 Flows, inkl. Flow 38) am 04.11.2026 grün.
 
 ## Auftrag an die Umsetzung
 

@@ -114,8 +114,9 @@ if [ $fail = 0 ]; then
   else echo "FEHL Einkauf.md: Reihenfolge oder Haken falsch"; fail=1; fi
   # Löschen (4.4): „Wegwerfen“ aus Flow 12 liegt im Papierkorb, „Auch weg“ hat der Verlauf zurückgeholt.
   # Programmieren (4.8, Flow 38): Erledigte entfernt, dann Liste samt Eintrag gelöscht.
+  # Ohne Groß-/Kleinschreibung: Die Emulator-Tastatur korrigiert „unter“ teils zu „Unter“.
   for f in "Wegwerfen.md" "Absturz unter Mesa.md" "Dunkles Design.md" "Markdoist.md"; do
-    if adb shell ls "$DIR/.todo-trash" | tr -d '\r' | grep -qxF -- "$f"; then echo "OK   im Papierkorb: $f"; else echo "FEHL nicht im Papierkorb: $f"; fail=1; fi
+    if adb shell ls "$DIR/.todo-trash" | tr -d '\r' | grep -qixF -- "$f"; then echo "OK   im Papierkorb: $f"; else echo "FEHL nicht im Papierkorb: $f"; fail=1; fi
   done
   # Müllabfuhr (4.7): übersprungener Termin, Vorlauf geändert, Formatversion bleibt 2.
   # Der Termin steht auch in recurrence_dates: nur die Zeile direkt unter skipped_instances zählt.

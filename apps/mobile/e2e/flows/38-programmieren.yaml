@@ -30,9 +30,10 @@ appId: de.markdoist.aufgaben
 # Notiz wie bei Aufgaben; Termine, Eingang und Priorität gibt es nicht.
 - tapOn:
     id: "text-Absturz unter Mesa"
+# Der Text steht im Kind von detail-badge, darum getrennt prüfen.
 - assertVisible:
     id: detail-badge
-    text: "Programmieren · Markdoist"
+- assertVisible: "Programmieren · Markdoist"
 - assertNotVisible:
     id: field-inbox
 - assertNotVisible:

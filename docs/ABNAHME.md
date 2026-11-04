@@ -203,6 +203,9 @@ PLAN1 4.8; Entscheidungen in `.fragen/2026-11-03-2036-programmieren.md`. Drei Co
 - **Desktop-E2E:** `pnpm e2e:desktop` mit 37 Playwright-Tests grün. Davon sind zwei neu:
   - Liste anlegen, Eintrag mit Notiz, Erledigen, „Erledigte entfernen“, Suche und „Liste löschen“
   - Übersicht filtern, „Ohne Liste“ und Einträge sortieren
+- **Android-E2E (04.11.2026):** `apps/mobile/e2e/run.sh` grün, alle 20 Flows einschließlich `38-programmieren.yaml`, dazu 32 Dateiprüfungen mit dem Papierkorb nach „Erledigte entfernen“ und „Liste löschen“. Release-Build x86_64, Emulator `Markdoist_API_36` mit `-gpu host`. Zwei Korrekturen am Test, nicht an der App:
+  - Flow 38 prüft `detail-badge` und den Text getrennt, weil der Text im Kind-Element steht.
+  - Die Papierkorbprüfung ignoriert Groß- und Kleinschreibung, weil die Emulator-Tastatur „unter“ teils zu „Unter“ korrigiert.
+- **Emulator unter Mesa 26.2.6 (Intel UHD):** Nicht stabil. Mit `-gpu host` stürzte er in einem von drei Läufen ab (gfxstream, „null ctx“). `swiftshader_indirect`, `guest` und `-no-window` stürzen schon beim Start ab.
 - **Nicht geprüft:**
-  - Android-E2E: Der Maestro-Flow `38-programmieren.yaml` und die Papierkorbprüfungen in `run.sh` sind geschrieben, aber nicht gelaufen, weil kein Emulator gestartet wurde.
   - Keine Sichtprüfung der Oberfläche.
