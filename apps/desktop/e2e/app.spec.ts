@@ -601,8 +601,25 @@ test("Programmieren: Liste anlegen, Eintrag mit Notiz, erledigen, Erledigte entf
   await page.getByTestId("detail").getByRole("button", { name: "Schließen", exact: true }).click();
   await expect(item("Bug: Absturz unter Mesa").getByTestId("dev-item-note")).toBeVisible();
 
-  // Erledigen: wandert nach „Erledigt“, erscheint nirgends zwischen den Aufgaben.
-  await item("Bug: Absturz unter Mesa").getByTestId("dev-item-check").click();
+  // Erster Klick: In Arbeit (halber Kreis), der Eintrag bleibt offen.
+  const check = item("Bug: Absturz unter Mesa").getByTestId("dev-item-check");
+  await check.click();
+  await expect(check).toHaveAttribute("aria-checked", "mixed");
+  await expect.poll(() => file("Bug Absturz unter Mesa.md")).toContain("status: in-progress");
+  await expect(page.getByTestId("dev-done-toggle")).toHaveCount(0);
+  // Im Detail ebenfalls halb; „Nicht mehr in Arbeit“ setzt ihn zurück auf offen.
+  await item("Bug: Absturz unter Mesa").getByTestId("dev-item-open").click();
+  await expect(page.locator(".detail .check.big")).toHaveAttribute("aria-checked", "mixed");
+  await page.getByTestId("detail-more").click();
+  await page.getByTestId("stop-work").click();
+  await expect.poll(() => file("Bug Absturz unter Mesa.md")).toContain("status: open");
+  await page.getByTestId("detail").getByRole("button", { name: "Schließen", exact: true }).click();
+  await expect(check).toHaveAttribute("aria-checked", "false");
+
+  // Zwei Klicks erledigen: wandert nach „Erledigt“, erscheint nirgends zwischen den Aufgaben.
+  await check.click();
+  await expect(check).toHaveAttribute("aria-checked", "mixed");
+  await check.click();
   await expect.poll(() => file("Bug Absturz unter Mesa.md")).toContain("status: done");
   await expect(page.getByTestId("dev-done-toggle")).toContainText("1");
   await page.getByTestId("dev-menu").click();

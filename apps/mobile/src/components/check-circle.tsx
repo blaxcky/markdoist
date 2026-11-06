@@ -17,9 +17,11 @@ interface Props {
   strong?: boolean;
   /** Zeile der Ausgangslage: FlashList verwendet Zeilen wieder, der Zustand hängt am Prop. */
   id?: string;
+  /** In Arbeit (Programmieren, 4.8): linke Hälfte gefüllt wie ein Halbmond */
+  half?: boolean;
 }
 
-export function CheckCircle({ checked, phase, ring, strong = false, id }: Props) {
+export function CheckCircle({ checked, phase, ring, strong = false, id, half = false }: Props) {
   const c = useTheme();
   const reduced = useReducedMotion();
   const pop = useSharedValue(1);
@@ -41,10 +43,12 @@ export function CheckCircle({ checked, phase, ring, strong = false, id }: Props)
           alignItems: "center",
           justifyContent: "center",
           marginTop: 1,
+          overflow: "hidden",
         },
         popStyle,
       ]}
     >
+      {half && !checked && <Animated.View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "50%", backgroundColor: c.p4 }} />}
       {checked && <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>✓</Text>}
     </Animated.View>
   );

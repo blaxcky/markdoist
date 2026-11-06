@@ -7,7 +7,7 @@ import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { COMPLETE_COLLAPSE_MS, T, toggleDoneAction, trashDevList, trashDoneDevItems, type CompletionPhase } from "@markdoist/app";
+import { COMPLETE_COLLAPSE_MS, startDevWorkAction, T, toggleDoneAction, trashDevList, trashDoneDevItems, type CompletionPhase } from "@markdoist/app";
 import { devIndex, devItemsView, type TaskView } from "@markdoist/core";
 import { Menu } from "../components/menu";
 import { ChevronIcon, DotsIcon, LinesIcon, PlusIcon, ViewOptionsIcon } from "../components/icons";
@@ -81,6 +81,9 @@ export function DevListScreen() {
   if (gone) return null;
 
   const toggle = (v: TaskView) => {
+    // Erster Tipp: nur „In Arbeit“, der Eintrag bleibt stehen. Erst der zweite erledigt ihn.
+    const work = startDevWorkAction(v);
+    if (work) return void repo.perform(v.task.ref, work.action, work.label).then((o) => notify(o, work.label));
     const { action, label } = toggleDoneAction(v);
     completion.startAction(v.task.ref, label, () => repo.perform(v.task.ref, action, label));
   };
@@ -231,6 +234,7 @@ function ItemRow({
   const isDone = f.status === "done";
   // Während des Ablaufs zeigt der Haken den Zielzustand.
   const checked = isDone !== (phase !== undefined);
+  const half = f.status === "in-progress" && phase === undefined;
   const hasNote = view.task.body.trim() !== "";
   const radius = { borderTopLeftRadius: first ? 12 : 0, borderTopRightRadius: first ? 12 : 0, borderBottomLeftRadius: last ? 12 : 0, borderBottomRightRadius: last ? 12 : 0 };
   return (
@@ -243,12 +247,12 @@ function ItemRow({
       <Pressable
         onPress={view.readOnly ? undefined : onToggle}
         accessibilityRole="checkbox"
-        accessibilityState={{ checked, disabled: view.readOnly }}
+        accessibilityState={{ checked: half ? "mixed" : checked, disabled: view.readOnly }}
         accessibilityLabel={f.title}
         testID={`check-${f.title}`}
         style={{ paddingLeft: 16, paddingRight: 14, paddingVertical: 12 }}
       >
-        <CheckCircle checked={checked} phase={phase} id={view.task.ref} />
+        <CheckCircle checked={checked} half={half} phase={phase} id={view.task.ref} />
       </Pressable>
       <Pressable onPress={onOpen} onLongPress={onMenu} delayLongPress={500} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingRight: 16 }} testID={`text-${f.title}`}>
         <Text style={{ flex: 1, color: isDone ? c.muted : c.fg, fontSize: 16, lineHeight: 22, textDecorationLine: isDone ? "line-through" : "none" }}>{f.title}</Text>

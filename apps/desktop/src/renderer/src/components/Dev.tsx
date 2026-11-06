@@ -1,6 +1,6 @@
 // Programmieren (4.8): Listen je App, Einträge als eigene Dateien mit Notiz. Übersicht und geöffnete Liste.
 import { useEffect, useMemo, useState } from "react";
-import { T, toggleDoneAction, trashDevList, trashDoneDevItems, createDevItem, type CompletionPhase, type Outcome, type Repository } from "@markdoist/app";
+import { T, startDevWorkAction, toggleDoneAction, trashDevList, trashDoneDevItems, createDevItem, type CompletionPhase, type Outcome, type Repository } from "@markdoist/app";
 import { devIndex, devItemsView, devListProgress, devListsView, type DevItemOptions, type Index, type ListOptions, type TaskView } from "@markdoist/core";
 import { Menu, MenuItem } from "./Menu";
 import { useCompletionFlow } from "../completion";
@@ -180,6 +180,9 @@ function DevDetail({
   };
 
   const toggle = (v: TaskView) => {
+    // Erster Klick: nur „In Arbeit“, der Eintrag bleibt stehen. Erst der zweite erledigt ihn.
+    const work = startDevWorkAction(v);
+    if (work) return void repo.perform(v.task.ref, work.action, work.label).then((o) => onOutcome(o, work.label));
     const { action, label } = toggleDoneAction(v);
     completion.startAction(v.task.ref, label, () => repo.perform(v.task.ref, action, label));
   };
@@ -324,10 +327,12 @@ function DevItemRow({ view, phase, onToggle, onOpen, onRemove }: { view: TaskVie
   const isDone = f.status === "done";
   // Während des Ablaufs zeigt der Haken den Zielzustand.
   const checked = isDone !== (phase !== undefined);
+  // In Arbeit: Kreis halb gefüllt wie ein Halbmond
+  const half = f.status === "in-progress" && phase === undefined;
   const hasNote = view.task.body.trim() !== "";
   return (
     <div className={`row item-row${isDone ? " done" : ""}`} data-testid="dev-item-row" data-text={f.title}>
-      <button className={`check prio-none${checked ? " checked" : ""}${phase ? " animate" : ""}`} role="checkbox" aria-checked={checked} aria-label={f.title} onClick={onToggle} disabled={ro} data-testid="dev-item-check">
+      <button className={`check prio-none${checked ? " checked" : ""}${half ? " half" : ""}${phase ? " animate" : ""}`} role="checkbox" aria-checked={half ? "mixed" : checked} aria-label={f.title} title={half ? T.actions.complete : !checked ? T.dev.startWork : undefined} onClick={onToggle} disabled={ro} data-testid="dev-item-check">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M7.5 12.3l3 3 6-6.3" />
         </svg>

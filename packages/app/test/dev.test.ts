@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { allOpenView, clockAtLocal, devItemsView, devListsView, inboxView } from "@markdoist/core";
-import { createDevItem, MemoryAdapter, MemoryKeyValueStore, Repository, trashDevList, trashDoneDevItems } from "../src";
+import { createDevItem, MemoryAdapter, MemoryKeyValueStore, Repository, startDevWorkAction, toggleDoneAction, trashDevList, trashDoneDevItems } from "../src";
 
 const TZ = "Europe/Berlin";
 function setup(adapter = new MemoryAdapter(), kv = new MemoryKeyValueStore()) {
@@ -49,6 +49,40 @@ describe("Programmieren im Repository (4.8)", () => {
 
     expect((await repo.undo()).status).toBe("ok");
     expect(titles(devItemsView(repo.getState().index, list()).open)).toEqual(["Absturz unter Mesa"]);
+  });
+
+  it("Kreis: offen → in Arbeit → erledigt → wieder offen", async () => {
+    const { repo, adapter, list } = await withList();
+    const r = await createDevItem(repo, list(), "Halbmond");
+    const ref = r.status === "ok" ? r.ref! : "";
+    const view = () => repo.getState().index.tasks.find((v) => v.task.ref === ref)!;
+    const text = () => adapter.tasks.get("Halbmond.md")!.text;
+    const click = () => {
+      const { action, label } = startDevWorkAction(view()) ?? toggleDoneAction(view());
+      return repo.perform(ref, action, label);
+    };
+
+    expect((await click()).status).toBe("ok");
+    expect(text()).toMatch(/status: in-progress\n/);
+    expect(text()).not.toContain("completedDate");
+    expect(titles(devItemsView(repo.getState().index, list()).open)).toEqual(["Halbmond"]);
+
+    expect((await click()).status).toBe("ok");
+    expect(text()).toMatch(/status: done\n/);
+    expect(text()).toContain("completedDate: ");
+    expect(titles(devItemsView(repo.getState().index, list()).done)).toEqual(["Halbmond"]);
+
+    expect((await click()).status).toBe("ok");
+    expect(text()).toMatch(/status: open\n/);
+    expect(text()).not.toContain("completedDate");
+  });
+
+  it("Aufgaben und einfache Listen kennen keinen Zwischenschritt", async () => {
+    const { repo } = setup();
+    await repo.open();
+    await repo.create({ title: "Aufgabe" });
+    const t = repo.getState().index.tasks.find((v) => v.task.fields.title === "Aufgabe")!;
+    expect(startDevWorkAction(t)).toBeNull();
   });
 
   it("Liste ohne ID erhält beim ersten Eintrag eine", async () => {

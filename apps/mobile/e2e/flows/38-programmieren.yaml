@@ -56,7 +56,13 @@ appId: de.markdoist.aufgaben
     visible:
       id: "note-Absturz unter Mesa"
     timeout: 3000
-# Erledigen: wandert nach „Erledigt“.
+# Erster Tipp: nur „In Arbeit“ (halber Kreis), der Eintrag bleibt offen.
+- tapOn:
+    id: "check-Absturz unter Mesa"
+- assertVisible: "0 von 2 erledigt"
+- assertNotVisible:
+    id: dev-done-toggle
+# Zweiter Tipp erledigt: wandert nach „Erledigt“.
 - tapOn:
     id: "check-Absturz unter Mesa"
 - extendedWaitUntil:

@@ -22,6 +22,8 @@ export const T = {
     newList: "Neue Programmier-Liste",
     titlePlaceholder: "Name der Liste, z. B. die App",
     addItem: "Idee, Bug oder Aufgabe eintragen",
+    startWork: "In Arbeit nehmen",
+    stopWork: "Nicht mehr in Arbeit",
     done: "Erledigt",
     removeDone: "Erledigte entfernen",
     rename: "Umbenennen",

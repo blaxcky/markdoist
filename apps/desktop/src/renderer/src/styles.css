@@ -556,6 +556,13 @@ button:disabled {
 .check.checked svg {
   opacity: 1;
 }
+/* In Arbeit (Programmieren, 4.8): linke Hälfte gefüllt wie ein Halbmond */
+.check.half {
+  background: linear-gradient(90deg, var(--p4) 50%, transparent 50%);
+}
+.check.half svg {
+  display: none;
+}
 /* Abhaken: Kreis springt kurz auf, Haken zeichnet sich */
 .check.checked.animate {
   animation: check-pop 0.15s ease-out;

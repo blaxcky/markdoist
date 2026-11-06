@@ -11,7 +11,7 @@ import { diffLines } from "diff";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { pastSkippedCount, previewAction, renderMarkdown, seriesStrip, skippedBeyondStrip, splitDateValue, stripByMonth as byMonth, T, type Outcome, type StripCell } from "@markdoist/app";
+import { pastSkippedCount, previewAction, renderMarkdown, seriesStrip, skippedBeyondStrip, splitDateValue, startDevWorkAction, stripByMonth as byMonth, T, type Outcome, type StripCell } from "@markdoist/app";
 import {
   describeOccurrence,
   describeSeries,
@@ -353,12 +353,17 @@ export function DetailScreen() {
   };
 
   const done = f.status === "done";
+  // Programmier-Einträge (4.8): offen → In Arbeit (halber Kreis) → erledigt
+  const work = startDevWorkAction(view);
+  const working = f.isDevItem && f.status === "in-progress";
   // Runder Haken: ohne Serie erledigen/wiederöffnen, bei aktiver Serie das Vorkommen erledigen (Entscheidung 18.10.2026).
   const onCheck = s
     ? s.phase === "active"
       ? () => act({ type: "completeOccurrence", revision: s.revisionKey, instance: K }, "Vorkommen erledigt")
       : undefined
-    : () => act(done ? { type: "reopen" } : { type: "complete" }, done ? "Wiederöffnet" : "Erledigt");
+    : work
+      ? () => act(work.action, work.label)
+      : () => act(done ? { type: "reopen" } : { type: "complete" }, done ? "Wiederöffnet" : "Erledigt");
   const ring = prioColor(c, f.priority);
   const noteVisible = showNote || !!body.trim() || save === "failed" || save === "conflict";
   const due = dateParts("due");
@@ -423,11 +428,12 @@ export function DetailScreen() {
               onPress={ro ? undefined : onCheck}
               testID={s ? (s.phase === "active" ? "series-complete" : undefined) : "toggle-done"}
               accessibilityRole="checkbox"
-              accessibilityState={{ checked: done, disabled: ro || !onCheck }}
-              accessibilityLabel={s ? `Vorkommen ${occ} erledigen` : done ? T.actions.reopen : T.actions.complete}
+              accessibilityState={{ checked: working ? "mixed" : done, disabled: ro || !onCheck }}
+              accessibilityLabel={s ? `Vorkommen ${occ} erledigen` : done ? T.actions.reopen : work ? T.dev.startWork : T.actions.complete}
               style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
             >
-              <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: f.priority === "none" ? 1.5 : 2, borderColor: done ? c.p4 : ring, backgroundColor: done ? c.p4 : f.priority === "none" ? "transparent" : `${ring}1A`, alignItems: "center", justifyContent: "center", opacity: onCheck ? 1 : 0.5 }}>
+              <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: f.priority === "none" ? 1.5 : 2, borderColor: done ? c.p4 : ring, backgroundColor: done ? c.p4 : f.priority === "none" ? "transparent" : `${ring}1A`, alignItems: "center", justifyContent: "center", opacity: onCheck ? 1 : 0.5, overflow: "hidden" }}>
+                {working && <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "50%", backgroundColor: c.p4 }} />}
                 {done && <CheckIcon color="#fff" size={14} weight={2} />}
               </View>
             </Pressable>
@@ -487,7 +493,7 @@ export function DetailScreen() {
           {(() => {
             const list = plain;
             const chips = [
-              !list && f.status === "in-progress" && <AddChip key="status" c={c} disabled={ro} active icon={<Glyph color={c.p3} size={12}>▶</Glyph>} label={T.status["in-progress"]} onPress={() => act({ type: "setStatus", status: "open" }, "Status geändert")} testID="status-open" />,
+              (!list || f.isDevItem) && f.status === "in-progress" && <AddChip key="status" c={c} disabled={ro} active icon={<Glyph color={c.p3} size={12}>▶</Glyph>} label={T.status["in-progress"]} onPress={() => act({ type: "setStatus", status: "open" }, "Status geändert")} testID="status-open" />,
               !list && f.priority === "none" && <AddChip key="prio" c={c} disabled={ro} icon={<FlagIcon color={c.muted} size={14} />} label={T.fields.priority} onPress={() => setMenu("priority")} testID="field-priority" />,
               !list && !due.date && !due.raw && <AddChip key="due" c={c} disabled={ro} icon={<CalendarIcon color={c.muted} size={14} />} label={T.fields.due} onPress={() => pickDate(null, (d) => due.set(d, ""))} testID="field-due" />,
               !list && !sch.date && !sch.raw && <AddChip key="sch" c={c} disabled={ro} icon={<ClockIcon color={c.muted} size={14} />} label={T.fields.scheduled} onPress={() => pickDate(null, (d) => sch.set(d, ""))} testID="field-scheduled" />,
@@ -730,8 +736,8 @@ export function DetailScreen() {
         title={f.title}
         items={[
           // Bei Serien kein „Erledigt“: Erledigen und Beenden nur über die Serienaktionen (Entscheidung 18.10.2026).
-          !ro && !plain && f.status !== "in-progress" && !done && { label: `Status: ${T.status["in-progress"]}`, testID: "status-in-progress", icon: <Glyph color={c.p3} size={14}>▶</Glyph>, onPress: () => act({ type: "setStatus", status: "in-progress" }, "Status geändert") },
-          !ro && !plain && f.status === "in-progress" && { label: `Status: ${T.status.open}`, testID: "status-open-menu", icon: <Glyph color={c.muted} size={14}>○</Glyph>, onPress: () => act({ type: "setStatus", status: "open" }, "Status geändert") },
+          !ro && (!plain || f.isDevItem) && f.status !== "in-progress" && !done && { label: `Status: ${T.status["in-progress"]}`, testID: "status-in-progress", icon: <Glyph color={c.p3} size={14}>▶</Glyph>, onPress: () => act({ type: "setStatus", status: "in-progress" }, "Status geändert") },
+          !ro && (!plain || f.isDevItem) && f.status === "in-progress" && { label: `Status: ${T.status.open}`, testID: "status-open-menu", icon: <Glyph color={c.muted} size={14}>○</Glyph>, onPress: () => act({ type: "setStatus", status: "open" }, "Status geändert") },
           !ro && !s && !plain && { label: "Wiederholung …", icon: <RepeatIcon color={c.muted} size={15} />, onPress: () => nav.navigate("Recurrence", { ref }) },
           !ro && { label: T.actions.renameToTitle, icon: <Glyph color={c.muted} size={15}>✎</Glyph>, onPress: () => void repo.renameToTitle(ref).then((o) => notify(o, "Umbenannt")) },
           !ro && {

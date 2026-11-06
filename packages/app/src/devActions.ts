@@ -1,7 +1,19 @@
 // Programmieren (4.8): Abläufe, die mehrere Dateien betreffen. Jeder Schritt ist ein eigener
 // Schreibvorgang mit eigenem Verlaufseintrag.
-import { devItemsOf, type Index, type TaskView } from "@markdoist/core";
+import { devItemsOf, type Index, type TaskAction, type TaskView } from "@markdoist/core";
 import type { Outcome, Repository } from "./repository";
+import { T } from "./texts";
+
+/**
+ * Kreis eines Programmier-Eintrags: Ein offener Eintrag wird erst „In Arbeit“ (halb gefüllter Kreis),
+ * erst der nächste Klick erledigt ihn. Gibt null zurück, wenn der Klick wie sonst erledigt bzw.
+ * wiederöffnet (`toggleDoneAction`).
+ */
+export function startDevWorkAction(v: TaskView): { action: TaskAction; label: string } | null {
+  const f = v.task.fields;
+  if (!f.isDevItem || f.status === "in-progress" || f.status === "done") return null;
+  return { action: { type: "setStatus", status: "in-progress" }, label: T.status["in-progress"] };
+}
 
 /**
  * Legt einen Eintrag in einer Programmier-Liste an. Eine Liste ohne ID (extern angelegt) erhält

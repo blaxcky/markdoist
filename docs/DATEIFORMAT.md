@@ -69,7 +69,7 @@ dateModified: 2026-10-26T23:12:41+01:00
 
 ## Programmieren
 
-Eine Datei mit `kind: dev-list` ist eine Programmier-Liste, z. B. eine je App. Ihre Einträge sind **eigene Dateien** mit `kind: dev-item` und `dev_list: <id der Liste>`; der Body eines Eintrags ist seine Notiz. Erledigen setzt wie bei Aufgaben `status: done` und `completedDate`. Termine, Priorität und Eingang gibt es nicht. Beides erscheint nur unter „Programmieren“ und in der Suche, nie in Eingang, Heute, Alle offenen, Erledigt oder Listen. `status: open` und `inbox: false` beim Anlegen sind wie bei Listen für ältere Versionen da; dort erscheinen Einträge höchstens unter „Alle offenen“. Ein Eintrag ohne oder mit unbekanntem `dev_list` steht unter „Ohne Liste“.
+Eine Datei mit `kind: dev-list` ist eine Programmier-Liste, z. B. eine je App. Ihre Einträge sind **eigene Dateien** mit `kind: dev-item` und `dev_list: <id der Liste>`; der Body eines Eintrags ist seine Notiz. Der Kreis eines offenen Eintrags setzt zuerst `status: in-progress` („In Arbeit“), erst der nächste Klick erledigt ihn; Erledigen setzt wie bei Aufgaben `status: done` und `completedDate`. Termine, Priorität und Eingang gibt es nicht. Beides erscheint nur unter „Programmieren“ und in der Suche, nie in Eingang, Heute, Alle offenen, Erledigt oder Listen. `status: open` und `inbox: false` beim Anlegen sind wie bei Listen für ältere Versionen da; dort erscheinen Einträge höchstens unter „Alle offenen“. Ein Eintrag ohne oder mit unbekanntem `dev_list` steht unter „Ohne Liste“.
 
 ```markdown
 ---

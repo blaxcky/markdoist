@@ -10,6 +10,7 @@ import {
   seriesHistory,
   seriesStrip,
   skippedBeyondStrip,
+  startDevWorkAction,
   stripByMonth,
   T,
   type Outcome,
@@ -313,7 +314,9 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
       if (seriesActive) void act({ type: "completeOccurrence", revision: s.revisionKey, instance: K }, "Vorkommen erledigt");
     } else onToggle();
   };
-  const checkLabel = s ? `Vorkommen ${occ} erledigen` : f.status === "done" ? T.actions.reopen : T.actions.complete;
+  // Programmier-Einträge (4.8): offen → In Arbeit (halber Kreis) → erledigt
+  const working = f.isDevItem && f.status === "in-progress";
+  const checkLabel = s ? `Vorkommen ${occ} erledigen` : f.status === "done" ? T.actions.reopen : startDevWorkAction(view) ? T.dev.startWork : T.actions.complete;
   const folderName = repo.folder.split("/").filter(Boolean).pop() ?? repo.folder;
   // Programmieren (4.8): Liste des Eintrags in der Kopfzeile
   const devListTitle = f.isDevItem ? devIndex(repo.getState().index).lists.find((l) => l.task.fields.id === f.devList)?.task.fields.title : undefined;
@@ -347,7 +350,12 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                 <Menu label="Aufgabenaktionen" onClose={() => setMenu(false)}>
                   {!s && !f.isList && !f.isDevList && (
                     <MenuItem icon={<IconDone size={20} />} disabled={ro} onClick={() => (setMenu(false), onToggle())}>
-                      {f.status === "done" ? T.actions.reopen : T.actions.complete}
+                      {checkLabel}
+                    </MenuItem>
+                  )}
+                  {working && (
+                    <MenuItem icon={<IconClose size={20} />} disabled={ro} testId="stop-work" onClick={() => (setMenu(false), void act({ type: "setStatus", status: "open" }, T.dev.stopWork))}>
+                      {T.dev.stopWork}
                     </MenuItem>
                   )}
                   <MenuItem icon={<IconPencil size={20} />} disabled={ro} onClick={() => (setMenu(false), void repo.renameToTitle(ref).then((o) => onOutcome(o, "Umbenannt")))}>
@@ -370,9 +378,9 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
             <div className="detail-title">
               {!f.isList && !f.isDevList && (
               <button
-                className={`check big prio-${f.priority}${f.status === "done" ? " checked" : ""}`}
+                className={`check big prio-${f.priority}${f.status === "done" ? " checked" : ""}${working ? " half" : ""}`}
                 role="checkbox"
-                aria-checked={f.status === "done"}
+                aria-checked={working ? "mixed" : f.status === "done"}
                 aria-label={checkLabel}
                 title={`${checkLabel} (Leertaste)`}
                 disabled={checkDisabled}

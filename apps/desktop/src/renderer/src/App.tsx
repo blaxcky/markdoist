@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { T, type Outcome, type Repository } from "@markdoist/app";
+import { startDevWorkAction, T, type Outcome, type Repository } from "@markdoist/app";
 import {
   allOpenView,
   DEFAULT_DEV_ITEM_OPTIONS,
@@ -276,7 +276,13 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const selIndex = selectedView ? flat.findIndex((v) => v.task.ref === selectedView.task.ref) : -1;
 
   // Aktion und Ziel beim Bedienereignis festhalten: bei Serien das angezeigte Vorkommen (R6).
-  const toggleDone = completion.start;
+  // Programmier-Einträge gehen erst „In Arbeit“; das bleibt in der Zeile stehen, ohne Abhak-Ablauf (4.8).
+  const toggleDone = (v: TaskView) => {
+    const work = startDevWorkAction(v);
+    if (!work) return completion.start(v);
+    void repo.perform(v.task.ref, work.action, work.label).then((o) => notify(o, work.label));
+    return true;
+  };
 
   const doUndo = useCallback(() => {
     void repo.undo().then((o) => {
