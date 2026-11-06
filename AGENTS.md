@@ -24,8 +24,10 @@ Spezifikation und Entwicklungsplan stehen in `PLAN1.md`. Bisherige Entscheidunge
 
 ## Android-E2E
 
-- **Gerät: Genymotion**, nicht der Android-Emulator. Der Android-Emulator (`Markdoist_API_36`) stürzt auf diesem Rechner unter Mesa/Intel UHD ab: gfxstream bekommt keinen GL-Kontext („null ctx“). Nur `-gpu host` bootet, und auch das stürzt in etwa einem von drei Läufen ab. `swiftshader_indirect`, `guest` und `-no-window` stürzen schon beim Start ab (Stand 04.11.2026, Mesa 26.2.6, Emulator 37.2.12).
-- Genymotion 3.11.0 liegt in `~/genymotion`, Gerät „Google Pixel 7“ (Android 15, API 35, adb `127.0.0.1:6555`). Starten: `~/genymotion/gmtool admin start "Google Pixel 7"` (`stop` entsprechend). Geräte anlegen geht mit der kostenlosen Lizenz nur in der Genymotion-Oberfläche.
+- **Gerät hängt vom Rechner ab.** Erst `hostname` und `ls ~/genymotion` prüfen.
+- **Rechner `fedora-xmg` (AMD Radeon 780M):** Hier gibt es kein Genymotion. Der Android-Emulator `Markdoist_API_36` läuft mit Fenster und `-gpu host` stabil; der volle Lauf von `run.sh` war am 06.11.2026 grün. Starten: `setsid -f timeout 3600 ~/Android/Sdk/emulator/emulator -avd Markdoist_API_36 -gpu host -no-snapshot-save`, dann auf `sys.boot_completed = 1` warten (Schleife mit Höchstdauer). Beenden: `adb emu kill`.
+- **Anderer Laptop (Intel UHD): Genymotion**, nicht der Android-Emulator. Der Android-Emulator stürzt dort unter Mesa/Intel UHD ab: gfxstream bekommt keinen GL-Kontext („null ctx“). Nur `-gpu host` bootet, und auch das stürzt in etwa einem von drei Läufen ab. `swiftshader_indirect`, `guest` und `-no-window` stürzen schon beim Start ab (Stand 04.11.2026, Mesa 26.2.6, Emulator 37.2.12).
+- Genymotion 3.11.0 liegt dort in `~/genymotion`, Gerät „Google Pixel 7“ (Android 15, API 35, adb `127.0.0.1:6555`). Starten: `~/genymotion/gmtool admin start "Google Pixel 7"` (`stop` entsprechend). Geräte anlegen geht mit der kostenlosen Lizenz nur in der Genymotion-Oberfläche.
 - Genymotion nutzt die Navigationsleiste mit drei Knöpfen. Damit fallen Blätter und Knöpfe auf, die unter der Leiste liegen; die Gestensteuerung des Emulators verdeckt das. Unten immer `useSafeAreaInsets().bottom` als Abstand halten, Modals mit `statusBarTranslucent navigationBarTranslucent` (Vorbild `src/components/menu.tsx`).
 - Release-Build für den Test (x86_64, mit dem Debug-Schlüssel signiert):
   ```bash
