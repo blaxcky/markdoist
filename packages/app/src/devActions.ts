@@ -16,6 +16,16 @@ export function startDevWorkAction(v: TaskView): { action: TaskAction; label: st
 }
 
 /**
+ * Text zum Kopieren eines Programmier-Eintrags (Desktop, 4.8): Titel, Leerzeile, Notiz.
+ * Ohne Notiz nur der Titel.
+ */
+export function devItemClipboardText(title: string, body: string): string {
+  const t = title.trim();
+  const b = body.trim();
+  return b ? (t ? `${t}\n\n${b}` : b) : t;
+}
+
+/**
  * Legt einen Eintrag in einer Programmier-Liste an. Eine Liste ohne ID (extern angelegt) erhält
  * vorher eine, damit der Eintrag auf sie verweisen kann.
  */

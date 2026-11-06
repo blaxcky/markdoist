@@ -36,6 +36,9 @@ export const T = {
     hasNote: "hat eine Notiz",
     emptyList: "Noch keine Einträge.",
     progress: (done: number, total: number) => `${done}/${total}`,
+    copy: "Titel und Notiz kopieren",
+    copied: "Kopiert",
+    copyFailed: "Kopieren fehlgeschlagen",
   },
   lists: {
     newList: "Neue Liste",

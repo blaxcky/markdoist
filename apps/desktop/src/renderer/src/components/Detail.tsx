@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { diffLines } from "diff";
 import {
   pastSkippedCount,
+  devItemClipboardText,
   previewAction,
   renderMarkdown,
   seriesHistory,
@@ -38,6 +39,7 @@ import {
   IconCheck,
   IconChevronDown,
   IconCode,
+  IconCopy,
   IconChevronUp,
   IconClose,
   IconDescription,
@@ -321,6 +323,12 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
   // Programmieren (4.8): Liste des Eintrags in der Kopfzeile
   const devListTitle = f.isDevItem ? devIndex(repo.getState().index).lists.find((l) => l.task.fields.id === f.devList)?.task.fields.title : undefined;
   const devCrumb = f.isDevItem ? `${T.views.dev} · ${devListTitle ?? T.dev.orphans}` : T.views.dev;
+  // Ganzen Eintrag für die KI kopieren, mit ungespeichertem Titel und Notiz-Entwurf.
+  const copyItem = () =>
+    window.markdoist.copyText(devItemClipboardText(title, body)).then(
+      () => onOutcome({ status: "ok", message: T.dev.copied }),
+      () => onOutcome({ status: "error", message: T.dev.copyFailed }),
+    );
 
   return (
     <div
@@ -336,6 +344,11 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
             <span>{f.isList ? T.views.lists : f.isDevItem || f.isDevList ? devCrumb : f.inbox ? T.views.inbox : folderName}</span>
           </div>
           <div className="detail-tools">
+            {f.isDevItem && (
+              <button className="icon-btn" onClick={() => void copyItem()} title={T.dev.copy} aria-label={T.dev.copy} data-testid="copy-item">
+                <IconCopy size={24} />
+              </button>
+            )}
             <button className="icon-btn" onClick={onPrev} disabled={!onPrev} title="Vorherige Aufgabe (↑)" aria-label="Vorherige Aufgabe">
               <IconChevronUp size={24} />
             </button>

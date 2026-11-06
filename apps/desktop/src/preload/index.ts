@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("markdoist", {
   folder: { choose: call("folder:choose"), set: call("folder:set") },
   ics: { choose: call("ics:choose") },
   openExternal: call("open:external"),
+  copyText: call("clipboard:write"),
   storage: Object.fromEntries(methods.map((m) => [m, call(`storage:${m}`)])),
   kv: { get: call("kv:get"), set: call("kv:set"), delete: call("kv:delete") },
   onStorageChanged(fn: (overflow: boolean) => void) {

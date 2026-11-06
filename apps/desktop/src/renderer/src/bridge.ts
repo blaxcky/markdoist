@@ -13,6 +13,8 @@ interface Bridge {
   /** ICS-Datei wählen und lesen (Müllabfuhr-Import, 4.7); null = abgebrochen */
   ics: { choose(): Promise<{ name: string; text?: string; error?: string } | null> };
   openExternal(url: string): Promise<void>;
+  /** Text in die Zwischenablage legen (Kopieren eines Programmier-Eintrags, 4.8) */
+  copyText(text: string): Promise<void>;
   /** Speicheroperationen; erstes Argument ist der Ordner des aufrufenden Repositorys (7.1). */
   storage: {
     [K in Exclude<keyof StorageAdapter, "watch" | "readMany">]: (

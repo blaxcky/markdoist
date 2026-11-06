@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { allOpenView, clockAtLocal, devItemsView, devListsView, inboxView } from "@markdoist/core";
-import { createDevItem, MemoryAdapter, MemoryKeyValueStore, Repository, startDevWorkAction, toggleDoneAction, trashDevList, trashDoneDevItems } from "../src";
+import { createDevItem, devItemClipboardText, MemoryAdapter, MemoryKeyValueStore, Repository, startDevWorkAction, toggleDoneAction, trashDevList, trashDoneDevItems } from "../src";
 
 const TZ = "Europe/Berlin";
 function setup(adapter = new MemoryAdapter(), kv = new MemoryKeyValueStore()) {
@@ -121,5 +121,15 @@ describe("Programmieren im Repository (4.8)", () => {
     const trashRef = repo.getState().trash.find((t) => t.name === "Eins.md")!.ref;
     expect((await repo.restoreFromTrash(trashRef)).status).toBe("ok");
     expect(titles(devItemsView(repo.getState().index, null).open)).toEqual(["Eins"]);
+  });
+});
+
+describe("devItemClipboardText (4.8)", () => {
+  it("Titel, Leerzeile, Notiz; Leerraum am Rand entfällt", () => {
+    expect(devItemClipboardText("  Bug: Absturz ", "\nNur mit Mesa 26.\n\n")).toBe("Bug: Absturz\n\nNur mit Mesa 26.");
+  });
+  it("ohne Notiz nur der Titel, ohne Titel nur die Notiz", () => {
+    expect(devItemClipboardText("Idee", "  \n")).toBe("Idee");
+    expect(devItemClipboardText("", "Text")).toBe("Text");
   });
 });

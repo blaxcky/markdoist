@@ -124,6 +124,12 @@ export const IconDisplay = (p: P) => (
     <path d="M8 9h8M8 12h8M8 15h5" />
   </Svg>
 );
+export const IconCopy = (p: P) => (
+  <Svg {...p}>
+    <rect x="8.5" y="8.5" width="11" height="11" rx="2" />
+    <path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" />
+  </Svg>
+);
 export const IconPencil = (p: P) => (
   <Svg {...p}>
     <path d="M15.5 5.5l3 3L9 18H6v-3z" />

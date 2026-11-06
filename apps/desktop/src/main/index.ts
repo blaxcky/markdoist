@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from "electron";
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -146,6 +146,8 @@ function registerIpc() {
   ipcMain.handle("open:external", (_e, url: string) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
   });
+  // Zwischenablage im Main-Prozess: navigator.clipboard verlangt ein fokussiertes Fenster (4.8).
+  ipcMain.handle("clipboard:write", (_e, text: string) => clipboard.writeText(String(text)));
 
   // Ordnerbezogene Speicheroperationen; Referenzen werden im Adapter gegen den Ordner geprüft.
   // Jeder Aufruf nennt seinen Ordner: Aufträge eines alten Repositorys schreiben nach einem

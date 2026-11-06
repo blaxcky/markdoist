@@ -111,6 +111,8 @@ test("Frist setzen: Eingang und Heute, inbox bleibt (AK-02)", async () => {
   await page.getByTestId("capture-edit").click();
   await page.getByTestId("field-due").fill("2026-10-12");
   await expect(row("Neue Frist")).toBeVisible();
+  // Das Kopier-Icon gibt es nur bei Programmier-Einträgen (4.8).
+  await expect(page.getByTestId("copy-item")).toHaveCount(0);
   const text = await file("Neue Frist.md");
   expect(text).toContain("due: 2026-10-12");
   expect(text).toContain("inbox: true");
@@ -598,6 +600,10 @@ test("Programmieren: Liste anlegen, Eintrag mit Notiz, erledigen, Erledigte entf
   await page.keyboard.type("Nur mit Mesa 26.");
   await expect(page.getByTestId("save-state")).toHaveText("Gespeichert", { timeout: 5000 });
   expect(await file("Bug Absturz unter Mesa.md")).toMatch(/---\nNur mit Mesa 26\.\n?$/);
+  // Kopier-Icon: Titel und Notiz in einem Stück, z. B. für die KI.
+  await page.getByTestId("copy-item").click();
+  await expect(page.getByTestId("toast")).toHaveText("Kopiert");
+  expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe("Bug: Absturz unter Mesa\n\nNur mit Mesa 26.");
   await page.getByTestId("detail").getByRole("button", { name: "Schließen", exact: true }).click();
   await expect(item("Bug: Absturz unter Mesa").getByTestId("dev-item-note")).toBeVisible();
 
