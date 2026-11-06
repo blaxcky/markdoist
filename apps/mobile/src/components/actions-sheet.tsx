@@ -1,7 +1,7 @@
 // Aktionen zu einer Aufgabe (Wischen nach links / langes Drücken): Einsortieren, Termin, Löschen.
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { T, withDate } from "@markdoist/app";
-import { Temporal, type TaskView } from "@markdoist/core";
+import { Temporal, todayOf, type TaskView } from "@markdoist/core";
 import { systemClock, useRepo } from "../repo";
 import { useNotify } from "../notify";
 import { useTheme } from "../theme";
@@ -14,10 +14,11 @@ export function pickDate(initial: string | null, onPick: (date: string) => void)
     value: base,
     mode: "date",
     firstDayOfWeek: 1,
-    // „Heute“ schließt den Dialog; er öffnet gleich wieder auf dem heutigen Tag, bestätigt wird weiter mit OK.
+    // „Heute“ übernimmt sofort den heutigen Tag. Neu öffnen geht nicht: Das native Modul findet beim
+    // erneuten open() noch das schließende Fragment, aktualisiert nur dieses und zeigt keinen Dialog.
     neutralButton: { label: "Heute" },
     onChange: (e, d) => {
-      if (e.type === "neutralButtonPressed") return pickDate(null, onPick);
+      if (e.type === "neutralButtonPressed") return onPick(todayOf(systemClock()).toString());
       if (e.type !== "set" || !d) return;
       const pd = Temporal.PlainDate.from({ year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() });
       onPick(pd.toString());

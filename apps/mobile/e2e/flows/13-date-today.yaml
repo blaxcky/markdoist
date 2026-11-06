@@ -1,0 +1,31 @@
+# Datumsauswahl: Der Knopf „Heute“ übernimmt sofort den heutigen Tag (kein OK nötig).
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-inbox
+- tapOn:
+    id: fab-capture
+- tapOn:
+    id: capture-title
+- inputText: "Maestro Heute"
+- tapOn:
+    id: capture-submit
+- assertVisible:
+    id: row-Maestro Heute
+- longPressOn:
+    id: row-Maestro Heute
+- tapOn:
+    id: act-due
+- tapOn: "(?i)heute"
+- tapOn:
+    id: tab-today
+- assertVisible:
+    id: row-Maestro Heute
+# Aufräumen, damit spätere Flows Heute unverändert vorfinden.
+- longPressOn:
+    id: row-Maestro Heute
+- tapOn:
+    id: act-delete
+- assertNotVisible:
+    id: row-Maestro Heute
