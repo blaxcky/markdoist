@@ -8,6 +8,8 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 28.10.2026 (M9):** Müllabfuhr mit ICS-Import (4.7), Serien mit fester Terminliste (5.7) und die kompaktere untere Leiste am Handy (4.5). Abnahmenotiz in `docs/ABNAHME.md`.
 
+**Umgesetzt am 07.11.2026:** Diktieren für Notizen von Programmier-Einträgen (4.9).
+
 **Umgesetzt am 03.11.2026:** Bereich „Programmieren“ (4.8). Desktop-E2E grün; Android-E2E (alle 20 Flows, inkl. Flow 38) am 04.11.2026 grün.
 
 ## Auftrag an die Umsetzung
@@ -105,7 +107,7 @@ Technische Annahmen werden in den Meilensteinen überprüft; eine fertige Planun
 ## 1. Feststehende Anforderungen (Kurzfassung) [F]
 
 - **Name:** Markdoist, Android-applicationId `de.markdoist.aufgaben` (F001).
-- **Plattformen:** Electron auf Fedora, React Native mit **Expo** auf Android (F011/F014). Die App arbeitet vollständig lokal und offline. Es gibt keinen eigenen Sync-Server. Dein bestehendes Sync-Programm gleicht den Ordner ab; die App muss es weder kennen noch einrichten (F012).
+- **Plattformen:** Electron auf Fedora, React Native mit **Expo** auf Android (F011/F014). Die App arbeitet vollständig lokal und offline; einzige Ausnahme ist das Diktieren (4.9), das nur mit hinterlegtem OpenAI-Schlüssel und nur auf Knopfdruck ins Netz geht. Es gibt keinen eigenen Sync-Server. Dein bestehendes Sync-Programm gleicht den Ordner ab; die App muss es weder kennen noch einrichten (F012).
 - **Auslieferung:**
   - Android: GitHub baut die APK und stellt sie als Release bereit; du installierst sie über Obtainium (F011).
   - Fedora: RPM, Installation mit `dnf` (F010).
@@ -208,6 +210,7 @@ Dies ist eine Vertragsskizze, kein Anwendungscode. Schreiboperationen liefern di
 | CI/Auslieferung | GitHub Actions: Prüfungen bei jedem Push; jeder Push auf `main` startet den Release-Workflow (F016). Er baut die signierte APK und das RPM (F017) und hängt beide an ein GitHub-Release; Obtainium verfolgt diese Releases. Repository und Secrets werden mit der GitHub CLI eingerichtet (F015). | F011. Der Signierschlüssel liegt nur als verschlüsseltes GitHub-Secret vor, nie im Repository. |
 | Android-Speicher | eigenes Kotlin-Modul `saf-storage` (Expo-Modul) | Kontrolliert Baumauswahl mit `takePersistableUriPermission`, Metadatenabfragen, `"wt"`-Schreiben, Journal, MIME-Typ, Verschieben und Umbenennen. Der Umfang ergibt sich aus den Fehler- und Wiederherstellungsfällen in M1; eine feste Zeilenzahl wird nicht zugesichert. |
 | Android-UI | React Navigation, FlashList, react-native-webview, `@react-native-community/datetimepicker`, react-native-gesture-handler, Maestro (E2E auf dem Emulator) | Etablierte Bausteine. Maestro kann auch den SAF-Ordnerdialog automatisieren. |
+| Diktieren (4.9) | Android: `expo-audio` (Aufnahme), `expo-secure-store` (API-Schlüssel im Keystore), `expo-file-system` (Aufnahme löschen). Desktop: `MediaRecorder` im Renderer, Electron `safeStorage` und `fetch` im Main-Prozess | Expo-Standardmodule für SDK 58; am Desktop keine neue Abhängigkeit. |
 | Zustand | zustand | Klein, läuft identisch unter React DOM und React Native. |
 | Konfliktansicht | `diff` (jsdiff) | Zeilendiff für die Gegenüberstellung von Varianten. |
 | IDs | ULID (eigene kleine Funktion; Zufall über `crypto.getRandomValues`, auf Android über `expo-crypto`) | Stabil, sortierbar, ohne zentrale Vergabe. |
@@ -233,7 +236,7 @@ Für die Android-App nutzt die Umsetzung die Skills des Expo-Plugins und den Exp
 | `expo:expo-animation` | Wischgesten und Rückmeldungen mit Gesture Handler und Reanimated | M5 |
 | `expo:expo-skill-feedback` | Rückmeldung an Expo, wenn ein Skill fehlt, irreführt oder sich nicht bewährt hat | bei Bedarf |
 
-Nicht genutzt: alle `eas-*`-Skills (kein EAS Build, Update, Hosting, Workflows oder EAS-Simulator, siehe 10.2), `expo-router` und `expo-project-structure` (Navigation und Ordnerstruktur sind in 2.1/2.2 festgelegt), `expo-app-clip` und `expo-brownfield` (kein iOS, keine native Bestandsapp), `expo-data-fetching` (die App arbeitet ohne Netzwerk).
+Nicht genutzt: alle `eas-*`-Skills (kein EAS Build, Update, Hosting, Workflows oder EAS-Simulator, siehe 10.2), `expo-router` und `expo-project-structure` (Navigation und Ordnerstruktur sind in 2.1/2.2 festgelegt), `expo-app-clip` und `expo-brownfield` (kein iOS, keine native Bestandsapp), `expo-data-fetching` (die App arbeitet ohne Netzwerk; die zwei Aufrufe des Diktierens in 4.9 laufen mit einfachem `fetch`).
 
 **Expo-MCP (`plugin:expo:expo`):**
 - **Genutzt (Server):** `search_documentation` und `read_documentation` für aktuelle Expo-Doku, bevor Expo-APIs, Config-Plugins oder Prebuild-Einstellungen geschrieben werden; `add_library` als Alternative zu `pnpm expo install`.
@@ -624,6 +627,43 @@ Wunsch und Entscheidungen vom 03.11.2026 (`.fragen/2026-11-03-2036-programmieren
   - Desktop: Seitenleiste „Programmieren“, Ctrl+7. Escape führt von der Liste zur Übersicht zurück. „Anzeige“ gilt in der Übersicht für Sortierung und Filter, in einer Liste für die Sortierung der Einträge.
   - Android: „⋯ Mehr → Programmieren“ [F]. Anzeige-Knopf in der Übersicht und in der Kopfzeile der Liste. Langes Drücken auf einen Eintrag für Öffnen und Löschen.
 - **Nicht vorgesehen:** Art oder Schlagworte, Termine, Priorität, Ziehen, Eintrag in eine andere Liste verschieben, automatisches Aufräumen erledigter Einträge.
+
+### 4.9 Diktieren [F]/[V]
+
+Wunsch vom 07.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben [F]; Umsetzung [V].
+
+- **Zweck:** Die Notiz eines Programmier-Eintrags lässt sich diktieren, vor allem am Handy. Ergebnis ist ein sauberer Text wie bei Wispr Flow: ohne Füllwörter, mit aufgelösten Selbstkorrekturen, Satzzeichen und Absätzen.
+- **Ablauf [F]:**
+  - Aufnahme in der App.
+  - Erkennung mit OpenAI `gpt-transcribe` (`POST /v1/audio/transcriptions`, `languages[]=de`, Listen- und Eintragstitel als `prompt`).
+  - Bereinigung mit `gpt-6.1-terra` über die Responses API (`reasoning.effort: low`).
+  - Beide Modellnamen stehen in den Einstellungen und sind änderbar.
+- **Netz [F]:** Das ist die einzige Netzfunktion der App. Sie läuft nur mit hinterlegtem Schlüssel und nur auf Knopfdruck. An OpenAI gehen die Aufnahme sowie Listen- und Eintragstitel; der Einstellungstext sagt das.
+- **Ort [F]:** nur im Detail von Programmier-Einträgen, nicht schreibgeschützt.
+  - Android: Chip „Diktieren“ neben „Beschreibung“ und „Checkliste“, in der offenen Beschreibungskarte der Knopf „Diktieren“ neben „Checklistenpunkt“.
+  - Desktop: Mikrofon-Knopf im Kopf der Beschreibung.
+- **Einfügen [F]:** Der Text wird am Ende der Notiz angehängt, mit einer Leerzeile Abstand, wenn schon Text da ist. Er läuft über den normalen Entwurfs- und Speicherpfad (7.6); Konfliktschutz und Rückgängig gelten wie beim Tippen. Am Desktop hängt der Editor den Text auch dann an, wenn er gerade den Fokus hat.
+- **Bedienung:**
+  - Antippen startet die Aufnahme: roter Punkt, Laufzeit, „Abbrechen“ und „Fertig“.
+  - Danach „Wird erkannt …“ und „Wird bereinigt …“. „Abbrechen“ verwirft auch eine laufende Übertragung.
+  - Nach 10 Minuten stoppt die Aufnahme von selbst. Geht die Android-App in den Hintergrund, endet die Aufnahme wie mit „Fertig“; eine Hintergrundaufnahme gibt es nicht.
+  - Verlassen des Details bricht ab. Am Desktop gilt das auch beim Wechsel zu einem anderen Eintrag.
+- **Fehler [F]:**
+  - Scheitert die Bereinigung, wird der Rohtext eingefügt, mit der Meldung „Nicht bereinigt eingefügt“.
+  - Scheitert die Erkennung (kein Netz, Schlüssel ungültig, Kontingent, Zeitüberschreitung, Serverfehler), bleibt die Aufnahme erhalten und „Erneut versuchen“ schickt sie noch einmal.
+  - Ohne Schlüssel erscheint „Für das Diktieren einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen“, und die Einstellungen öffnen sich.
+  - Ohne Mikrofonberechtigung erscheint „Kein Zugriff auf das Mikrofon“.
+- **Einstellungen „Diktieren“:**
+  - API-Schlüssel: nach dem Speichern nur maskiert (`sk-…abcd`), mit „Prüfen“ (`GET /v1/models`) und „Entfernen“.
+  - Schalter „Text bereinigen“ (Standard an).
+  - Modell für die Erkennung und Modell für die Bereinigung.
+  - Android: Abschnitt im Einstellungsbildschirm. Desktop: Nutzermenü → „Diktieren …“.
+- **Schlüssel nur gerätelokal [F]:** nie im Aufgabenordner.
+  - Android: `expo-secure-store` (Keystore). Die Android-Sicherung nimmt ihn aus.
+  - Desktop: `safeStorage`, verschlüsselt in `settings.json` (Modus 0600). Der Renderer erhält nur Maske und Status, die Aufrufe laufen im Main-Prozess; die CSP des Renderers bleibt unverändert. Ohne Schlüsselbund (`basic_text` oder keine Verschlüsselung) weisen die Einstellungen darauf hin.
+- **Aufnahmeformat [V]:** Android m4a/AAC mono mit 64 kbit/s (10 min ≈ 5 MB). Desktop WebM/Opus mit 48 kbit/s. Grenze der API: 25 MB. Die Android-Aufnahme liegt im Cache und wird nach Erfolg oder Abbruch gelöscht.
+- **Mikrofon am Desktop [V]:** Electron erlaubt `media` nur für das eigene Fenster und nur Audio; andere Berechtigungsanfragen werden abgelehnt.
+- **Nicht vorgesehen:** Diktieren bei normalen Aufgaben, in Listen oder bei der Erfassung, Einfügen an der Cursorposition, Live-Mitschrift während des Sprechens, andere Anbieter.
 
 ## 5. Wiederholungen
 

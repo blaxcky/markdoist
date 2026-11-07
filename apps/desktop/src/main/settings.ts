@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { join } from "node:path";
 import { clampZoom } from "./zoom";
+import type { StoredDictation } from "./dictation";
 
 let tmpCounter = 0;
 
@@ -79,6 +80,8 @@ export interface Settings {
   theme: "system" | "light" | "dark";
   /** Zoomfaktor des Fensters, 1 = 100 % */
   zoom: number;
+  /** Diktieren (4.9): Schlüssel verschlüsselt, Modelle; geht nie an den Renderer */
+  dictation?: StoredDictation;
 }
 
 export async function loadSettings(dir: string): Promise<Settings> {

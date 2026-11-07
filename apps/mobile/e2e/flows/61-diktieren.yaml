@@ -1,0 +1,101 @@
+# Diktieren (4.9): Knopf nur bei Programmier-Einträgen; ohne Schlüssel Hinweis und Einstellungen;
+# Schlüssel speichern (nur maskiert sichtbar) und entfernen; Aufnahme starten und abbrechen.
+# Netz und OpenAI prüft Maestro nicht (kein echter Schlüssel im Test).
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: more-dev
+- tapOn:
+    id: fab-new-dev-list
+- inputText: "Diktat"
+- tapOn:
+    id: new-list-create
+- tapOn:
+    id: fab-add-dev-item
+- inputText: "Sprachnotiz"
+- pressKey: Enter
+- tapOn:
+    id: sheet-close
+- tapOn:
+    id: "text-Sprachnotiz"
+- assertVisible:
+    id: dictate-chip
+# Ohne Schlüssel: Hinweis, dann die Einstellungen
+- tapOn:
+    id: dictate-chip
+- extendedWaitUntil:
+    visible: ".*API-Schlüssel in den Einstellungen.*"
+    timeout: 4000
+- scrollUntilVisible:
+    element:
+      id: dictation-key
+    direction: DOWN
+    timeout: 8000
+- tapOn:
+    id: dictation-key
+- inputText: "sk-test-maestro-1234"
+- hideKeyboard
+- tapOn:
+    id: dictation-key-save
+- extendedWaitUntil:
+    visible:
+      id: dictation-key-masked
+      text: "sk-…1234"
+    timeout: 4000
+- assertNotVisible: ".*maestro.*"
+- back
+# Mit Schlüssel: Aufnahme startet (Berechtigung einmal erlauben) und lässt sich abbrechen.
+- tapOn:
+    id: dictate
+- runFlow:
+    when:
+      visible: "(?i)while using the app|only this time|allow"
+    commands:
+      - tapOn: "(?i)while using the app|allow"
+- extendedWaitUntil:
+    visible:
+      id: dictate-recording
+    timeout: 6000
+- assertVisible: "Aufnahme.*"
+- tapOn:
+    id: dictate-cancel
+- extendedWaitUntil:
+    visible:
+      id: dictate
+    timeout: 3000
+- back
+# Gewöhnliche Aufgaben haben keinen Diktierknopf.
+- tapOn:
+    id: tab-inbox
+- runFlow:
+    when:
+      visible:
+        id: "row-Maestro Aufgabe"
+    commands:
+      - tapOn:
+          id: "row-Maestro Aufgabe"
+      - assertNotVisible:
+          id: dictate-chip
+      - assertNotVisible:
+          id: dictate
+      - back
+# Schlüssel wieder entfernen
+- tapOn:
+    id: nav-menu
+- tapOn:
+    id: nav-settings
+- scrollUntilVisible:
+    element:
+      id: dictation-key-remove
+    direction: DOWN
+    timeout: 8000
+- tapOn:
+    id: dictation-key-remove
+- extendedWaitUntil:
+    visible:
+      id: dictation-key
+    timeout: 4000
+- back

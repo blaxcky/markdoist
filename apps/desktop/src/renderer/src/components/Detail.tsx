@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { diffLines } from "diff";
 import {
+  appendDictation,
   pastSkippedCount,
   devItemClipboardText,
   previewAction,
@@ -14,6 +15,7 @@ import {
   startDevWorkAction,
   stripByMonth,
   T,
+  type DictationResult,
   type Outcome,
   type Repository,
   type StripCell,
@@ -31,6 +33,7 @@ import {
   type TaskView,
 } from "@markdoist/core";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { DictateButton } from "./DictateButton";
 import { RecurrenceEditor } from "./RecurrenceEditor";
 import { DateListEditor } from "./Waste";
 import { Menu, MenuItem } from "./Menu";
@@ -191,6 +194,18 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
   };
 
   const body = draftText ?? t.body;
+  // Diktieren (4.9): Ergebnis kommt asynchron, angehängt wird an den dann aktuellen Text.
+  const bodyNow = useRef(body);
+  bodyNow.current = body;
+  const tabNow = useRef(tab);
+  tabNow.current = tab;
+  const [dictAppend, setDictAppend] = useState<{ seq: number; text: string } | null>(null);
+  const onDictated = (r: DictationResult) => {
+    // Im Editor anhängen, damit auch ein fokussierter Editor den Text übernimmt; in der Vorschau direkt speichern.
+    if (tabNow.current === "edit" && !ro) setDictAppend((a) => ({ seq: (a?.seq ?? 0) + 1, text: r.text }));
+    else onBodyChange(appendDictation(bodyNow.current, r.text));
+    if (!r.cleaned && r.cleanupError) onOutcome({ status: "ok", message: T.dictation.notCleaned });
+  };
   const html = useMemo(() => (tab === "preview" ? renderMarkdown(body) : ""), [tab, body]);
 
   const setDate = (field: "due" | "scheduled", date: string, time: string) => {
@@ -672,6 +687,14 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
             <div className="desc-head">
               <IconDescription size={16} />
               <span className="desc-label">Beschreibung</span>
+              {f.isDevItem && !ro && (
+                <DictateButton
+                  key={ref}
+                  ctx={() => ({ list: devListTitle, title })}
+                  onResult={onDictated}
+                  onError={(kind) => onOutcome({ status: "error", message: T.dictation.errors[kind] })}
+                />
+              )}
               <span className={`state ${save}`} data-testid="save-state">
                 {save === "pending" && T.save.pending}
                 {save === "draft" && T.save.draft}
@@ -753,7 +776,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
               </div>
             )}
             {tab === "edit" ? (
-              <MarkdownEditor value={body} docKey={ref} readOnly={ro} onChange={onBodyChange} onBlur={() => void flush()} />
+              <MarkdownEditor value={body} docKey={ref} readOnly={ro} onChange={onBodyChange} onBlur={() => void flush()} append={dictAppend} />
             ) : (
               <div className="preview" data-testid="preview" onClick={onPreviewClick} dangerouslySetInnerHTML={{ __html: html }} />
             )}

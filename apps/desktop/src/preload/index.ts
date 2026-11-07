@@ -23,6 +23,19 @@ contextBridge.exposeInMainWorld("markdoist", {
   copyText: call("clipboard:write"),
   storage: Object.fromEntries(methods.map((m) => [m, call(`storage:${m}`)])),
   kv: { get: call("kv:get"), set: call("kv:set"), delete: call("kv:delete") },
+  dictation: {
+    status: call("dictation:status"),
+    setKey: call("dictation:setKey"),
+    clearKey: call("dictation:clearKey"),
+    check: call("dictation:check"),
+    setSettings: call("dictation:setSettings"),
+    run: call("dictation:run"),
+    onPhase(fn: (p: string) => void) {
+      const h = (_e: unknown, p: string) => fn(p);
+      ipcRenderer.on("dictation:phase", h);
+      return () => ipcRenderer.removeListener("dictation:phase", h);
+    },
+  },
   onStorageChanged(fn: (overflow: boolean) => void) {
     const h = (_e: unknown, overflow: boolean) => fn(overflow);
     ipcRenderer.on("storage:changed", h);

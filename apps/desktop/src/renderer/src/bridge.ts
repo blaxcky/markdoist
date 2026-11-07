@@ -1,9 +1,17 @@
 // Brücke zum Main-Prozess: StorageAdapter und Schlüssel-Wert-Speicher über IPC.
-import type { KeyValueStore, StorageAdapter } from "@markdoist/app";
+import type { DictationContext, DictationErrorKind, DictationResult, DictationSettings, KeyValueStore, StorageAdapter } from "@markdoist/app";
 
 export interface Settings {
   folder: string | null;
   theme: "system" | "light" | "dark";
+}
+
+/** Diktieren (4.9); der Schlüssel selbst bleibt im Main-Prozess */
+export interface DictationStatus {
+  hasKey: boolean;
+  masked: string | null;
+  insecure: boolean;
+  settings: DictationSettings;
 }
 
 interface Bridge {
@@ -23,6 +31,15 @@ interface Bridge {
     ) => ReturnType<StorageAdapter[K]>;
   };
   kv: KeyValueStore;
+  dictation: {
+    status(): Promise<DictationStatus>;
+    setKey(key: string): Promise<DictationStatus>;
+    clearKey(): Promise<DictationStatus>;
+    check(): Promise<{ ok: true } | { ok: false; kind: DictationErrorKind }>;
+    setSettings(s: Partial<DictationSettings>): Promise<DictationStatus>;
+    run(audio: ArrayBuffer, mime: string, ctx: DictationContext): Promise<{ ok: true; result: DictationResult } | { ok: false; kind: DictationErrorKind }>;
+    onPhase(fn: (p: "transcribing" | "cleaning") => void): () => void;
+  };
   onStorageChanged(fn: (overflow: boolean) => void): () => void;
   onFocus(fn: () => void): () => void;
 }

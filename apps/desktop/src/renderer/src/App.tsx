@@ -41,6 +41,8 @@ import { Dev, DevListRow } from "./components/Dev";
 import { DateListEditor, WasteDates, WasteHead, WasteImportDialog, WasteOverview } from "./components/Waste";
 import { Menu, MenuItem } from "./components/Menu";
 import { useDialog } from "./dialog";
+import { DictationSettingsDialog } from "./components/DictationSettings";
+import { OPEN_DICTATION_SETTINGS } from "./components/DictateButton";
 import {
   IconBell,
   IconChevronDown,
@@ -49,6 +51,7 @@ import {
   IconDone,
   IconFolder,
   IconHelp,
+  IconMic,
   IconInbox,
   IconBin,
   IconCode,
@@ -178,6 +181,12 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const [sidebar, setSidebar] = useState(true);
   const [userMenu, setUserMenu] = useState(false);
   const [help, setHelp] = useState(false);
+  const [dictSettings, setDictSettings] = useState(false);
+  useEffect(() => {
+    const h = () => setDictSettings(true);
+    window.addEventListener(OPEN_DICTATION_SETTINGS, h);
+    return () => window.removeEventListener(OPEN_DICTATION_SETTINGS, h);
+  }, []);
   const searchRef = useRef<HTMLInputElement>(null);
   const [version, setVersion] = useState("");
   useEffect(() => {
@@ -544,6 +553,9 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                       <option value="dark">Dunkel</option>
                     </select>
                   </label>
+                  <MenuItem icon={<IconMic size={20} />} onClick={() => (setUserMenu(false), setDictSettings(true))} testId="menu-dictation">
+                    {T.dictation.section} …
+                  </MenuItem>
                   <div className="menu-sep" />
                   <div className="menu-foot">
                     {state.lastScan && (
@@ -1028,6 +1040,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         />
       )}
       {help && <Help onClose={() => setHelp(false)} />}
+      {dictSettings && <DictationSettingsDialog onClose={() => setDictSettings(false)} />}
       {toast && (
         <div key={toast.id} className={`toast${toast.error ? " error" : ""}${toast.out ? " out" : ""}`} role="status" data-testid="toast">
           <span>{toast.text}</span>

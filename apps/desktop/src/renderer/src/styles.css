@@ -2219,3 +2219,59 @@ button.strip-day:hover:not(:disabled) .strip-dot {
 .waste-effect.blocked {
   color: var(--danger);
 }
+
+/* ---------- Diktieren (4.9) ---------- */
+.dictate-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.dictate-bar .btn {
+  padding: 2px 10px;
+  font-size: 12px;
+}
+.dictate-bar.error .dictate-state {
+  color: var(--danger);
+}
+.dictate-bar .dictate-state {
+  font-variant-numeric: tabular-nums;
+}
+.rec-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rec-dot {
+    animation: none;
+  }
+}
+.dictation-settings .key-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.dictation-settings .key-row input {
+  flex: 1;
+}
+.dictation-settings .masked {
+  font-family: monospace;
+  flex: 1;
+}
+.dictation-settings .hint {
+  color: var(--fg-muted);
+  font-size: 12px;
+  margin: 0;
+}
+.dictation-settings .hint.error {
+  color: var(--danger);
+}

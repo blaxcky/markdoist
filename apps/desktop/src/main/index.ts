@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, safeStorage, session, shell } from "electron";
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
@@ -6,6 +6,8 @@ import icon from "../../build/icons/256x256.png?asset";
 import { FsAdapter } from "./fsAdapter";
 import { LocalStore, loadSettings, saveSettings, type Settings } from "./settings";
 import { stepZoom, zoomCommand, type ZoomCommand } from "./zoom";
+import { DictationService } from "./dictation";
+import type { DictationContext, DictationSettings, FetchLike } from "@markdoist/app";
 
 // Datenverzeichnis: ~/.config/markdoist (Plan 3.1). Für Tests überschreibbar.
 const dataDir = process.env.MARKDOIST_DATA_DIR ?? join(app.getPath("appData"), "markdoist");
@@ -21,6 +23,25 @@ let settings: Settings = { folder: null, theme: "system", zoom: 1 };
 let adapter: FsAdapter | null = null;
 let unwatch: (() => void) | null = null;
 const store = new LocalStore(dataDir);
+
+// Diktieren (4.9). MARKDOIST_OPENAI_BASE_URL nur für E2E-Tests (lokaler Ersatzserver).
+const dictation = new DictationService(
+  safeStorage,
+  () => settings.dictation,
+  async (d) => {
+    settings = { ...settings, dictation: d };
+    if (!d) delete settings.dictation;
+    await saveSettings(dataDir, settings);
+  },
+  fetch as unknown as FetchLike,
+  process.env.MARKDOIST_OPENAI_BASE_URL,
+);
+
+/** Einstellungen ohne Diktier-Geheimnisse für den Renderer */
+function publicSettings() {
+  const { dictation: _d, ...rest } = settings;
+  return rest;
+}
 
 function journalDir(folder: string) {
   const id = createHash("sha256").update(folder).digest("hex").slice(0, 16);
@@ -113,20 +134,20 @@ function applyZoom(cmd: ZoomCommand) {
 
 function registerIpc() {
   ipcMain.handle("app:info", () => ({ version: app.getVersion() }));
-  ipcMain.handle("settings:get", () => settings);
+  ipcMain.handle("settings:get", () => publicSettings());
   ipcMain.handle("settings:theme", async (_e, theme: Settings["theme"]) => {
-    if (!["system", "light", "dark"].includes(theme)) return settings;
+    if (!["system", "light", "dark"].includes(theme)) return publicSettings();
     settings = { ...settings, theme };
     nativeTheme.themeSource = theme;
     await saveSettings(dataDir, settings);
-    return settings;
+    return publicSettings();
   });
   ipcMain.handle("folder:choose", async () => {
     const r = await dialog.showOpenDialog(win!, {
       title: "Aufgabenordner wählen",
       properties: ["openDirectory", "createDirectory"],
     });
-    if (r.canceled || !r.filePaths[0]) return settings;
+    if (r.canceled || !r.filePaths[0]) return publicSettings();
     return setFolder(r.filePaths[0]);
   });
   ipcMain.handle("folder:set", async (_e, folder: string) => setFolder(folder));
@@ -168,18 +189,29 @@ function registerIpc() {
   s("recover", () => requireAdapter().recover());
   s("resolveRecovery", (opId: string) => requireAdapter().resolveRecovery(opId));
 
+  ipcMain.handle("dictation:status", () => dictation.status());
+  ipcMain.handle("dictation:setKey", (_e, key: string) => dictation.setKey(key));
+  ipcMain.handle("dictation:clearKey", () => dictation.clearKey());
+  ipcMain.handle("dictation:check", () => dictation.check());
+  ipcMain.handle("dictation:setSettings", (_e, s: Partial<DictationSettings>) => dictation.setSettings(s));
+  ipcMain.handle("dictation:run", (e, audio: ArrayBuffer | Uint8Array, mime: string, ctx: DictationContext) =>
+    dictation.run(audio, mime, ctx, (p) => {
+      if (!e.sender.isDestroyed()) e.sender.send("dictation:phase", p);
+    }),
+  );
+
   ipcMain.handle("kv:get", (_e, k: string) => store.get(k));
   ipcMain.handle("kv:set", (_e, k: string, v: string) => store.set(k, v));
   ipcMain.handle("kv:delete", (_e, k: string) => store.delete(k));
 }
 
-async function setFolder(folder: string): Promise<Settings> {
+async function setFolder(folder: string): Promise<Omit<Settings, "dictation">> {
   const st = await stat(folder);
   if (!st.isDirectory()) throw new Error("Kein Ordner");
   settings = { ...settings, folder };
   await saveSettings(dataDir, settings);
   openFolder(folder);
-  return settings;
+  return publicSettings();
 }
 
 app.on("second-instance", () => {
@@ -195,6 +227,12 @@ void app.whenReady().then(async () => {
   nativeTheme.themeSource = settings.theme;
   openFolder(settings.folder);
   registerIpc();
+  // Mikrofon nur für das eigene Fenster und nur Audio (Diktieren, 4.9); alles andere ablehnen.
+  session.defaultSession.setPermissionRequestHandler((wc, permission, cb, details) => {
+    const media = permission === "media" && (!("mediaTypes" in details) || (details.mediaTypes ?? []).every((t) => t === "audio"));
+    cb(media && wc === win?.webContents);
+  });
+  session.defaultSession.setPermissionCheckHandler((wc, permission) => permission === "media" && wc === win?.webContents);
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

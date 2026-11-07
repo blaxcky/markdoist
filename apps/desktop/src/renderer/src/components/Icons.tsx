@@ -254,3 +254,10 @@ export const IconCode = (p: P) => (
     <path d="M8.5 7.5L4 12l4.5 4.5M15.5 7.5L20 12l-4.5 4.5M13.5 5.5l-3 13" />
   </Svg>
 );
+/** Mikrofon (Diktieren, 4.9) */
+export const IconMic = (p: P) => (
+  <Svg {...p}>
+    <rect x="9" y="3.5" width="6" height="11" rx="3" />
+    <path d="M6 11.5a6 6 0 0 0 12 0M12 17.5v3M9 20.5h6" />
+  </Svg>
+);

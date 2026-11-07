@@ -1,5 +1,6 @@
 // CodeMirror 6 als Markdown-Editor. Ctrl+Z wirkt hier auf die Texteingabe (4.5).
 import { useEffect, useRef } from "react";
+import { appendDictation } from "@markdoist/app";
 import { EditorView, keymap } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
@@ -13,9 +14,11 @@ interface Props {
   readOnly: boolean;
   onChange(text: string): void;
   onBlur(): void;
+  /** Text ans Ende anhängen (Diktieren, 4.9), auch wenn der Editor gerade fokussiert ist */
+  append?: { seq: number; text: string } | null;
 }
 
-export function MarkdownEditor({ value, docKey, readOnly, onChange, onBlur }: Props) {
+export function MarkdownEditor({ value, docKey, readOnly, onChange, onBlur, append }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const cb = useRef({ onChange, onBlur });
@@ -58,6 +61,17 @@ export function MarkdownEditor({ value, docKey, readOnly, onChange, onBlur }: Pr
     const cur = v.state.doc.toString();
     if (cur !== value) v.dispatch({ changes: { from: 0, to: cur.length, insert: value } });
   }, [value]);
+
+  // Nur neue Anhänge übernehmen: Ein neu eingehängter Editor (Tabwechsel) wiederholt den letzten nicht.
+  const applied = useRef(append?.seq ?? 0);
+  useEffect(() => {
+    const v = view.current;
+    if (!v || !append || append.seq <= applied.current) return;
+    applied.current = append.seq;
+    const cur = v.state.doc.toString();
+    const next = appendDictation(cur, append.text);
+    if (next !== cur) v.dispatch({ changes: { from: 0, to: cur.length, insert: next }, selection: { anchor: next.length } });
+  }, [append?.seq]);
 
   return <div className="editor" ref={host} />;
 }

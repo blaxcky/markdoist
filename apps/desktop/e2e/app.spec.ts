@@ -3,6 +3,8 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 
 const appDir = join(__dirname, "..");
 // Fenster bleiben verborgen; MARKDOIST_E2E_SHOW=1 zeigt sie zum Zuschauen.
@@ -733,6 +735,96 @@ test("Müllabfuhr: ICS importieren, Abfuhrart öffnen, Termin überspringen, ern
   await page.getByTestId("waste-import").click();
   await expect(page.getByTestId("waste-import-effect-0")).toHaveText("keine Änderung");
   await expect(page.getByTestId("waste-import-apply")).toBeDisabled();
+});
+
+test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler und erneuter Versuch (4.9)", async () => {
+  // Lokaler Ersatz für die OpenAI-API; das Mikrofon liefert Chromiums Testton.
+  const seen: { path: string; auth: string; body: string }[] = [];
+  let mode: "ok" | "401" = "ok";
+  const server = createServer((req, res) => {
+    let body = "";
+    req.setEncoding("latin1");
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      seen.push({ path: req.url ?? "", auth: req.headers.authorization ?? "", body });
+      res.setHeader("Content-Type", "application/json");
+      if (mode === "401") return void res.writeHead(401).end("{}");
+      if (req.url === "/v1/audio/transcriptions") return void res.end(JSON.stringify({ text: "äh also der Knopf soll äh rot sein" }));
+      if (req.url === "/v1/responses") return void res.end(JSON.stringify({ output: [{ type: "reasoning" }, { type: "message", content: [{ type: "output_text", text: "Der Knopf soll rot sein." }] }] }));
+      res.end(JSON.stringify({ data: [] }));
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as AddressInfo).port;
+  try {
+    await app.close();
+    app = await electron.launch({
+      args: [join(appDir, "out/main/index.js"), "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
+      env: {
+        ...process.env,
+        ...hide,
+        MARKDOIST_FOLDER: folder,
+        MARKDOIST_DATA_DIR: join(base, "data"),
+        MARKDOIST_TEST_NOW: "2026-10-12T10:00",
+        MARKDOIST_TEST_TZ: "Europe/Berlin",
+        MARKDOIST_OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`,
+      },
+    });
+    page = await app.firstWindow();
+    await page.getByTestId("list").waitFor();
+
+    await page.keyboard.press("Control+7");
+    await page.getByTestId("new-dev-list").click();
+    await page.getByTestId("new-dev-list-title").fill("Markdoist");
+    await page.keyboard.press("Enter");
+    const add = page.getByTestId("dev-add-item");
+    await add.fill("Farbe des Knopfs");
+    await add.press("Enter");
+    const item = page.locator('[data-testid="dev-item-row"][data-text="Farbe des Knopfs"]');
+    await item.getByTestId("dev-item-open").click();
+
+    // Ohne Schlüssel: Hinweis und Einstellungen öffnen sich.
+    await page.getByTestId("dictate").click();
+    await expect(page.getByTestId("toast")).toContainText("API-Schlüssel in den Einstellungen");
+    await expect(page.getByTestId("dictation-settings")).toBeVisible();
+    await page.getByTestId("dictation-key").fill("sk-test-e2e-geheim-1234");
+    await page.getByTestId("dictation-key-save").click();
+    await expect(page.getByTestId("dictation-key-masked")).toHaveText("sk-…1234");
+    await page.getByTestId("dictation-key-check").click();
+    await expect(page.getByTestId("dictation-status")).toHaveText("Schlüssel funktioniert");
+    expect(await readFile(join(base, "data", "settings.json"), "utf8")).not.toContain("geheim");
+    await page.getByTestId("dictation-settings-close").click();
+
+    // Aufnahme → Fertig → bereinigter Text landet in der Notiz und in der Datei.
+    await page.getByTestId("dictate").click();
+    await expect(page.getByTestId("dictate-state")).toContainText("Aufnahme");
+    await page.waitForTimeout(1500);
+    await page.getByTestId("dictate-stop").click();
+    await expect(page.locator(".cm-content")).toHaveText("Der Knopf soll rot sein.");
+    await expect(page.getByTestId("save-state")).toHaveText("Gespeichert", { timeout: 5000 });
+    expect(await file("Farbe des Knopfs.md")).toMatch(/---\nDer Knopf soll rot sein\.\n$/);
+    const upload = seen.find((s) => s.path === "/v1/audio/transcriptions")!;
+    expect(upload.auth).toBe("Bearer sk-test-e2e-geheim-1234");
+    expect(upload.body).toContain('filename="diktat.webm"');
+    expect(upload.body).toContain("gpt-transcribe");
+    expect(upload.body).toContain("Projekt: Markdoist");
+    expect(seen.find((s) => s.path === "/v1/responses")!.body).toContain('"model":"gpt-6.1-terra"');
+
+    // Schlüssel abgelehnt: Aufnahme bleibt, „Erneut versuchen“ hängt den Text an.
+    mode = "401";
+    await page.getByTestId("dictate").click();
+    await expect(page.getByTestId("dictate-state")).toContainText("Aufnahme");
+    await page.waitForTimeout(800);
+    await page.getByTestId("dictate-stop").click();
+    await expect(page.getByTestId("dictate-state")).toHaveText("API-Schlüssel ungültig");
+    mode = "ok";
+    await page.getByTestId("dictate-retry").click();
+    await expect(page.locator(".cm-content")).toHaveText(/Der Knopf soll rot sein\.\s*Der Knopf soll rot sein\./);
+    await expect.poll(() => file("Farbe des Knopfs.md")).toMatch(/---\nDer Knopf soll rot sein\.\n\nDer Knopf soll rot sein\.\n$/);
+    await expect(page.getByTestId("dictate")).toBeVisible();
+  } finally {
+    server.close();
+  }
 });
 
 test("Ansicht mit Ctrl+Plus vergrößern, Größe bleibt nach Neustart (4.5)", async () => {
