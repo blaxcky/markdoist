@@ -66,6 +66,8 @@ appId: de.markdoist.aufgaben
     visible:
       id: dictate
     timeout: 3000
+# Detail → Liste → Übersicht mit unterer Leiste
+- back
 - back
 # Gewöhnliche Aufgaben haben keinen Diktierknopf.
 - tapOn:

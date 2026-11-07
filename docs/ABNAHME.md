@@ -211,3 +211,37 @@ PLAN1 4.8; Entscheidungen in `.fragen/2026-11-03-2036-programmieren.md`. Drei Co
 - **Halbmond „In Arbeit“ (06.11.2026):** Der Kreis eines Programmier-Eintrags setzt erst `status: in-progress` (linke Hälfte gefüllt, `aria-checked`/`accessibilityState` „mixed“), erst der zweite Klick erledigt. `packages/app/test/dev.test.ts` prüft offen → in Arbeit → erledigt → wieder offen und dass Aufgaben keinen Zwischenschritt haben. Desktop-E2E (37 Tests) grün, der Programmieren-Test prüft zusätzlich den Halbzustand in Zeile und Detail und „Nicht mehr in Arbeit“. Android-E2E grün (alle 20 Flows, 32 Dateiprüfungen) im Emulator `Markdoist_API_36` mit `-gpu host`, weil Genymotion nicht mehr installiert war; Flow 38 tippt zweimal und prüft dazwischen „0 von 2 erledigt“. Den Halbmond am Desktop per Screenshot des Stylesheets angesehen, am Android nicht.
 - **Nicht geprüft:**
   - Keine Sichtprüfung der Oberfläche.
+
+## Diktieren (07.11.2026)
+
+PLAN1 4.9; Wunsch und Festlegungen vom 07.11.2026, als Plan freigegeben (keine eigene Fragenrunde). Modellnamen gegen die OpenAI-Doku geprüft: `gpt-transcribe` (Transkription, löst whisper-1 und gpt-4o-transcribe ab, die am 26.02.2027 abgeschaltet werden) und `gpt-6.1-terra` (Responses API). Commits für Kern und Android, für Desktop und Spezifikation, dazu die Doku.
+
+- **Kern (AK-49):** `packages/app/test/dictation.test.ts` prüft mit einem gefälschten `fetch`:
+  - Formularfelder (Modell, `languages[]=de`, Kontext mit Listen- und Eintragstitel) und den Body der Bereinigung (Modell, `reasoning.effort: low`, Anweisung)
+  - Auslesen des Texts aus `output[]` auch hinter einem Reasoning-Element
+  - Fehlerklassen 401/403, 429, 504, 500, Netzfehler, Zeitüberschreitung, fehlender Schlüssel und leere Erkennung
+  - Rückfall auf den Rohtext, wenn die Bereinigung scheitert oder abgeschaltet ist
+  - Anhängen an die Notiz, Maske des Schlüssels, Einlesen der Einstellungen, Schlüsselprüfung
+- **Desktop-Dienst:** `apps/desktop/test/dictation.test.ts` prüft:
+  - Der Schlüssel liegt nur verschlüsselt in den Einstellungen; der Status enthält nur die Maske.
+  - Ohne Schlüsselbund kommt der Hinweis; ein nicht entschlüsselbarer Schlüssel gilt als fehlend.
+  - „Entfernen“ behält die Modelle.
+  - Audio geht mit Dateiname und Typ hinaus.
+- **Prüfstand:** `pnpm typecheck` und `pnpm lint` grün, `pnpm test` grün. Während des parallelen Desktop-E2E-Laufs liefen wie bekannt drei rechenlastige Tests (`dateList`, `dateutil`, `engine`) in die 5-s-Grenze; einzeln sind sie grün (104 Tests).
+- **Desktop-E2E:** `pnpm e2e:desktop` mit 38 Playwright-Tests grün. Neu ist „Programmieren: Diktieren …“:
+  - lokaler Ersatzserver über `MARKDOIST_OPENAI_BASE_URL`, Chromiums Testmikrofon (`--use-fake-device-for-media-stream`)
+  - Hinweis ohne Schlüssel öffnet die Einstellungen; Schlüssel speichern, prüfen, nur maskiert sichtbar, nicht im Klartext in `settings.json`
+  - Aufnahme → Fertig → bereinigter Text in Editor und Datei; Upload mit `Bearer`, `diktat.webm`, Modell und Kontext
+  - 401 → „API-Schlüssel ungültig“, „Erneut versuchen“ hängt den Text mit Leerzeile an
+- **Android-E2E (07.11.2026):** `apps/mobile/e2e/run.sh` mit allen 22 Flows grün, einschließlich des neuen `61-diktieren.yaml`, und 31 Dateiprüfungen. Release-Build x86_64 nach neuem `expo prebuild` (Manifest mit `RECORD_AUDIO`, ohne Vordergrunddienst; Sicherungsregeln von `expo-secure-store`), Genymotion „Google Pixel 7“. Flow 61 prüft:
+  - Knopf nur bei Programmier-Einträgen
+  - Hinweis ohne Schlüssel öffnet die Einstellungen
+  - Schlüssel speichern (nur maskiert sichtbar) und entfernen
+  - Aufnahme starten (Mikrofon) und abbrechen
+
+  Zwei Korrekturen am Test, nicht an der App: Ein fehlendes zweites „Zurück“ in Flow 61, und die Dateizählung erwartet jetzt 15 statt 13 (Liste und Eintrag aus Flow 61). Die Zählung wurde nach dem Lauf einzeln gegen den Testordner nachgeprüft.
+- **[V]-Abweichungen:** keine gegenüber 4.9.
+- **Nicht geprüft:**
+  - Kein Aufruf der echten OpenAI-API (kein echter Schlüssel im Test). Insbesondere ist nicht geprüft, dass die echte API die m4a-Aufnahme von Android und die WebM-Aufnahme des Desktops annimmt, und nicht, wie gut die Bereinigung tatsächlich ist.
+  - Keine Aufnahme mit echtem Ton am Handy; Maestro prüft nur Start und Abbruch der Aufnahme.
+  - Keine Sichtprüfung der neuen Bedienelemente.

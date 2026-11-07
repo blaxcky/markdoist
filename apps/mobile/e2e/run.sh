@@ -126,9 +126,10 @@ if [ $fail = 0 ]; then
   check "Restmuell.md" "recurrence_offset_days: -3"
   check "Restmuell.md" "scheduled: $(date -u -d "$W1 -3 days" +%F)"
   check "Restmuell.md" "format_version: 2"
-  # AK-12: Serienaktionen legen keine Dateien an – 8 Seed-Dateien + 3 Erfassungen + 1 Liste + „Auch weg“.
+  # AK-12: Serienaktionen legen keine Dateien an – 8 Seed-Dateien + 3 Erfassungen + 1 Liste + „Auch weg“
+  # + Liste „Diktat“ und Eintrag „Sprachnotiz“ aus Flow 61.
   n=$(adb shell ls "$DIR" | grep -c '\.md' || true)
-  if [ "$n" = 13 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 13)"; fail=1; fi
+  if [ "$n" = 15 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 15)"; fail=1; fi
   adb shell ls -a "$DIR" | grep -q 'todo-tmp' && { echo "FEHL Temp-Datei übrig"; fail=1; } || true
 fi
 exit $fail
