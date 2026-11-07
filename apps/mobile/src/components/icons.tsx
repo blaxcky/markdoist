@@ -307,3 +307,16 @@ export function CodeIcon({ color, size = 14 }: P) {
     </View>
   );
 }
+
+/** Mikrofon (Diktieren, 4.9): Kapsel, Bügel, Fuß. */
+export function MicIcon({ color, size = 16 }: P) {
+  const b = stroke(size);
+  return (
+    <View style={{ width: size, height: size, alignItems: "center" }}>
+      <View style={{ width: size * 0.4, height: size * 0.58, borderRadius: size * 0.2, borderWidth: b, borderColor: color }} />
+      <View style={{ position: "absolute", top: size * 0.3, width: size * 0.68, height: size * 0.42, borderWidth: b, borderTopWidth: 0, borderColor: color, borderBottomLeftRadius: size * 0.34, borderBottomRightRadius: size * 0.34 }} />
+      <View style={{ position: "absolute", top: size * 0.72, width: b, height: size * 0.18, backgroundColor: color }} />
+      <View style={{ position: "absolute", top: size * 0.88, width: size * 0.4, height: b, borderRadius: b, backgroundColor: color }} />
+    </View>
+  );
+}

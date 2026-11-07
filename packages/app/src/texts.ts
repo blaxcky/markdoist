@@ -1,9 +1,11 @@
 // Zentrale deutsche Texte (Plan 4.5).
 import type { Priority, Status } from "@markdoist/core";
 import type { WriteResult } from "./storage";
+import { T_DICTATION } from "./dictation";
 
 export const T = {
   appName: "Markdoist",
+  dictation: T_DICTATION,
   views: {
     inbox: "Eingang",
     today: "Heute",

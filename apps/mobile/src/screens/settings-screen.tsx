@@ -8,6 +8,8 @@ import { useRepo, useRepoState } from "../repo";
 import { useFolder } from "../folder";
 import { ThemeSettingContext, useTheme, type ThemeSetting } from "../theme";
 import type { RootStack } from "../navigation";
+import { DictationSettings } from "../components/dictation-settings";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function SettingsScreen() {
   const c = useTheme();
@@ -16,13 +18,14 @@ export function SettingsScreen() {
   const folder = useFolder();
   const theme = use(ThemeSettingContext);
   const nav = useNavigation<NativeStackNavigationProp<RootStack>>();
+  const insets = useSafeAreaInsets();
   const row = (label: string, onPress: () => void, testID?: string) => (
     <Pressable onPress={onPress} testID={testID} android_ripple={{ color: c.surfaceHigh }} style={{ paddingVertical: 14 }}>
       <Text style={{ color: c.fg, fontSize: 16 }}>{label}</Text>
     </Pressable>
   );
   return (
-    <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: 16, gap: 4 }}>
+    <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24, gap: 4 }} keyboardShouldPersistTaps="handled">
       <Text style={{ color: c.muted, fontSize: 13 }}>Aufgabenordner</Text>
       <Text selectable style={{ color: c.fg, fontSize: 16 }}>{folder.name}</Text>
       {row("Ordner wechseln / Freigabe erneuern", () => void folder.choose(), "change-folder")}
@@ -42,6 +45,7 @@ export function SettingsScreen() {
           </Pressable>
         ))}
       </View>
+      <DictationSettings />
       <Text style={{ color: c.muted, fontSize: 13, marginTop: 24 }}>Über</Text>
       <Text selectable style={{ color: c.fg }} testID="version">Markdoist {Constants.expoConfig?.version ?? ""}</Text>
     </ScrollView>

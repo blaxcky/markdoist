@@ -11,7 +11,7 @@ import { diffLines } from "diff";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { pastSkippedCount, previewAction, renderMarkdown, seriesStrip, skippedBeyondStrip, splitDateValue, startDevWorkAction, stripByMonth as byMonth, T, type Outcome, type StripCell } from "@markdoist/app";
+import { appendDictation, pastSkippedCount, previewAction, renderMarkdown, seriesStrip, skippedBeyondStrip, splitDateValue, startDevWorkAction, stripByMonth as byMonth, T, type DictationContext, type DictationResult, type Outcome, type StripCell } from "@markdoist/app";
 import {
   describeOccurrence,
   describeSeries,
@@ -29,6 +29,8 @@ import { prioColor, useTheme, type Theme } from "../theme";
 import { dateLabel, toneColor } from "../format";
 import { Menu } from "../components/menu";
 import { GroupedSheet } from "../components/series-sheet";
+import { DictateBar } from "../components/dictate-bar";
+import { useDictation } from "../dictation/use-dictation";
 import {
   CalendarIcon,
   CheckCircleIcon,
@@ -42,6 +44,7 @@ import {
   Glyph,
   InboxIcon,
   LinesIcon,
+  MicIcon,
   PlusIcon,
   RepeatIcon,
   SkipIcon,
@@ -209,6 +212,19 @@ export function DetailScreen() {
   const { height } = useWindowDimensions();
   const card = { backgroundColor: c.surface, borderRadius: 18, overflow: "hidden" } as const;
   const divider = (inset = 54) => <View style={{ height: 1, backgroundColor: c.divider, marginLeft: inset }} />;
+  // Diktieren (4.9): Ergebnis kommt asynchron; eingefügt wird in den dann aktuellen Text.
+  const bodyNow = useRef(body);
+  bodyNow.current = body;
+  const dictCtx = useRef<DictationContext>({});
+  const onDictated = useRef<(r: DictationResult) => void>(() => {});
+  const dictation = useDictation({
+    ctx: () => dictCtx.current,
+    onResult: (r) => onDictated.current(r),
+    onError: (kind) => {
+      notify({ status: "error", message: T.dictation.errors[kind] });
+      if (kind === "nokey") nav.navigate("Settings");
+    },
+  });
 
   useEffect(() => {
     if (view && !pending.current) setBody(draft ?? view.task.body);
@@ -283,6 +299,21 @@ export function DetailScreen() {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void flush(), 1500);
   };
+  dictCtx.current = { list: devListTitle, title: f.title };
+  onDictated.current = (r) => {
+    onBody(appendDictation(bodyNow.current, r.text));
+    setShowNote(true);
+    setTab("edit");
+    if (!r.cleaned && r.cleanupError) notify({ status: "ok", message: T.dictation.notCleaned });
+  };
+  const startDictation = () => {
+    setShowNote(true);
+    setTab("edit");
+    void dictation.start();
+  };
+  // Aufnahme, Fortschritt oder wiederholbarer Fehler belegen die ganze Zeile.
+  const dictBusy = f.isDevItem && dictation.state.phase !== "idle" && !(dictation.state.phase === "error" && !dictation.state.canRetry);
+  const dictateBar = <DictateBar state={dictation.state} onStart={startDictation} onStop={() => void dictation.stop()} onCancel={() => void dictation.cancel()} onRetry={() => void dictation.retry()} />;
 
   const tz = systemClock().timeZone;
   const dateParts = (field: "due" | "scheduled") => {
@@ -500,6 +531,7 @@ export function DetailScreen() {
               !list && !s && <AddChip key="rec" c={c} disabled={ro} icon={<RepeatIcon color={c.muted} size={14} />} label="Wiederholen" onPress={() => nav.navigate("Recurrence", { ref })} testID="edit-recurrence" />,
               !noteVisible && <AddChip key="note" c={c} icon={<LinesIcon color={c.muted} size={13} />} label="Beschreibung" onPress={() => { setShowNote(true); setTimeout(() => editor.current?.focus(), 50); }} testID="show-note" />,
               !noteVisible && !ro && <AddChip key="check" c={c} icon={<PlusIcon color={c.muted} size={11} />} label="Checkliste" onPress={addChecklistItem} testID="add-checklist" />,
+              !noteVisible && !ro && f.isDevItem && <AddChip key="dictate" c={c} icon={<MicIcon color={c.muted} size={13} />} label={T.dictation.dictate} onPress={startDictation} testID="dictate-chip" />,
             ].filter(Boolean);
             return chips.length ? (
               <>
@@ -651,12 +683,17 @@ export function DetailScreen() {
                 <PreviewWeb html={html} onCheck={(line) => !ro && void flush().then(() => act({ type: "toggleCheckbox", line }, "Checkbox"))} />
               </View>
             )}
-            {!ro && (
-              <Pressable onPress={addChecklistItem} testID="add-checklist" android_ripple={{ color: c.surfaceHigh }} style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: c.divider }}>
-                <PlusIcon color={c.primary} size={12} />
-                <Text style={{ color: c.primary, fontSize: 14, fontWeight: "500" }}>Checklistenpunkt</Text>
-              </Pressable>
-            )}
+            {!ro && (dictBusy ? (
+              dictateBar
+            ) : (
+              <View style={{ flexDirection: "row", alignItems: "center", borderTopWidth: 1, borderTopColor: c.divider }}>
+                <Pressable onPress={addChecklistItem} testID="add-checklist" android_ripple={{ color: c.surfaceHigh }} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48, paddingHorizontal: 16 }}>
+                  <PlusIcon color={c.primary} size={12} />
+                  <Text style={{ color: c.primary, fontSize: 14, fontWeight: "500" }}>Checklistenpunkt</Text>
+                </Pressable>
+                {f.isDevItem && dictateBar}
+              </View>
+            ))}
           </View>
         )}
 

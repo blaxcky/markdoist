@@ -26,6 +26,10 @@ const config: ExpoConfig = {
     "./plugins/withReleaseSigning.js",
     "./plugins/withCaptureShortcut.js",
     "./plugins/withWorkspaceBundleInputs.js",
+    // Diktieren (4.9): nur Aufnahme im Vordergrund, keine Hintergrund-Wiedergabe mit Dienst und Benachrichtigung.
+    ["expo-audio", { recordAudioAndroid: true, enableBackgroundPlayback: false, enableBackgroundRecording: false }],
+    // API-Schlüssel im Keystore; die Sicherung nimmt ihn aus (nicht entschlüsselbar nach Wiederherstellung).
+    "expo-secure-store",
   ],
 };
 

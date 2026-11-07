@@ -14,3 +14,4 @@ export * from "./completionFlow";
 export * from "./seriesStrip";
 export * from "./ics";
 export * from "./wasteImport";
+export * from "./dictation";
