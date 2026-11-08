@@ -9,10 +9,12 @@ import {
   formatDuration,
   maskKey,
   parseDictationSettings,
+  dictationErrorText,
   runDictation,
   T,
   transcriptionFields,
   type FetchLike,
+  type UploadLike,
 } from "../src";
 
 type Call = { url: string; method: string; headers: Record<string, string>; body: unknown };
@@ -116,6 +118,44 @@ describe("Diktieren (4.9)", () => {
     const fetch: FetchLike = (_url, init) =>
       new Promise((_res, rej) => init.signal?.addEventListener("abort", () => rej(new Error("aborted"))));
     await expect(runDictation({ fetch, key: "k", settings: DEFAULT_DICTATION, ctx, form, timeoutMs: 10 })).rejects.toMatchObject({ kind: "timeout" });
+  });
+
+  it("nativer Upload ersetzt fetch und FormData bei der Erkennung", async () => {
+    const uploads: { url: string; headers: Record<string, string>; fields: [string, string][]; signal?: AbortSignal }[] = [];
+    const upload: UploadLike = async (url, init) => {
+      uploads.push({ url, ...init });
+      return { ok: true, status: 200, json: async () => ({ text: "roh" }) };
+    };
+    const { fetch, calls } = fakeFetch([() => ({ status: 200, json: message("Sauber.") })]);
+    const r = await runDictation({ fetch, upload, key: "sk-x", settings: DEFAULT_DICTATION, ctx });
+    expect(r).toEqual({ text: "Sauber.", raw: "roh", cleaned: true });
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]!.url).toBe("https://api.openai.com/v1/audio/transcriptions");
+    expect(uploads[0]!.headers.Authorization).toBe("Bearer sk-x");
+    expect(uploads[0]!.fields).toContainEqual(["model", "gpt-transcribe"]);
+    expect(uploads[0]!.fields).toContainEqual(["languages[]", "de"]);
+    expect(uploads[0]!.signal).toBeDefined();
+    // Bereinigung weiter über fetch
+    expect(calls.map((c) => c.url)).toEqual(["https://api.openai.com/v1/responses"]);
+  });
+
+  it("nativer Upload: 401 und Ablehnung mit Ursache", async () => {
+    const no: UploadLike = async () => ({ ok: false, status: 401, json: async () => ({}) });
+    await expect(runDictation({ fetch: fakeFetch([]).fetch, upload: no, key: "k", settings: DEFAULT_DICTATION, ctx })).rejects.toMatchObject({ kind: "auth" });
+    const broken: UploadLike = async () => {
+      throw new Error("java.io.FileNotFoundException: recording.m4a");
+    };
+    const err = (await runDictation({ fetch: fakeFetch([]).fetch, upload: broken, key: "k", settings: DEFAULT_DICTATION, ctx }).catch((e: DictationError) => e)) as DictationError;
+    expect(err).toMatchObject({ kind: "network" });
+    expect(dictationErrorText(err.kind, err.message)).toBe("Kein Netz (java.io.FileNotFoundException: recording.m4a)");
+  });
+
+  it("Meldungstext mit Ursache nur bei Netz-, Zeit- und Serverfehlern", () => {
+    expect(dictationErrorText("auth", "HTTP 401")).toBe("API-Schlüssel ungültig");
+    expect(dictationErrorText("server", "HTTP 500")).toBe("OpenAI hat einen Fehler gemeldet (HTTP 500)");
+    expect(dictationErrorText("network")).toBe("Kein Netz");
+    expect(dictationErrorText("network", "network")).toBe("Kein Netz");
+    expect(dictationErrorText("network", "x".repeat(200)).length).toBeLessThan(100);
   });
 
   it("Ausgabetext aus mehreren Teilen, ohne Reasoning", () => {

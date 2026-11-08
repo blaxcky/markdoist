@@ -661,6 +661,7 @@ Wunsch vom 07.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben [F];
 - **Schlüssel nur gerätelokal [F]:** nie im Aufgabenordner.
   - Android: `expo-secure-store` (Keystore). Die Android-Sicherung nimmt ihn aus.
   - Desktop: `safeStorage`, verschlüsselt in `settings.json` (Modus 0600). Der Renderer erhält nur Maske und Status, die Aufrufe laufen im Main-Prozess; die CSP des Renderers bleibt unverändert. Ohne Schlüsselbund (`basic_text` oder keine Verschlüsselung) weisen die Einstellungen darauf hin.
+- **Upload am Handy [V, 08.11.2026]:** Die Aufnahme geht nativ über `File.upload` von `expo-file-system` (multipart) hinaus, nicht über React Natives `fetch` mit `FormData`: Dieser Weg scheiterte am Gerät reproduzierbar mit „Network request failed“. Die Bereinigung bleibt bei `fetch` (nur JSON). Netz-, Zeit- und Serverfehler zeigen die technische Ursache in Klammern.
 - **Aufnahmeformat [V]:** Android m4a/AAC mono mit 64 kbit/s (10 min ≈ 5 MB). Desktop WebM/Opus mit 48 kbit/s. Grenze der API: 25 MB. Die Android-Aufnahme liegt im Cache und wird nach Erfolg oder Abbruch gelöscht.
 - **Mikrofon am Desktop [V]:** Electron erlaubt `media` nur für das eigene Fenster und nur Audio; andere Berechtigungsanfragen werden abgelehnt.
 - **Nicht vorgesehen:** Diktieren bei normalen Aufgaben, in Listen oder bei der Erfassung, Einfügen an der Cursorposition, Live-Mitschrift während des Sprechens, andere Anbieter.

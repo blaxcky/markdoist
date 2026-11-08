@@ -125,6 +125,14 @@ export function dictationErrorMessage(kind: DictationErrorKind): string {
   return T_DICTATION.errors[kind];
 }
 
+/** Meldung mit kurzer technischer Ursache bei Netz- und Serverfehlern, z. B. „Kein Netz (Socket closed)“. */
+export function dictationErrorText(kind: DictationErrorKind, detail?: string): string {
+  const base = T_DICTATION.errors[kind];
+  const d = (detail ?? "").replace(/\s+/g, " ").trim();
+  if (!d || d === kind || !(kind === "network" || kind === "server" || kind === "timeout")) return base;
+  return `${base} (${d.length > 80 ? d.slice(0, 79) + "…" : d})`;
+}
+
 /** Hängt diktierten Text an die Notiz an, mit einer Leerzeile Abstand. */
 export function appendDictation(body: string, text: string): string {
   const t = text.trim();
@@ -139,13 +147,24 @@ export type FetchLike = (
   init: { method: string; headers: Record<string, string>; body?: unknown; signal?: AbortSignal },
 ) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 
+/**
+ * Nativer Datei-Upload (Android: expo-file-system `File.upload`). Ersetzt für die Erkennung `fetch` mit
+ * FormData, weil React Natives FormData-Upload jeden nativen Fehler nur als „Network request failed“ meldet.
+ */
+export type UploadLike = (
+  url: string,
+  init: { headers: Record<string, string>; fields: [string, string][]; signal?: AbortSignal },
+) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
+
 export interface DictationRun {
   fetch: FetchLike;
+  /** Ist es gesetzt, lädt die Erkennung darüber hoch; `form` wird dann nicht gebraucht. */
+  upload?: UploadLike;
   key: string;
   settings: DictationSettings;
   ctx: DictationContext;
   /** Baut das multipart-Formular: Felder plus Audiodatei. */
-  form: (fields: [string, string][]) => unknown;
+  form?: (fields: [string, string][]) => unknown;
   baseUrl?: string;
   onPhase?: (phase: "transcribing" | "cleaning") => void;
   /** Zeitgrenze je Anfrage in ms */
@@ -160,16 +179,16 @@ export interface DictationResult {
   cleanupError?: DictationErrorKind;
 }
 
-async function request(run: DictationRun, path: string, init: { method: string; headers: Record<string, string>; body?: unknown }): Promise<unknown> {
+type Send = (url: string, headers: Record<string, string>, signal?: AbortSignal) => ReturnType<FetchLike>;
+
+async function request(run: DictationRun, path: string, init: { method: string; headers: Record<string, string>; body?: unknown }, send?: Send): Promise<unknown> {
   const ctrl = typeof AbortController === "function" ? new AbortController() : undefined;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), run.timeoutMs ?? 120_000) : undefined;
   let res: Awaited<ReturnType<FetchLike>>;
+  const url = `${run.baseUrl ?? OPENAI_BASE_URL}${path}`;
+  const headers = { Authorization: `Bearer ${run.key.trim()}`, ...init.headers };
   try {
-    res = await run.fetch(`${run.baseUrl ?? OPENAI_BASE_URL}${path}`, {
-      ...init,
-      headers: { Authorization: `Bearer ${run.key.trim()}`, ...init.headers },
-      ...(ctrl ? { signal: ctrl.signal } : {}),
-    });
+    res = send ? await send(url, headers, ctrl?.signal) : await run.fetch(url, { ...init, headers, ...(ctrl ? { signal: ctrl.signal } : {}) });
   } catch (e) {
     throw new DictationError(ctrl?.signal.aborted ? "timeout" : "network", e instanceof Error ? e.message : String(e));
   } finally {
@@ -187,8 +206,12 @@ async function request(run: DictationRun, path: string, init: { method: string; 
 export async function runDictation(run: DictationRun): Promise<DictationResult> {
   if (!run.key.trim()) throw new DictationError("nokey");
   run.onPhase?.("transcribing");
+  const fields = transcriptionFields(run.settings, run.ctx);
+  const upload = run.upload;
   const raw = parseTranscription(
-    await request(run, "/audio/transcriptions", { method: "POST", headers: {}, body: run.form(transcriptionFields(run.settings, run.ctx)) }),
+    upload
+      ? await request(run, "/audio/transcriptions", { method: "POST", headers: {} }, (url, headers, signal) => upload(url, { headers, fields, ...(signal ? { signal } : {}) }))
+      : await request(run, "/audio/transcriptions", { method: "POST", headers: {}, body: run.form?.(fields) }),
   );
   if (!raw) throw new DictationError("empty");
   if (!run.settings.cleanup) return { text: raw, raw, cleaned: false };
@@ -209,7 +232,7 @@ export async function runDictation(run: DictationRun): Promise<DictationResult> 
 export async function checkKey(fetch: FetchLike, key: string, baseUrl?: string): Promise<{ ok: true } | { ok: false; kind: DictationErrorKind }> {
   if (!key.trim()) return { ok: false, kind: "nokey" };
   try {
-    await request({ fetch, key, baseUrl, settings: DEFAULT_DICTATION, ctx: {}, form: () => null, timeoutMs: 20_000 }, "/models", { method: "GET", headers: {} });
+    await request({ fetch, key, baseUrl, settings: DEFAULT_DICTATION, ctx: {}, timeoutMs: 20_000 }, "/models", { method: "GET", headers: {} });
     return { ok: true };
   } catch (e) {
     return { ok: false, kind: e instanceof DictationError ? e.kind : "server" };

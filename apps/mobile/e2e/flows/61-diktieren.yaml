@@ -50,16 +50,40 @@ appId: de.markdoist.aufgaben
 # Mit Schlüssel: Aufnahme startet (Berechtigung einmal erlauben) und lässt sich abbrechen.
 - tapOn:
     id: dictate
+# Der Berechtigungsdialog erscheint erst nach dem Antippen; warten, bis er oder die laufende Aufnahme da ist.
+- extendedWaitUntil:
+    visible: "(?i)while using the app|Aufnahme 0:0[1-9]"
+    timeout: 8000
 - runFlow:
     when:
-      visible: "(?i)while using the app|only this time|allow"
+      visible: "(?i)while using the app"
     commands:
-      - tapOn: "(?i)while using the app|allow"
+      - tapOn: "(?i)while using the app"
+- extendedWaitUntil:
+    visible: "Aufnahme 0:0[1-9]"
+    timeout: 8000
+- tapOn:
+    id: dictate-cancel
 - extendedWaitUntil:
     visible:
-      id: dictate-recording
-    timeout: 6000
-- assertVisible: "Aufnahme.*"
+      id: dictate
+    timeout: 3000
+# Echter Upload bis zu OpenAI (braucht Internet im Gerät): Der Testschlüssel ist ungültig, also antwortet
+# OpenAI mit 401. Das beweist, dass die Aufnahme hinausgeht; kostet nichts. Vorher stand hier „Kein Netz“.
+- tapOn:
+    id: dictate
+- extendedWaitUntil:
+    visible: "Aufnahme 0:0[2-9]"
+    timeout: 8000
+- tapOn:
+    id: dictate-stop
+- extendedWaitUntil:
+    visible:
+      id: dictate-retry
+    timeout: 30000
+- assertVisible:
+    id: dictate-state
+    text: "API-Schlüssel ungültig"
 - tapOn:
     id: dictate-cancel
 - extendedWaitUntil:

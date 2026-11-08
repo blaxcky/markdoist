@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, type RecordingOptions } from "expo-audio";
-import { File } from "expo-file-system";
-import { DictationError, MAX_RECORDING_MS, runDictation, type DictationContext, type DictationErrorKind, type DictationResult, type FetchLike } from "@markdoist/app";
+import { File, UploadType } from "expo-file-system";
+import { DictationError, MAX_RECORDING_MS, runDictation, type DictationContext, type DictationErrorKind, type DictationResult, type FetchLike, type UploadLike } from "@markdoist/app";
 import { getApiKey, loadDictationSettings } from "./store";
 
 // Sprache braucht kein Stereo und keine 128 kbit/s: Mono mit 64 kbit/s hält den Upload klein (10 min ≈ 5 MB).
@@ -16,8 +16,29 @@ export interface DictationState {
   /** Aufnahmedauer in ms */
   ms: number;
   error?: DictationErrorKind;
+  /** technische Ursache des Fehlers (ohne Schlüssel) */
+  detail?: string;
   /** Aufnahme liegt noch vor und kann erneut gesendet werden */
   canRetry: boolean;
+}
+
+/**
+ * Upload der Aufnahme nativ über expo-file-system. React Natives FormData-Upload scheiterte am Gerät
+ * reproduzierbar mit „Network request failed“ (07./08.11.2026), während JSON-Anfragen durchgingen.
+ */
+function nativeUpload(uri: string): UploadLike {
+  return async (url, { headers, fields, signal }) => {
+    const r = await new File(uri).upload(url, {
+      httpMethod: "POST",
+      uploadType: UploadType.MULTIPART,
+      fieldName: "file",
+      mimeType: "audio/mp4",
+      headers,
+      parameters: Object.fromEntries(fields),
+      ...(signal ? { signal } : {}),
+    });
+    return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => JSON.parse(r.body) as unknown };
+  };
 }
 
 function deleteFile(uri: string | null) {
@@ -29,7 +50,7 @@ function deleteFile(uri: string | null) {
   }
 }
 
-export function useDictation(opts: { ctx: () => DictationContext; onResult: (r: DictationResult) => void; onError: (kind: DictationErrorKind) => void }) {
+export function useDictation(opts: { ctx: () => DictationContext; onResult: (r: DictationResult) => void; onError: (kind: DictationErrorKind, detail?: string) => void }) {
   const recorder = useAudioRecorder(OPTIONS);
   const [state, setState] = useState<DictationState>({ phase: "idle", ms: 0, canRetry: false });
   const started = useRef(0);
@@ -57,13 +78,7 @@ export function useDictation(opts: { ctx: () => DictationContext; onResult: (r: 
         key: key ?? "",
         settings,
         ctx: cb.current.ctx(),
-        form: (fields) => {
-          const f = new FormData();
-          for (const [k, v] of fields) f.append(k, v);
-          // React Native liest die Datei selbst von der URI.
-          f.append("file", { uri, name: "diktat.m4a", type: "audio/mp4" } as unknown as Blob);
-          return f;
-        },
+        upload: nativeUpload(uri),
         onPhase: (p) => gen.current === my && setState((s) => ({ ...s, phase: p })),
       });
       if (gen.current !== my) return;
@@ -74,14 +89,16 @@ export function useDictation(opts: { ctx: () => DictationContext; onResult: (r: 
     } catch (e) {
       if (gen.current !== my) return;
       const kind = e instanceof DictationError ? e.kind : "server";
+      const detail = e instanceof Error ? e.message : String(e);
+      console.warn(`Diktieren fehlgeschlagen: ${kind}: ${detail}`);
       // Ohne Schlüssel oder ohne erkannten Text hilft ein neuer Versuch mit derselben Aufnahme nicht.
       const keep = kind !== "empty";
       if (!keep) {
         pendingUri.current = null;
         deleteFile(uri);
       }
-      setState((s) => ({ phase: "error", ms: s.ms, error: kind, canRetry: keep && kind !== "nokey" }));
-      cb.current.onError(kind);
+      setState((s) => ({ phase: "error", ms: s.ms, error: kind, detail, canRetry: keep && kind !== "nokey" }));
+      cb.current.onError(kind, detail);
     }
   }, []);
 

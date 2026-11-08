@@ -240,8 +240,13 @@ PLAN1 4.9; Wunsch und Festlegungen vom 07.11.2026, als Plan freigegeben (keine e
   - Aufnahme starten (Mikrofon) und abbrechen
 
   Zwei Korrekturen am Test, nicht an der App: Ein fehlendes zweites „Zurück“ in Flow 61, und die Dateizählung erwartet jetzt 15 statt 13 (Liste und Eintrag aus Flow 61). Die Zählung wurde nach dem Lauf einzeln gegen den Testordner nachgeprüft.
-- **[V]-Abweichungen:** keine gegenüber 4.9.
+- **Nachtrag 08.11.2026, „Kein Netz“ am Handy:** Am Gerät meldete das Diktieren bei jedem Versuch sofort „Kein Netz“. Auf Genymotion mit echtem Netz und einem ungültigen Schlüssel nachgestellt:
+  - „Prüfen“ (`GET /v1/models`, nur JSON) lieferte richtig „API-Schlüssel ungültig“.
+  - Der Upload der Aufnahme über React Natives `fetch` mit `FormData` scheiterte dagegen jedes Mal mit „Network request failed“, auch bei „Erneut versuchen“. Den nativen Grund verschluckt dieser Weg; Logcat zeigte nichts.
+
+  Korrektur: Der Upload läuft jetzt nativ über `File.upload` aus `expo-file-system` (`DictationRun.upload` im Kern). Netz-, Zeit- und Serverfehler zeigen die Ursache in Klammern und stehen per `console.warn` im Log. Zuvor hatten das die Tests nicht gefunden: Der Desktop lädt über Node hoch, und Flow 61 prüfte nur Start und Abbruch der Aufnahme. Flow 61 lädt jetzt mit dem ungültigen Testschlüssel wirklich zu OpenAI hoch und erwartet „API-Schlüssel ungültig“ (401, kostenlos; braucht Internet im Gerät).
+- **[V]-Abweichungen:** Upload am Handy über `expo-file-system` statt `fetch` (Nachtrag oben).
 - **Nicht geprüft:**
   - Kein Aufruf der echten OpenAI-API (kein echter Schlüssel im Test). Insbesondere ist nicht geprüft, dass die echte API die m4a-Aufnahme von Android und die WebM-Aufnahme des Desktops annimmt, und nicht, wie gut die Bereinigung tatsächlich ist.
-  - Keine Aufnahme mit echtem Ton am Handy; Maestro prüft nur Start und Abbruch der Aufnahme.
+  - Keine Aufnahme mit echtem Ton am Handy und keine erfolgreiche Erkennung mit gültigem Schlüssel; Flow 61 prüft den Upload bis zur 401-Antwort.
   - Keine Sichtprüfung der neuen Bedienelemente.

@@ -1,7 +1,7 @@
 // Diktieren (4.9): Leiste in der Beschreibungskarte. Ruhezustand: Knopf „Diktieren“ neben „Checklistenpunkt“;
 // während der Aufnahme Laufzeit mit „Abbrechen“ und „Fertig“; danach Fortschritt bzw. Fehler mit „Erneut versuchen“.
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { formatDuration, T } from "@markdoist/app";
+import { dictationErrorText, formatDuration, T } from "@markdoist/app";
 import { useTheme } from "../theme";
 import { MicIcon } from "./icons";
 import type { DictationState } from "../dictation/use-dictation";
@@ -48,7 +48,7 @@ export function DictateBar({ state, onStart, onStop, onCancel, onRetry }: { stat
     return (
       <View style={row}>
         <Text style={{ flex: 1, color: c.danger, fontSize: 14 }} testID="dictate-state">
-          {state.error ? D.errors[state.error] : D.errors.server}
+          {dictationErrorText(state.error ?? "server", state.detail)}
         </Text>
         {btn(D.cancel, onCancel, "dictate-cancel")}
         {btn(D.retry, onRetry, "dictate-retry", true)}

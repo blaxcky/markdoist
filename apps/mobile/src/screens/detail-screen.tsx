@@ -11,7 +11,7 @@ import { diffLines } from "diff";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { appendDictation, pastSkippedCount, previewAction, renderMarkdown, seriesStrip, skippedBeyondStrip, splitDateValue, startDevWorkAction, stripByMonth as byMonth, T, type DictationContext, type DictationResult, type Outcome, type StripCell } from "@markdoist/app";
+import { appendDictation, dictationErrorText, pastSkippedCount, previewAction, renderMarkdown, seriesStrip, skippedBeyondStrip, splitDateValue, startDevWorkAction, stripByMonth as byMonth, T, type DictationContext, type DictationResult, type Outcome, type StripCell } from "@markdoist/app";
 import {
   describeOccurrence,
   describeSeries,
@@ -220,8 +220,8 @@ export function DetailScreen() {
   const dictation = useDictation({
     ctx: () => dictCtx.current,
     onResult: (r) => onDictated.current(r),
-    onError: (kind) => {
-      notify({ status: "error", message: T.dictation.errors[kind] });
+    onError: (kind, detail) => {
+      notify({ status: "error", message: dictationErrorText(kind, detail) });
       if (kind === "nokey") nav.navigate("Settings");
     },
   });
