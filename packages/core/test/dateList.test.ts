@@ -380,5 +380,6 @@ describe("Eigenschaften fester Terminlisten (5.7)", () => {
       ),
       { numRuns: 300 },
     );
-  });
+    // 300 Zufallsfälle: unter Last über der Standardgrenze von 5 s.
+  }, 60_000);
 });

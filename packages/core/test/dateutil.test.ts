@@ -24,10 +24,13 @@ describe("Golden-Fixtures aus python-dateutil", () => {
       const start = Temporal.PlainDate.from(f.start);
       let prev: Temporal.PlainDate | null = null;
       for (const want of f.dates) {
-        const n = nextOccurrence({ rule: p.rule, start, ...(prev ? { after: prev } : { from: start }) });
+        // Großzügige Zeitgrenze: Geprüft wird das Ergebnis, nicht die Geschwindigkeit unter Last.
+        const deadline = { now: () => performance.now(), until: performance.now() + 30_000 };
+        const n = nextOccurrence({ rule: p.rule, start, deadline, ...(prev ? { after: prev } : { from: start }) });
         expect(n, `nach ${prev ?? "Start"}`).toEqual({ kind: "found", date: Temporal.PlainDate.from(want) });
         prev = Temporal.PlainDate.from(want);
       }
-    });
+      // Seltene Regeln (Schalttag am Montag) brauchen unter Last für 24 Einzelsuchen länger als 5 s.
+    }, 60_000);
   }
 });

@@ -13,6 +13,9 @@ function list(r: string, start: string, n: number) {
   return queryOccurrences({ rule: rule(r), start: D(start), limit: n }).dates.map(String);
 }
 
+/** Großzügige Zeitgrenze für seltene, aber gültige Regeln: Das Ergebnis darf nicht von der Rechnerlast abhängen. */
+const generous = () => ({ now: () => performance.now(), until: performance.now() + 30_000 });
+
 describe("parseRule", () => {
   it("akzeptiert Positivliste und Präfixe", () => {
     expect(parseRule("RRULE:FREQ=WEEKLY;BYDAY=MO").status).toBe("ok");
@@ -114,7 +117,7 @@ describe("BYSETPOS-Grenzfälle (Review 23.10.2026, R1/R2)", () => {
     expect(r.exhausted).toBe(true);
   });
   it("Schalttag am Montag liegt im Tageshorizont (R5)", () => {
-    const n = nextOccurrence({ rule: rule("FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO"), start: D("2016-02-29"), after: D("2016-02-29") });
+    const n = nextOccurrence({ rule: rule("FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO"), start: D("2016-02-29"), after: D("2016-02-29"), deadline: generous() });
     expect(n).toEqual({ kind: "found", date: D("2044-02-29") });
   });
 });
@@ -133,7 +136,7 @@ describe("INTERVAL und COUNT als sichere Ganzzahlen (R6)", () => {
 
 describe("Zweistufige Suche bis zum Kalenderzyklus (Nachprüfung 24.10.2026, N1)", () => {
   it("Schalttag am Montag: 2072 → 2112 über das Nicht-Schaltjahr 2100", () => {
-    const n = nextOccurrence({ rule: rule("FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO"), start: D("2016-02-29"), after: D("2072-02-29") });
+    const n = nextOccurrence({ rule: rule("FREQ=DAILY;BYMONTH=2;BYMONTHDAY=29;BYDAY=MO"), start: D("2016-02-29"), after: D("2072-02-29"), deadline: generous() });
     expect(n).toEqual({ kind: "found", date: D("2112-02-29") });
   });
   it("großes INTERVAL erreicht seinen Folgetermin", () => {

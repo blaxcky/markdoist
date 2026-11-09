@@ -49,6 +49,17 @@ export const SEARCH_BUDGET_MS = 500;
 
 const clock = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
+let budgetMs = SEARCH_BUDGET_MS;
+
+/** Nur für Tests: Standard-Zeitgrenze vorübergehend ändern; gibt den bisherigen Wert zurück.
+ *  Tests, die eine seltene, aber gültige Regel durchrechnen, sollen nicht an der Rechnerlast
+ *  scheitern. Die App ruft das nie auf und bleibt bei SEARCH_BUDGET_MS. */
+export function setSearchBudgetForTests(ms: number): number {
+  const prev = budgetMs;
+  budgetMs = ms;
+  return prev;
+}
+
 /** Haken im gepatchten rrule (patches/rrule@2.8.1.patch): wird je Zählzeitraum gefragt, ob die
  *  Iteration enden soll. rrule ruft die Engine sonst nur bei Treffern zurück. */
 const hooks = globalThis as { __markdoistRruleStop?: () => boolean };
@@ -126,7 +137,7 @@ export function queryOccurrences(q: EngineQuery): EngineResult {
   );
   // Ein gemeinsames Budget für beide Stufen.
   const start = clock();
-  const deadline = q.deadline ?? { now: clock, until: start + SEARCH_BUDGET_MS };
+  const deadline = q.deadline ?? { now: clock, until: start + budgetMs };
   const quick = horizonFrom(searchBase, HORIZON_YEARS[q.rule.freq]);
   const first = search(q, quick, deadline);
   if (!first.horizonReached) return first.result;

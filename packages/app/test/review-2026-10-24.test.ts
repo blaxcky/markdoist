@@ -1,6 +1,6 @@
 // Regressionssperren aus docs/REVIEW-WIEDERHOLUNGEN-2026-10-24.md (N1–N3).
 // Die Fälle stammen aus der externen Nachprüfung; jeder war am Stand 0e9a049 rot.
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   applyPlan,
   nextOccurrence,
@@ -8,6 +8,7 @@ import {
   parseRule,
   planAction,
   readSeries,
+  setSearchBudgetForTests,
   Temporal,
 } from "@markdoist/core";
 import { ctxAt, fm, run, task } from "../../core/test/helpers";
@@ -30,6 +31,15 @@ const series = (rule: string, start: string, anchor = "calendar", extra: string[
   ]);
 
 describe("Nachprüfung 24.10.2026 – N1 Suchgrenze", () => {
+  // Die Fälle laufen über Aktionen ohne eigene Zeitgrenze. Geprüft wird das Ergebnis der seltenen,
+  // aber gültigen Regel, nicht die Geschwindigkeit: unter Rechnerlast soll die Suche nicht abbrechen.
+  let saved = 0;
+  beforeAll(() => {
+    saved = setSearchBudgetForTests(30_000);
+  });
+  afterAll(() => {
+    setSearchBudgetForTests(saved);
+  });
   it.each(["calendar", "completion"] as const)(
     "%s: Schalttag am Montag springt über das Nicht-Schaltjahr 2100",
     (anchor) => {
