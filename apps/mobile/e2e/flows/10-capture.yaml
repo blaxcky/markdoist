@@ -15,6 +15,33 @@ appId: de.markdoist.aufgaben
 - tapOn:
     id: tab-inbox
 - assertVisible: "Maestro Aufgabe"
+# Zurück bei offener Tastatur schließt das Blatt in einem Schritt, ohne zu erfassen und ohne die Ansicht zu verlassen.
+- tapOn:
+    id: fab-capture
+- tapOn:
+    id: capture-title
+- inputText: "Maestro Verworfen"
+- pressKey: back
+- assertNotVisible:
+    id: capture-title
+- assertVisible:
+    id: tab-inbox
+- assertNotVisible: "Maestro Verworfen"
+# Beschreibung an und wieder aus: Das Feld fällt weg, das Blatt bleibt offen. Ein Tipp daneben schließt es.
+- tapOn:
+    id: fab-capture
+- tapOn:
+    id: capture-toggle-note
+- tapOn:
+    id: capture-toggle-note
+- assertVisible:
+    id: capture-title
+- tapOn:
+    id: sheet-close
+- assertNotVisible:
+    id: capture-title
+- assertVisible:
+    id: tab-inbox
 # Bearbeiten ist ohne Titel ausgegraut; mit Titel erfasst es und öffnet das Detail der neuen Aufgabe.
 - tapOn:
     id: fab-capture

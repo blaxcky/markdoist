@@ -1,7 +1,7 @@
 // Eingabeblatt der Erfassung (4.1): Blatt über der Liste, Titelzeile, darunter Chips und Plus-Knopf über der Tastatur.
 // Gemeinsam für neue Aufgaben, neue Listen und Listeneinträge (4.6); läuft als kopfloses transparentModal.
-import { useEffect, useState, type ReactNode } from "react";
-import { Keyboard, KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from "react-native";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AppState, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Animated, { Easing, SlideInDown, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,9 +32,21 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
   // Ohne Tastatur Abstand zur Gestenleiste halten (randlose Darstellung).
   const insets = useSafeAreaInsets();
   const [keyboard, setKeyboard] = useState(true);
+  // Schon geschlossen (Tipp daneben, Senden, Bearbeiten): Die danach verschwindende Tastatur schließt nicht ein zweites Mal.
+  const closing = useRef(false);
+  const close = () => {
+    if (closing.current || !nav.isFocused()) return;
+    closing.current = true;
+    nav.goBack();
+  };
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", () => setKeyboard(true));
-    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboard(false));
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboard(false);
+      // Android verbraucht Zurück bei offener Tastatur selbst und schließt nur sie. Ein Schritt soll das ganze Blatt schließen.
+      // Das Feld behält dabei den Fokus; verschwindet die Tastatur, weil ein Feld wegfällt (Beschreibung aus), bleibt das Blatt.
+      if (Platform.OS === "android" && AppState.currentState === "active" && TextInput.State.currentlyFocusedInput()) close();
+    });
     return () => {
       show.remove();
       hide.remove();
@@ -49,7 +61,7 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
   const plusStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${armed.value * 90}deg` }] }));
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: c.backdrop }}>
-      <Pressable style={{ flex: 1 }} onPress={() => nav.goBack()} accessibilityLabel="Schließen" testID="sheet-close" />
+      <Pressable style={{ flex: 1 }} onPress={close} accessibilityLabel="Schließen" testID="sheet-close" />
       <Animated.View entering={SlideInDown.duration(200)} style={{ backgroundColor: c.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 8, paddingBottom: 12 + (keyboard ? 0 : insets.bottom) }}>
         <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: c.outline, marginBottom: 4 }} />
         <TextInput
