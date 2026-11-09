@@ -93,8 +93,14 @@ test("Heute zeigt Fällig und Geplant; Unterordner wird nicht eingelesen (AK-28)
 
 test("Erfassung aus Heute landet im Eingang ohne Termin (AK-01)", async () => {
   await page.keyboard.press("n");
-  await page.getByTestId("capture-title").fill("Steuer: Belege sammeln?");
-  await page.getByTestId("capture-submit").click();
+  // Lange Titel brechen um und bleiben ganz sichtbar; eingefügte Zeilenumbrüche werden zu Leerzeichen, Enter erfasst.
+  const title = page.getByTestId("capture-title");
+  const oneLine = (await title.boundingBox())!.height;
+  await title.fill("Sehr lange Aufgabe ".repeat(12));
+  expect((await title.boundingBox())!.height).toBeGreaterThan(oneLine * 1.5);
+  await title.fill("Steuer: Belege\nsammeln?");
+  await expect(title).toHaveValue("Steuer: Belege sammeln?");
+  await title.press("Enter");
   // Neuanlage landet im Verlauf, nicht in einer Meldung (4.4).
   await expect.poll(() => file("Steuer Belege sammeln.md").catch(() => "")).toContain("inbox: true");
   await expect(page.getByTestId("toast")).toHaveCount(0);

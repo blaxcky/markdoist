@@ -13,7 +13,7 @@ interface Props {
 export function Capture({ initial, onCancel, onCapture }: Props) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => input.current?.focus(), []);
   const submit = (edit: boolean) => {
     if (title.trim()) onCapture(title.trim(), note, edit);
@@ -35,7 +35,8 @@ export function Capture({ initial, onCancel, onCapture }: Props) {
         data-testid="capture"
       >
         <div className="qa-body">
-          <input ref={input} className="qa-title" placeholder="Aufgabenname" value={title} onChange={(e) => setTitle(e.target.value)} data-testid="capture-title" aria-label="Titel" />
+          {/* Mehrzeilig, damit lange Titel umbrechen; Enter erfasst, eingefügte Zeilenumbrüche werden zu Leerzeichen. */}
+          <textarea ref={input} className="qa-title" rows={1} placeholder="Aufgabenname" value={title} onChange={(e) => setTitle(e.target.value.replace(/[ \t]*[\r\n]+[ \t]*/g, " "))} data-testid="capture-title" aria-label="Titel" />
           <textarea className="qa-desc" placeholder="Beschreibung" rows={3} value={note} onChange={(e) => setNote(e.target.value)} data-testid="capture-note" aria-label="Notiz" />
         </div>
         <div className="qa-hint">

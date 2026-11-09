@@ -1125,6 +1125,11 @@ kbd {
 .quick-add .qa-title {
   font-size: 16px;
   font-weight: 600;
+  /* wächst mit dem Inhalt, lange Titel brechen um */
+  field-sizing: content;
+  min-height: 1lh;
+  max-height: 5lh;
+  overflow-y: auto;
 }
 .quick-add .qa-desc {
   font-size: 13px;

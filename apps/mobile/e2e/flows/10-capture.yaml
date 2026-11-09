@@ -15,6 +15,19 @@ appId: de.markdoist.aufgaben
 - tapOn:
     id: tab-inbox
 - assertVisible: "Maestro Aufgabe"
+# Lange Titel brechen im Feld um und bleiben ganz sichtbar; Enter erfasst trotzdem, statt eine Zeile anzufügen.
+- tapOn:
+    id: fab-capture
+- tapOn:
+    id: capture-title
+- inputText: "Maestro sehr lange Aufgabe mit einem Titel der nicht in eine Zeile passt"
+- assertVisible:
+    id: capture-title
+    text: "(?i)maestro sehr lange aufgabe mit einem titel der nicht in eine zeile passt"
+- pressKey: Enter
+- assertNotVisible:
+    id: capture-title
+- assertVisible: "(?i)maestro sehr lange aufgabe.*"
 # Zurück bei offener Tastatur schließt das Blatt in einem Schritt, ohne zu erfassen und ohne die Ansicht zu verlassen.
 - tapOn:
     id: fab-capture

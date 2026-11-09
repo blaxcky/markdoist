@@ -69,13 +69,16 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
           placeholder={placeholder}
           placeholderTextColor={c.muted}
           value={value}
-          onChangeText={onChangeText}
+          // Mehrzeilig, damit lange Titel umbrechen und ganz sichtbar bleiben. Enter sendet weiterhin;
+          // eingefügte Zeilenumbrüche werden zu Leerzeichen, der Titel bleibt eine Zeile.
+          multiline
+          onChangeText={(text) => onChangeText(text.replace(/[ \t]*[\r\n]+[ \t]*/g, " "))}
           onSubmitEditing={onSubmit}
           returnKeyType={keepOpen ? "next" : "done"}
           submitBehavior="submit"
           cursorColor={c.primary}
           selectionColor={`${c.primary}55`}
-          style={{ color: c.fg, fontSize: 20, paddingHorizontal: 18, paddingVertical: 10 }}
+          style={{ color: c.fg, fontSize: 20, lineHeight: 26, paddingHorizontal: 18, paddingVertical: 10, maxHeight: 5 * 26 + 20, textAlignVertical: "top" }}
           testID={testID.input}
           accessibilityLabel={accessibilityLabel}
         />
