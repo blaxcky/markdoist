@@ -72,6 +72,19 @@ export function GridIcon({ color, size = 14 }: P) {
   );
 }
 
+/** Vier Kacheln (Alle); das Kalendergitter gehört zu „Geplant“. */
+export function TilesIcon({ color, size = 14 }: P) {
+  const b = stroke(size);
+  const tile = size * 0.42;
+  return (
+    <View style={{ width: size, height: size, flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignContent: "space-between" }}>
+      {Array.from({ length: 4 }, (_, i) => (
+        <View key={i} style={{ width: tile, height: tile, borderWidth: b, borderColor: color, borderRadius: size * 0.08 }} />
+      ))}
+    </View>
+  );
+}
+
 /** Kreis mit Haken (Erledigt). */
 export function CheckCircleIcon({ color, size = 14 }: P) {
   return (

@@ -67,11 +67,17 @@ Du willst eine persönliche, lokal arbeitende Todo-App mit einer Markdown-Datei 
 - Sammelaktionen: „Abgehakte entfernen“, „Alle Haken zurücksetzen“, Reihenfolge per Ziehen. Kein Duplizieren.
 - Übersicht: zuletzt geänderte Liste zuerst.
 
+**Entscheidungen aus `.fragen/2026-11-09-2148-geplant.md` (09.11.2026, neue Ansicht „Geplant“, Abschnitte 4.1, 4.2a, 4.5):**
+- Der Eingang ist nur die Sammelstelle für frisch erfasste, noch nicht zugeteilte Aufgaben. Eine Aufgabe mit wirksamem `due` oder `scheduled` steht **nicht mehr im Eingang**, sondern in der neuen Ansicht „Geplant“. **Das ersetzt „Eingang **und** Heute“ aus 4.1 und AK-02.**
+- Das gilt nur in der Anzeige: Termin setzen schreibt weiter kein `inbox: false`. Wird der Termin entfernt, steht die Aufgabe wieder im Eingang.
+- „Geplant“ zeigt alle offenen Aufgaben mit Termin, egal ob `inbox`, gruppiert nach Tag. Verstrichene Termine stehen oben unter „Früher“, danach „Heute“, „Morgen“ und die weiteren Tage.
+- Android-Leiste: Eingang, Heute, Geplant, Alle, ⋯ Mehr (fünf Reiter). **Das ersetzt die vier Reiter vom 28.10.2026.**
+
 **Entscheidungen aus `.fragen/2026-10-28-1849-muellabfuhr.md` (28.10.2026, neue Funktion „Müllabfuhr“, Abschnitte 4.5, 4.7, 5.7):**
 - Die Abholtermine der Müllabfuhr kommen einmal im Jahr als ICS-Datei und werden importiert. Je Abfuhrart entsteht **eine Serie mit fester Terminliste**, keine Einzelaufgabe je Abholtag. Frist am Abholtag, geplant eine Woche vorher.
 - Ein verstrichener, nicht abgehakter Abholtermin bleibt überfällig, bis er abgehakt oder übersprungen wird, wie jede Aufgabe (5.2). Je Abfuhrart steht so höchstens ein überfälliger Eintrag.
 - Import nur am Desktop. Am Handy werden die Termine angezeigt und erledigt.
-- **Untere Leiste am Handy: Eingang, Heute, Alle, ⋯ Mehr.** „Mehr“ öffnet ein Blatt mit den drei Einträgen Erledigt, Listen und Müllabfuhr; jeder öffnet seine Übersicht. **Das ersetzt die Entscheidung vom 26.10.2026 „fünfter Reiter Listen“.**
+- **Untere Leiste am Handy: Eingang, Heute, Alle, ⋯ Mehr** (seit 09.11.2026 mit „Geplant“ nach Heute, siehe oben). „Mehr“ öffnet ein Blatt mit den drei Einträgen Erledigt, Listen und Müllabfuhr; jeder öffnet seine Übersicht. **Das ersetzt die Entscheidung vom 26.10.2026 „fünfter Reiter Listen“.**
 - Das ⋮-Menü der Kopfzeile bleibt unverändert (Neu einlesen, Verlauf, Probleme, Papierkorb, Einstellungen).
 - Vorlage ist die vom Nutzer bereitgestellte ICS-Datei im Ordner `abfuhrtermine/`. Sie enthält die Wohnadresse und gehört deshalb nicht ins öffentliche Repository (`.gitignore`); Tests verwenden eine anonymisierte Nachbildung.
 
@@ -127,7 +133,7 @@ Technische Annahmen werden in den Meilensteinen überprüft; eine fertige Planun
   - Formularfelder für die YAML-Eigenschaften.
 - **Nicht in v1:** Projekte, Unteraufgaben, Abhängigkeiten, Kalender, Kanban, Anhänge, natürlichsprachige Erfassung, Erinnerungen und Benachrichtigungen. Dafür werden auch keine Gerüste vorab angelegt.
 - **Eingang:**
-  - Jede neu erfasste Aufgabe landet immer im Eingang, auch wenn sie aus „Heute“ heraus erfasst wird oder einen Termin hat.
+  - Jede neu erfasste Aufgabe landet im Eingang, auch wenn sie aus „Heute“ heraus erfasst wird. Bekommt sie einen Termin, wechselt sie in „Geplant“ (Entscheidung 09.11.2026).
   - Neue Aufgaben übernehmen keinen Termin aus der gerade geöffneten Ansicht.
   - „Ohne Termin“ und „im Eingang“ sind verschiedene Zustände.
   - Wird eine Serie fortgeschrieben, kommt sie nicht zurück in den Eingang.
@@ -441,11 +447,12 @@ Eine Montagsserie hat bereits die Vorkommen 28.09. und 05.10.2026 erledigt. Am 1
 
 ### 4.1 Eingang [F]/[V]
 
-- Ansicht „Eingang“: alle Aufgaben mit `status ≠ done` und wirksamem `inbox = true` [F].
+- Ansicht „Eingang“: alle Aufgaben mit `status ≠ done`, wirksamem `inbox = true` und **ohne** wirksames `due`/`scheduled` [F, 09.11.2026]. Der Eingang ist die Sammelstelle für noch nicht zugeteilte Aufgaben; ein Termin gilt als Zuteilung.
 - **Erfassen** [F]: Die Schnellerfassung braucht nur einen Titel; eine Notiz ist optional. Erfasst wird von jeder Ansicht aus per Taste oder Plus-Button. Die neue Datei erhält:
   - `inbox: true`, `status: open`, `priority: none`;
   - **kein** `due`/`scheduled`, auch nicht bei Erfassung aus „Heute“.
-- Setzt der Nutzer ausdrücklich einen Termin (über „Erfassen & bearbeiten“ oder direkt danach im Detail), bleibt `inbox: true`. Die Aufgabe steht dann in Eingang **und**, falls zutreffend, in Heute [F].
+- Setzt der Nutzer ausdrücklich einen Termin (über „Erfassen & bearbeiten“ oder direkt danach im Detail), bleibt `inbox: true` in der Datei. Die Aufgabe verschwindet aus dem Eingang und steht in Geplant und, falls zutreffend, in Heute [F, 09.11.2026; vorher „Eingang **und** Heute“]. Wird der Termin entfernt, steht sie wieder im Eingang.
+- Das Kennzeichen „Eingang“ in Zeilen und im Detail folgt der Ansicht: Eine Aufgabe mit `inbox: true` und Termin trägt kein Kennzeichen „Eingang“; im Detail heißt der Zustand dann „Geplant“. „Einsortiert“ bleibt wählbar und setzt `inbox: false`.
 - **„Einsortiert“** (Aus Eingang entfernen) setzt `inbox: false`, und nur diese Aktion tut das. „Zurück in den Eingang“ setzt ausdrücklich `inbox: true` [V].
 - Termin setzen, ändern oder entfernen ändert `inbox` nie [F]. Erledigen und Wiederöffnen ändern `inbox` ebenfalls nicht [V].
 - Das Fortschreiben einer Serie ändert `inbox` nie [F].
@@ -462,14 +469,21 @@ Zwei Bereiche auf einer Seite. Jede Aufgabe erscheint höchstens einmal [F-Start
 
 - Steht eine Aufgabe unter „Fällig“, wird ihr `scheduled` als Zusatz gezeigt („geplant Do 15.10.“).
 - Eine überschrittene Frist bekommt die Kennzeichnung „überfällig“. Ein verstrichenes `scheduled` gilt **nicht** als überfällig; es erscheint nur in „Früher eingeplant“.
-- Eingangsaufgaben erscheinen in Heute mit einem Kennzeichen „Eingang“.
+- Aufgaben in Heute haben immer einen Termin und stehen darum nie im Eingang (4.1); ein Kennzeichen „Eingang“ entfällt hier seit 09.11.2026.
 - Bei einer Serie zählt das wirksame aktuelle Vorkommen (5.2).
 - Aufgaben ohne `due` und `scheduled` erscheinen nur im Eingang (falls `inbox`) bzw. unter Alle offenen.
 - Ungültige Datumsfelder werden einzeln ignoriert und unter Probleme gemeldet. Ein gültiges `scheduled: heute` erscheint weiterhin in Geplant, auch wenn `due` ungültig ist; ein gültiges heutiges `due` entsprechend in Fällig. Erst ohne gültigen passenden Termin fehlt die Aufgabe in Heute. Für unklare Serienfortschreibung gilt die ausdrückliche Sperre aus 5.2.
 
+### 4.2a Geplant [F]/[V] (09.11.2026)
+
+- Alle Aufgaben mit `status ≠ done` und wirksamem `due` oder `scheduled`, unabhängig von `inbox`. Listen und Programmieren nie. Bei Serien zählt das wirksame aktuelle Vorkommen (5.2); eine Serie in Klärung ohne Vorschlag hat keinen Termin.
+- Gruppiert nach dem früheren der beiden Daten: zuerst „Früher“ (vor heute, verstrichene Fristen behalten ihre Kennzeichnung „überfällig“), dann „Heute“, „Morgen“ und je weiterer Tag eine Gruppe „Mi 11.11.“ (Jahr nur, wenn abweichend). Leere Gruppen entfallen.
+- Sortierung in der Gruppe: früheres Datum, dann `due`, `scheduled`, Priorität, Titel. Filter und wählbare Sortierung (4.3) wirken innerhalb der Gruppen.
+- Eine Aufgabe kann zugleich in Heute und Geplant stehen; Geplant ist die vollständige Terminübersicht.
+
 ### 4.3 Weitere Ansichten [V]
 
-- **Alle offenen Aufgaben:** alle Aufgaben mit `status ≠ done`, einschließlich der Eingangsaufgaben (mit Kennzeichen).
+- **Alle offenen Aufgaben:** alle Aufgaben mit `status ≠ done`, einschließlich der Eingangsaufgaben (mit Kennzeichen) und der geplanten.
   - Standardsortierung: `due` aufsteigend (ohne Frist zuletzt), dann `scheduled`, Priorität, Titel.
   - Über Filter „Eingang: nein“ bleiben einsortierte Aufgaben ohne Termin dauerhaft auffindbar.
 - **Erledigt:**
@@ -480,7 +494,7 @@ Zwei Bereiche auf einer Seite. Jede Aufgabe erscheint höchstens einmal [F-Start
 **Filter** (in jeder Ansicht kombinierbar; UND zwischen Merkmalen, ODER innerhalb einer Mehrfachauswahl):
 - Status
 - Priorität
-- Eingang (egal/ja/nein)
+- Eingang (egal/ja/nein); „ja“ heißt: steht im Eingang (4.1), also `inbox: true` ohne Termin
 - `due` (egal / keine / überfällig / heute / nächste 7 Tage / Zeitraum)
 - `scheduled` (egal / keine / früher eingeplant / heute / nächste 7 Tage / Zeitraum); die Option heißt ausdrücklich nicht „überfällig“
 - Wiederholung (egal / keine / Kalender / ab Erledigung / fehlerhaft)
@@ -529,9 +543,9 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (ge
 ### 4.5 Bedienung [V]
 
 - **Desktop:**
-  - Aufbau: Seitenleiste (Erfassen, Suche, Eingang mit Zähler, Heute mit Zähler, Alle offenen, Erledigt, Listen, Müllabfuhr, Probleme, Papierkorb), zentrierte Liste, Details als Dialog über der Liste (Klick oder Enter öffnet, Escape schließt, ↑/↓ blättert). Gestaltung nach den Vorlage-Screenshots vom 18.10.2026 (Todoist-ähnlich): warme Seitenleiste, große Ansichtsüberschrift mit Aufgabenzahl, runde Haken in Prioritätsfarbe, Sortierung und Filter im Menü „Anzeige“.
+  - Aufbau: Seitenleiste (Erfassen, Suche, Eingang mit Zähler, Heute mit Zähler, Geplant, Alle offenen, Erledigt, Listen, Müllabfuhr, Probleme, Papierkorb), zentrierte Liste, Details als Dialog über der Liste (Klick oder Enter öffnet, Escape schließt, ↑/↓ blättert). Gestaltung nach den Vorlage-Screenshots vom 18.10.2026 (Todoist-ähnlich): warme Seitenleiste, große Ansichtsüberschrift mit Aufgabenzahl, runde Haken in Prioritätsfarbe, Sortierung und Filter im Menü „Anzeige“.
   - Tasten:
-    - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…7 für Eingang, Heute, Alle offenen, Erledigt, Listen, Müllabfuhr und Programmieren; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
+    - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…8 für Eingang, Heute, Geplant, Alle offenen, Erledigt, Listen, Müllabfuhr und Programmieren; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
     - Aufgabenaktionen: Leertaste erledigt/öffnet wieder, `E` sortiert ein, `D` setzt die Frist, `S` plant ein, `P` setzt die Priorität, Entf löscht.
     - Sonstiges: Ctrl+Z macht rückgängig, F5 liest neu ein, Ctrl+Plus/Ctrl+Minus vergrößern/verkleinern die Ansicht (auch Ctrl+Mausrad), Ctrl+0 stellt die Normalgröße her.
   - In Eingabefeldern/Editoren sind Buchstaben-, Leertasten- und Entf-Aktionen deaktiviert. Ctrl+Z wirkt dort auf die Texteingabe; Aufgaben-Undo bleibt als eigener Befehl erreichbar. Fokus, Tastaturbedienung und Screenreader-Beschriftungen werden auch für Konflikt- und Wiederholungsdialoge geprüft.
@@ -539,8 +553,8 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (ge
   - Ansichtsgröße (Entscheidung 30.10.2026): Zoom des ganzen Fensters in 10-%-Schritten von 70 bis 200 %. Der Wert ist gerätelokal und steht als `zoom` in `settings.json`; beim Start wird er wieder angewandt.
   - Keine systemweite Schnellerfassung [F, F008]. Erfasst wird im App-Fenster (`N`/Ctrl+N).
 - **Android:**
-  - Untere Navigation mit vier Reitern: Eingang, Heute, Alle, ⋯ Mehr (Entscheidung 28.10.2026; vorher fünf Reiter mit Erledigt und Listen). Suche in der Kopfzeile, Plus-Button zum Erfassen, Ziehen nach unten zum Neueinlesen.
-  - **Mehr:** Der Reiter wechselt nicht selbst die Ansicht, sondern öffnet ein Blatt von unten (wie die übrigen Blätter der App) mit den Einträgen Erledigt, Listen und Müllabfuhr. „Müllabfuhr“ erscheint nur, wenn es mindestens eine Müllabfuhr-Serie gibt, weil am Handy nicht importiert wird (4.7). Ein Eintrag öffnet die jeweilige Übersicht; solange eine dieser drei Ansichten aktiv ist, trägt „Mehr“ die hinterlegte Pille. Die Zurück-Taste führt von dort zur zuletzt gewählten Hauptansicht (Eingang, Heute oder Alle).
+  - Untere Navigation mit fünf Reitern: Eingang, Heute, Geplant, Alle, ⋯ Mehr (Entscheidung 09.11.2026; davor seit 28.10.2026 vier Reiter ohne Geplant, ursprünglich fünf mit Erledigt und Listen). Suche in der Kopfzeile, Plus-Button zum Erfassen, Ziehen nach unten zum Neueinlesen.
+  - **Mehr:** Der Reiter wechselt nicht selbst die Ansicht, sondern öffnet ein Blatt von unten (wie die übrigen Blätter der App) mit den Einträgen Erledigt, Listen und Müllabfuhr. „Müllabfuhr“ erscheint nur, wenn es mindestens eine Müllabfuhr-Serie gibt, weil am Handy nicht importiert wird (4.7). Ein Eintrag öffnet die jeweilige Übersicht; solange eine dieser drei Ansichten aktiv ist, trägt „Mehr“ die hinterlegte Pille. Die Zurück-Taste führt von dort zur zuletzt gewählten Hauptansicht (Eingang, Heute, Geplant oder Alle).
   - Gestaltung nach den Vorlage-Screenshots vom 19.10.2026 (Todoist-ähnlich, wie der Desktop): warmer Grund, Aufgaben als weiße Karten, runde Haken in Prioritätsfarbe, Datum mit Kalendersymbol in Farbstufe, „Eingang“ rechts in der Zeile; Kopfzeile mit großer Überschrift und Aufgabenzahl, Suche, Anzeige (Filter/Sortierung) und ⋮-Menü (Neu einlesen, Probleme, Papierkorb, Einstellungen); aktive Ansicht in der unteren Leiste mit hinterlegter Pille; roter Plus-Button.
   - Details und Erfassung als Blatt von unten über der Liste: Detail mit Eingang/Einsortiert und ⋮-Menü (Status, Wiederholung, Dateiname, Löschen), Titelkarte mit Haken, Terminzeilen, fehlende Eigenschaften als Chips (Beschreibung, Priorität, Frist, Geplant, Wiederholung), „Checklistenpunkt hinzufügen“; Erfassung mit Titelzeile, den Chips Beschreibung und Bearbeiten (ohne Titel ausgegraut; erfasst und öffnet das Detail) und rotem Plus-Knopf über der Tastatur, dessen Plus sich beim ersten Zeichen eine Vierteldrehung dreht. Zurück (Taste oder Geste) schließt das Eingabeblatt samt Tastatur in einem Schritt, ohne zu erfassen; das gilt auch für Listeneinträge und Neue Liste.
   - Wischgesten: nach rechts erledigt, nach links öffnet Aktionen (Einsortieren, Termin, Löschen).
@@ -990,7 +1004,7 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | ID | Kriterium |
 |---|---|
 | AK-01 | Erfassung aus „Heute“ erzeugt eine Datei mit `inbox: true` und ohne `due`/`scheduled`. Sie erscheint im Eingang, nicht in Heute. |
-| AK-02 | Eine neue Aufgabe mit ausdrücklich gesetztem heutigen `due` hat `inbox: true` und erscheint in Eingang **und** Heute/Fällig. |
+| AK-02 | Eine neue Aufgabe mit ausdrücklich gesetztem heutigen `due` hat `inbox: true`, erscheint in Heute/Fällig und Geplant/Heute, aber **nicht** im Eingang (geändert 09.11.2026). Nur `scheduled` wirkt genauso. Ohne Termin steht sie wieder im Eingang. Filter „Eingang: ja/nein“ stimmt mit der Ansicht überein. |
 | AK-03 | Eine einsortierte Aufgabe ohne Termin erscheint nur unter „Alle offenen“ (und mit Filter „Eingang: nein“) und wird von der Suche gefunden. Termin setzen oder entfernen ändert `inbox` nicht. |
 | AK-04 | Heute-Matrix: `due` ∈ {gestern, heute, morgen, leer} × `scheduled` ∈ {gestern, heute, morgen, leer}. Jede der 16 Kombinationen landet im erwarteten Bereich (Fällig / Geplant-heute / Früher eingeplant / nicht in Heute). |
 | AK-05 | Eigenschaftstest: Keine Aufgabe erscheint in Heute doppelt. Bei `due ≤ heute` und `scheduled ≤ heute` steht sie unter Fällig und zeigt das Planungsdatum. |
@@ -1035,10 +1049,11 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | AK-44 | Listen (4.6): Eine neue Liste hat `kind: list`, `inbox: false` und keine Termine. Sie erscheint in keiner Aufgabenansicht, aber in „Listen“ und in der Suche. Anfügen, Abhaken, Text ändern, Entfernen, Verschieben, „Abgehakte entfernen“ und „Alle Haken zurücksetzen“ ändern nur die betroffenen Body-Zeilen und sind rückgängig zu machen; eine extern verschobene Zeile führt zu keinem Schreiben. |
 | AK-45 | Feste Terminliste (5.7): Liste 13.11./11.12.2026, Bezugsfeld `due`, Abstand −7. Am 06.11. steht die Aufgabe unter „Heute eingeplant“, am 10.11. unter „Früher eingeplant“, am 13.11. unter Fällig. Erledigen am 15.11. ergibt K = 11.12. und `scheduled` = 04.12.; Erledigen am 20.12. beendet die Serie regulär. Verspätetes Erledigen überspringt einen dazwischen verstrichenen Termin, ohne ihn in C oder S einzutragen. Permutationen und Duplikate in `recurrence_dates` ergeben dasselbe nächste Vorkommen. Eine Datei mit `format_version: 2` ist für einen Leser, der nur Version 1 kennt, schreibgeschützt (wie AK-37). |
 | AK-46 | ICS-Import (4.7) mit einer anonymisierten Nachbildung der Vorlage (CRLF, `SUMMARY;LANGUAGE=de`, doppelte Leerzeichen, 10 Termine in 4 Arten): legt 4 Dateien mit zusammen 10 Terminen an, `inbox: false`, Abstand −7, Namen aus der Vorschau. Derselbe Import erneut: 0 Schreibvorgänge. Eine Folgedatei mit neuen UIDs, zusätzlichen Terminen und einem verlegten Termin ergänzt, entfernt nur den verlegten, ungelösten Zukunftstermin und setzt eine ausgeschöpfte wie eine von Hand beendete Serie in derselben Revision fort; vergangene, erledigte und übersprungene Daten bleiben. Die Adresse aus `LOCATION` steht in keiner Datei. Eine seit der Vorschau geänderte Datei wird nicht überschrieben. |
-| AK-47 | Android-Leiste (4.5): genau vier Reiter (Eingang, Heute, Alle, ⋯ Mehr). Mehr öffnet das Blatt mit Erledigt, Listen und, nur wenn eine Müllabfuhr-Serie existiert, Müllabfuhr; jeder Eintrag öffnet seine Übersicht, die Pille liegt dann auf „Mehr“, Zurück führt zur letzten Hauptansicht. Alle bisherigen Maestro-Flows laufen über den neuen Weg grün. |
+| AK-47 | Android-Leiste (4.5): genau fünf Reiter (Eingang, Heute, Geplant, Alle, ⋯ Mehr; bis 09.11.2026 vier ohne Geplant). Mehr öffnet das Blatt mit Erledigt, Listen und, nur wenn eine Müllabfuhr-Serie existiert, Müllabfuhr; jeder Eintrag öffnet seine Übersicht, die Pille liegt dann auf „Mehr“, Zurück führt zur letzten Hauptansicht. Alle bisherigen Maestro-Flows laufen über den neuen Weg grün. |
 | AK-48 | Programmieren (4.8): Eine neue Programmier-Liste hat `kind: dev-list`, `inbox: false` und keine Termine. Ein Eintrag hat `kind: dev-item` und `dev_list` mit der ID der Liste. Beide erscheinen in keiner Aufgaben- oder Listenansicht, aber in der Suche. Notiz, Erledigen und Undo funktionieren wie bei Aufgaben; der Kreis setzt einen offenen Eintrag erst auf `status: in-progress` (halb gefüllt), erst der zweite Klick erledigt ihn. „Erledigte entfernen“ und „Liste löschen“ legen genau die betroffenen Dateien in den Papierkorb. Einträge ohne vorhandene Liste stehen unter „Ohne Liste“. Übersicht und Einträge lassen sich sortieren, die Übersicht wie Listen filtern. Am Desktop legt das Kopier-Symbol im Detail eines Eintrags „Titel, Leerzeile, Notiz“ in die Zwischenablage; normale Aufgaben haben es nicht. |
 | AK-49 | Diktieren (4.9): Nur Programmier-Einträge haben den Diktierknopf. Ohne Schlüssel erscheint der Hinweis und die Einstellungen öffnen sich. Der Schlüssel ist nach dem Speichern nur maskiert sichtbar und steht weder im Aufgabenordner noch im Klartext in den Desktop-Einstellungen. Aufnahme → „Fertig“ schickt das Audio mit dem eingestellten Erkennungsmodell und Deutsch an `/audio/transcriptions` und den Rohtext an `/responses`; der bereinigte Text wird mit Leerzeile an die Notiz angehängt und gespeichert. Scheitert die Bereinigung, kommt der Rohtext; scheitert die Erkennung, bietet „Erneut versuchen“ dieselbe Aufnahme noch einmal an. |
 | AK-50 | Android: Zurück bei offener Tastatur schließt das Eingabeblatt (Erfassung, Listeneintrag, Neue Liste) in einem Schritt, ohne zu erfassen und ohne die Ansicht darunter zu verlassen. Blendet man die Beschreibung wieder aus, bleibt das Blatt offen. |
+| AK-51 | Geplant (4.2a): Offene Aufgaben mit Termin stehen gruppiert nach dem früheren Datum, verstrichene unter „Früher“, dann „Heute“, „Morgen“ und je Tag „Do 15.10.“; Aufgaben ohne Termin, Erledigte, Listen und Programmier-Einträge fehlen. Desktop: Seitenleiste und Ctrl+3; Android: Reiter „Geplant“. |
 
 ## 10. Build-Plan
 

@@ -6,10 +6,12 @@ import {
   clockAtLocal,
   hashText,
   inboxView,
+  inInbox,
   isOverdue,
   matchesFilter,
   newTaskText,
   parseDateValue,
+  plannedView,
   problemsView,
   readTaskFile,
   search,
@@ -36,11 +38,26 @@ describe("Eingang und Erfassung (AK-01–03)", () => {
     const tv = todayView(idx, TZ);
     expect(tv.due.length + tv.plannedToday.length + tv.plannedEarlier.length).toBe(0);
   });
-  it("AK-02: heutiges due → Eingang und Fällig", () => {
+  it("AK-02: heutiges due → Fällig und Geplant, nicht im Eingang; ohne Termin zurück", () => {
     const { text } = newTaskText({ title: "Neu", due: "2026-10-12" }, ctxAt("2026-10-12T10:00"));
+    expect(text).toMatch(/inbox: true/);
     const idx = buildIndex([file("Neu.md", text)], clock);
-    expect(inboxView(idx, TZ)).toHaveLength(1);
+    expect(inboxView(idx, TZ)).toHaveLength(0);
+    expect(inInbox(idx.tasks[0]!)).toBe(false);
     expect(todayView(idx, TZ).due).toHaveLength(1);
+    expect(plannedView(idx, TZ).flatMap((g) => g.items)).toHaveLength(1);
+    // Termin entfernt: Die Datei hat weiter inbox: true, die Aufgabe steht wieder im Eingang.
+    const back = buildIndex([file("Neu.md", text.replace(/^due: .*\n/m, ""))], clock);
+    expect(inboxView(back, TZ)).toHaveLength(1);
+    expect(plannedView(back, TZ)).toHaveLength(0);
+  });
+  it("AK-02: nur scheduled reicht ebenfalls, Filter „Eingang“ folgt der Ansicht", () => {
+    const idx = buildIndex([t("Geplant", ["inbox: true", "scheduled: 2026-10-20"]), t("Roh", ["inbox: true"])], clock);
+    expect(inboxView(idx, TZ).map((v) => v.task.fields.title)).toEqual(["Roh"]);
+    const yes = idx.tasks.filter((v) => matchesFilter(v, { inbox: "yes" }, idx.today)).map((v) => v.task.fields.title);
+    const no = idx.tasks.filter((v) => matchesFilter(v, { inbox: "no" }, idx.today)).map((v) => v.task.fields.title);
+    expect(yes).toEqual(["Roh"]);
+    expect(no).toEqual(["Geplant"]);
   });
   it("AK-03: einsortiert ohne Termin nur in Alle offenen und per Filter/Suche", () => {
     const idx = buildIndex([t("Einsortiert", ["inbox: false"])], clock);
@@ -48,6 +65,32 @@ describe("Eingang und Erfassung (AK-01–03)", () => {
     expect(allOpenView(idx, TZ)).toHaveLength(1);
     expect(matchesFilter(idx.tasks[0]!, { inbox: "no" }, idx.today)).toBe(true);
     expect(search(idx, "einsortiert")).toHaveLength(1);
+  });
+});
+
+describe("Geplant (AK-51)", () => {
+  it("gruppiert nach dem früheren Datum: Früher, je Tag; Listen, Programmieren und Erledigte fehlen", () => {
+    const idx = buildIndex(
+      [
+        t("Ueberfaellig", ["inbox: false", "due: 2026-10-09"]),
+        t("Verstrichen", ["inbox: true", "scheduled: 2026-10-11"]),
+        t("HeuteFrist", ["inbox: false", "due: 2026-10-12", "priority: high"]),
+        t("HeutePlan", ["inbox: false", "due: 2026-10-30", "scheduled: 2026-10-12"]),
+        t("Morgen", ["inbox: true", "due: 2026-10-13"]),
+        t("Spaeter", ["inbox: false", "scheduled: 2026-10-20"]),
+        t("Ohne", ["inbox: true"]),
+        file("Fertig.md", fm(["id: 01IDFERTIG0000000000000000", "title: Fertig", "status: done", "inbox: false", "due: 2026-10-13"])),
+        t("Liste", ["kind: list", "inbox: false", "due: 2026-10-13"]),
+      ],
+      clock,
+    );
+    const g = plannedView(idx, TZ);
+    expect(g.map((x) => [x.kind, x.date.toString(), x.items.map((v) => v.task.fields.title)])).toEqual([
+      ["earlier", "2026-10-09", ["Ueberfaellig", "Verstrichen"]],
+      ["day", "2026-10-12", ["HeuteFrist", "HeutePlan"]],
+      ["day", "2026-10-13", ["Morgen"]],
+      ["day", "2026-10-20", ["Spaeter"]],
+    ]);
   });
 });
 
@@ -137,7 +180,10 @@ describe("Suche und Filter (AK-25)", () => {
   });
   it("kombinierte Filter", () => {
     const r = idx.tasks.filter((v) => matchesFilter(v, { priority: ["high"], due: "overdue", inbox: "no" }, idx.today));
-    expect(r.map((v) => v.task.fields.title)).toEqual(["Bettwäsche wechseln"]);
+    // „Notiz“ hat inbox: true, steht mit Termin aber nicht im Eingang (4.1) und zählt darum als „Eingang: nein“.
+    expect(r.map((v) => v.task.fields.title)).toEqual(["Bettwäsche wechseln", "Notiz"]);
+    const low = idx.tasks.filter((v) => matchesFilter(v, { priority: ["low"], inbox: "no" }, idx.today));
+    expect(low.map((v) => v.task.fields.title)).toEqual([]);
   });
 });
 

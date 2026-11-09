@@ -61,6 +61,15 @@ export const IconUpcoming = (p: P) => (
     <circle cx="12" cy="15.5" r=".6" fill="currentColor" />
   </Svg>
 );
+/** Alle offenen: vier Kacheln (das Kalendergitter gehört zu „Geplant“) */
+export const IconAll = (p: P) => (
+  <Svg {...p}>
+    <rect x="4.5" y="4.5" width="6" height="6" rx="1.2" />
+    <rect x="13.5" y="4.5" width="6" height="6" rx="1.2" />
+    <rect x="4.5" y="13.5" width="6" height="6" rx="1.2" />
+    <rect x="13.5" y="13.5" width="6" height="6" rx="1.2" />
+  </Svg>
+);
 export const IconDone = (p: P) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="7.5" />

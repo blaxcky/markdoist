@@ -21,6 +21,7 @@ import {
   Temporal,
   type Priority,
   type TaskAction,
+  hasDate,
 } from "@markdoist/core";
 import { pickDate } from "../components/actions-sheet";
 import { systemClock, useRepo, useRepoState } from "../repo";
@@ -441,7 +442,7 @@ export function DetailScreen() {
           style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 40, paddingLeft: 12, paddingRight: 10, borderRadius: 20, backgroundColor: c.surfaceHigh }}
         >
           <InboxIcon color={f.inbox ? c.primary : c.muted} size={15} />
-          <Text style={{ color: c.fg, fontSize: 14, fontWeight: "500" }}>{f.inbox ? T.views.inbox : "Einsortiert"}</Text>
+          <Text style={{ color: c.fg, fontSize: 14, fontWeight: "500" }}>{f.inbox ? (hasDate(view) ? T.planned.inboxDated : T.views.inbox) : "Einsortiert"}</Text>
           {!ro && <ChevronIcon color={c.muted} size={12} dir="down" />}
         </Pressable>
         )}

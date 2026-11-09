@@ -1,5 +1,5 @@
 // Zentrale deutsche Texte (Plan 4.5).
-import type { Priority, Status } from "@markdoist/core";
+import type { PlannedGroup, Priority, Status, Temporal } from "@markdoist/core";
 import type { WriteResult } from "./storage";
 import { T_DICTATION } from "./dictation";
 
@@ -9,6 +9,7 @@ export const T = {
   views: {
     inbox: "Eingang",
     today: "Heute",
+    planned: "Geplant",
     all: "Alle offenen",
     done: "Erledigt",
     problems: "Probleme",
@@ -65,6 +66,13 @@ export const T = {
     plannedToday: "Heute eingeplant",
     plannedEarlier: "Früher eingeplant",
   },
+  planned: {
+    earlier: "Früher",
+    today: "Heute",
+    tomorrow: "Morgen",
+    /** Gruppe einer datierten Eingangsaufgabe im Detail (4.1) */
+    inboxDated: "Geplant",
+  },
   status: { open: "Offen", "in-progress": "In Arbeit", done: "Erledigt" } satisfies Record<Status, string>,
   priority: { none: "Keine", low: "Niedrig", normal: "Normal", high: "Hoch" } satisfies Record<Priority, string>,
   fields: {
@@ -118,6 +126,7 @@ export const T = {
   empty: {
     inbox: "Der Eingang ist leer.",
     today: "Für heute steht nichts an.",
+    planned: "Nichts geplant.",
     all: "Keine offenen Aufgaben.",
     done: "Noch nichts erledigt.",
     lists: "Noch keine Listen. Einkaufszettel, Packliste, Gesprächsthemen – alles, was du nur abhaken willst.",
@@ -160,4 +169,16 @@ export function writeResultMessage(r: WriteResult): string {
     case "unknown":
       return `Unklarer Ausgang – bitte Wiederherstellung prüfen: ${r.message}`;
   }
+}
+
+const WD = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+/** Überschrift einer Gruppe in „Geplant“ (4.2a): Früher, Heute, Morgen, sonst „Mi 11.11.“ (Jahr nur, wenn abweichend). */
+export function plannedGroupTitle(g: PlannedGroup, today: Temporal.PlainDate): string {
+  if (g.kind === "earlier") return T.planned.earlier;
+  const days = today.until(g.date, { largestUnit: "days" }).days;
+  if (days === 0) return T.planned.today;
+  if (days === 1) return T.planned.tomorrow;
+  const d = g.date;
+  return `${WD[d.dayOfWeek - 1]} ${d.day}.${d.month}.${d.year !== today.year ? d.year : ""}`;
 }

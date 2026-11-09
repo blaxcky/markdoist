@@ -9,6 +9,7 @@ import {
   findCheckboxes,
   hashText,
   inboxView,
+  plannedView,
   listProgress,
   listsView,
   moveItem,
@@ -41,7 +42,9 @@ describe("Listen: Dateiformat und Ansichten (4.6)", () => {
     const task = fm(["id: 01AUFGABE00000000000000000", "title: Einkaufen gehen", "status: open", "due: 2026-10-12"]);
     const done = list.replace("status: open", "status: done").replace(/id: \S+/, "id: 01LISTE2000000000000000000");
     const idx = buildIndex([file("Einkauf.md", list), file("Alt.md", done), file("Aufgabe.md", task)], clock);
-    expect(inboxView(idx, TZ).map((v) => v.task.name)).toEqual(["Aufgabe.md"]);
+    // Die Vergleichsaufgabe hat einen Termin und steht darum in Geplant statt im Eingang (4.1).
+    expect(inboxView(idx, TZ)).toEqual([]);
+    expect(plannedView(idx, TZ).flatMap((g) => g.items).map((v) => v.task.name)).toEqual(["Aufgabe.md"]);
     expect(allOpenView(idx, TZ).map((v) => v.task.name)).toEqual(["Aufgabe.md"]);
     expect(todayView(idx, TZ).due.map((v) => v.task.name)).toEqual(["Aufgabe.md"]);
     expect(doneView(idx).tasks).toEqual([]);

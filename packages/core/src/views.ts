@@ -278,10 +278,69 @@ const isList = (v: TaskView) => v.task.fields.isList || isDev(v);
 /** offene Aufgabe */
 const isOpen = (v: TaskView) => v.task.fields.status !== "done" && !isList(v);
 
+/** hat ein wirksames `due` oder `scheduled` (bei Serien das aktuelle Vorkommen, 5.2) */
+export const hasDate = (v: TaskView): boolean => v.dueDate !== null || v.scheduledDate !== null;
+
+/**
+ * Steht im Eingang (4.1): `inbox: true` und ohne wirksamen Termin. Eine Aufgabe mit Termin
+ * gilt als zugeteilt und steht unter „Geplant“; die Datei behält `inbox: true`, ohne Termin
+ * steht sie wieder im Eingang.
+ */
+export const inInbox = (v: TaskView): boolean => v.task.fields.inbox && !hasDate(v);
+
 export function inboxView(idx: Index, tz: string, newestFirst = true): TaskView[] {
   return idx.tasks
-    .filter((v) => isOpen(v) && v.task.fields.inbox)
+    .filter((v) => isOpen(v) && inInbox(v))
     .sort(compareBy(["created", "title"], tz, { created: newestFirst }));
+}
+
+export interface PlannedGroup {
+  /** „earlier“ = vor heute (verstrichene Fristen und Planungstage), sonst der Tag */
+  kind: "earlier" | "day";
+  /** Tag der Gruppe; bei „earlier“ der früheste enthaltene Tag */
+  date: Temporal.PlainDate;
+  items: TaskView[];
+}
+
+/** früheres der wirksamen Daten */
+function plannedDate(v: TaskView): Temporal.PlainDate {
+  const d = v.dueDate;
+  const s = v.scheduledDate;
+  if (d && s) return Temporal.PlainDate.compare(d, s) <= 0 ? d : s;
+  return (d ?? s)!;
+}
+
+/**
+ * Geplant (4.2a): alle offenen Aufgaben mit wirksamem Termin, gruppiert nach dem früheren
+ * der beiden Daten. Alles vor heute steht in einer Gruppe „Früher“, danach je Tag eine Gruppe.
+ */
+export function plannedView(idx: Index, tz: string): PlannedGroup[] {
+  const earlier: TaskView[] = [];
+  const byDay = new Map<string, { date: Temporal.PlainDate; items: TaskView[] }>();
+  let earliest: Temporal.PlainDate | null = null;
+  for (const v of idx.tasks) {
+    if (!isOpen(v) || !hasDate(v)) continue;
+    const d = plannedDate(v);
+    if (Temporal.PlainDate.compare(d, idx.today) < 0) {
+      earlier.push(v);
+      if (!earliest || Temporal.PlainDate.compare(d, earliest) < 0) earliest = d;
+      continue;
+    }
+    const k = d.toString();
+    const g = byDay.get(k);
+    if (g) g.items.push(v);
+    else byDay.set(k, { date: d, items: [v] });
+  }
+  const cmp = (a: TaskView, b: TaskView) => {
+    const c = Temporal.PlainDate.compare(plannedDate(a), plannedDate(b));
+    return c || compareBy(["due", "scheduled", "priority", "title"], tz)(a, b);
+  };
+  const out: PlannedGroup[] = [];
+  if (earlier.length) out.push({ kind: "earlier", date: earliest!, items: earlier.sort(cmp) });
+  for (const g of [...byDay.values()].sort((a, b) => Temporal.PlainDate.compare(a.date, b.date))) {
+    out.push({ kind: "day", date: g.date, items: g.items.sort(cmp) });
+  }
+  return out;
 }
 
 export interface TodayView {
@@ -451,8 +510,8 @@ function inRange(d: Temporal.PlainDate | null, f: { from: string; to: string }):
 export function matchesFilter(v: TaskView, f: Filter, today: Temporal.PlainDate): boolean {
   if (f.status?.length && !f.status.includes(v.task.fields.status)) return false;
   if (f.priority?.length && !f.priority.includes(v.task.fields.priority)) return false;
-  if (f.inbox === "yes" && !v.task.fields.inbox) return false;
-  if (f.inbox === "no" && v.task.fields.inbox) return false;
+  if (f.inbox === "yes" && !inInbox(v)) return false;
+  if (f.inbox === "no" && inInbox(v)) return false;
   const next7 = today.add({ days: 7 });
   const within7 = (d: Temporal.PlainDate | null) =>
     !!d && Temporal.PlainDate.compare(d, today) >= 0 && Temporal.PlainDate.compare(d, next7) <= 0;

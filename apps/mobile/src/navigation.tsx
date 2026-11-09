@@ -1,4 +1,4 @@
-// Navigation (Plan 4.5, 4.6, 4.8): untere Leiste Eingang/Heute/Alle/⋯ Mehr, Stack für Detail und Dialoge.
+// Navigation (Plan 4.5, 4.6, 4.8): untere Leiste Eingang/Heute/Geplant/Alle/⋯ Mehr, Stack für Detail und Dialoge.
 // „Mehr“ öffnet ein Blatt mit Erledigt, Listen, Müllabfuhr und Programmieren; diese bleiben Reiter des Tab-Navigators, nur ohne eigenen Knopf.
 // Kopfzeilen der Listen zeichnet die Liste selbst (components/list-header).
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
@@ -30,12 +30,12 @@ import { useRepoState } from "./repo";
 import { useTheme } from "./theme";
 import { DevItemOptionsSheet, FilterProvider, FilterSheet, ListOptionsSheet } from "./filter";
 import { GroupedSheet } from "./components/series-sheet";
-import { BinIcon, CalendarIcon, CheckCircleIcon, ChecklistIcon, CodeIcon, GridIcon, InboxIcon, MoreIcon } from "./components/icons";
+import { BinIcon, CalendarIcon, CheckCircleIcon, ChecklistIcon, CodeIcon, GridIcon, InboxIcon, MoreIcon, TilesIcon } from "./components/icons";
 import { wasteView } from "@markdoist/core";
 
-export type Tabs = { Inbox: undefined; Today: undefined; All: undefined; More: undefined; Done: undefined; Lists: undefined; Waste: undefined; Dev: undefined };
-type MainTab = "Inbox" | "Today" | "All";
-const MAIN_TABS: readonly string[] = ["Inbox", "Today", "All"];
+export type Tabs = { Inbox: undefined; Today: undefined; Planned: undefined; All: undefined; More: undefined; Done: undefined; Lists: undefined; Waste: undefined; Dev: undefined };
+type MainTab = "Inbox" | "Today" | "Planned" | "All";
+const MAIN_TABS: readonly string[] = ["Inbox", "Today", "Planned", "All"];
 /** Ansichten hinter „Mehr“ (4.5): eigene Reiter ohne Knopf in der Leiste. */
 const MORE_TABS: readonly string[] = ["Done", "Lists", "Waste", "Dev"];
 /** Route `DevList` für die Einträge ohne vorhandene Liste (4.8) */
@@ -172,8 +172,14 @@ function TabsNav({ navigation }: NativeStackScreenProps<RootStack, "Main">) {
           {() => <ListScreen kind="today" />}
         </Tab.Screen>
         <Tab.Screen
+          name="Planned"
+          options={{ title: T.views.planned, tabBarIcon: ({ color, focused }) => <TabIcon focused={focused}><GridIcon color={color} size={20} /></TabIcon>, tabBarButtonTestID: "tab-planned" }}
+        >
+          {() => <ListScreen kind="planned" />}
+        </Tab.Screen>
+        <Tab.Screen
           name="All"
-          options={{ title: "Alle", tabBarIcon: ({ color, focused }) => <TabIcon focused={focused}><GridIcon color={color} size={20} /></TabIcon>, tabBarButtonTestID: "tab-all" }}
+          options={{ title: "Alle", tabBarIcon: ({ color, focused }) => <TabIcon focused={focused}><TilesIcon color={color} size={18} /></TabIcon>, tabBarButtonTestID: "tab-all" }}
         >
           {() => <ListScreen kind="all" />}
         </Tab.Screen>

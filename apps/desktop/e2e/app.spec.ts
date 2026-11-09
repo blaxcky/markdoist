@@ -107,7 +107,7 @@ test("Erfassung aus Heute landet im Eingang ohne Termin (AK-01)", async () => {
   await expect(row("Steuer: Belege sammeln?")).toBeVisible();
 });
 
-test("Frist setzen: Eingang und Heute, inbox bleibt (AK-02)", async () => {
+test("Frist setzen: Heute und Geplant statt Eingang, inbox bleibt (AK-02)", async () => {
   await page.getByTestId("capture-button").click();
   await page.getByTestId("capture-title").fill("Neue Frist");
   await page.getByTestId("capture-edit").click();
@@ -118,6 +118,17 @@ test("Frist setzen: Eingang und Heute, inbox bleibt (AK-02)", async () => {
   const text = await file("Neue Frist.md");
   expect(text).toContain("due: 2026-10-12");
   expect(text).toContain("inbox: true");
+  // Erstes Escape verlässt das Datumsfeld, zweites schließt das Detail.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("detail")).toHaveCount(0);
+  await page.getByTestId("nav-inbox").click();
+  await expect(row("Neue Frist")).toHaveCount(0);
+  await page.getByTestId("nav-planned").click();
+  await expect(page.locator(".section", { hasText: "Heute" }).first()).toBeVisible();
+  await expect(row("Neue Frist")).toBeVisible();
+  await page.getByTestId("nav-today").click();
+  await expect(row("Neue Frist")).toBeVisible();
 });
 
 test("Erledigen per Leertaste und Aufgaben-Undo stellt exakt wieder her", async () => {
@@ -576,7 +587,7 @@ test("Listen: X zum Löschen bleibt erreichbar, wenn die Maus aus der Zeile hin�
 });
 
 test("Programmieren: Liste anlegen, Eintrag mit Notiz, erledigen, Erledigte entfernen, Liste löschen (4.8)", async () => {
-  await page.keyboard.press("Control+7");
+  await page.keyboard.press("Control+8");
   await expect(page.getByTestId("dev-empty")).toBeVisible();
   await page.getByTestId("new-dev-list").click();
   await page.getByTestId("new-dev-list-title").fill("Markdoist");
@@ -692,7 +703,7 @@ test("Müllabfuhr: ICS importieren, Abfuhrart öffnen, Termin überspringen, ern
   await app.evaluate(({ dialog }, p) => {
     dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [p] })) as never;
   }, ics);
-  await page.keyboard.press("Control+6");
+  await page.keyboard.press("Control+7");
   await expect(page.getByText(/Noch keine Abfuhrtermine/)).toBeVisible();
   await page.getByTestId("waste-import").click();
   await expect(page.getByTestId("waste-import-dialog")).toBeVisible();
@@ -773,7 +784,7 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler un
     page = await app.firstWindow();
     await page.getByTestId("list").waitFor();
 
-    await page.keyboard.press("Control+7");
+    await page.keyboard.press("Control+8");
     await page.getByTestId("new-dev-list").click();
     await page.getByTestId("new-dev-list-title").fill("Markdoist");
     await page.keyboard.press("Enter");

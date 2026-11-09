@@ -1,4 +1,4 @@
-// Listenansichten (4.1–4.3): Eingang, Heute, Alle, Erledigt. Ziehen nach unten liest neu ein.
+// Listenansichten (4.1–4.3): Eingang, Heute, Geplant, Alle, Erledigt. Ziehen nach unten liest neu ein.
 import { useMemo, useRef, useState } from "react";
 import { Pressable, RefreshControl, Text, View } from "react-native";
 import { ListHeader } from "../components/list-header";
@@ -7,8 +7,8 @@ import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { useNavigation } from "@react-navigation/native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { T } from "@markdoist/app";
-import { allOpenView, describeOccurrence, doneView, inboxView, matchesFilter, sortViews, todayView, type TaskView } from "@markdoist/core";
+import { plannedGroupTitle, T } from "@markdoist/app";
+import { allOpenView, describeOccurrence, doneView, inboxView, matchesFilter, plannedView, sortViews, todayView, type TaskView } from "@markdoist/core";
 import { useFilter } from "../filter";
 import { TaskRow } from "../components/task-row";
 import { ActionsSheet } from "../components/actions-sheet";
@@ -18,7 +18,7 @@ import { CollapseCell, CollapseProvider, useCompletionFlow } from "../completion
 import { useTheme } from "../theme";
 import type { RootStack } from "../navigation";
 
-export type ListKind = "inbox" | "today" | "all" | "done";
+export type ListKind = "inbox" | "today" | "planned" | "all" | "done";
 
 type Item =
   | { type: "header"; key: string; title: string; count: number }
@@ -35,7 +35,7 @@ function group(items: Item[]): Item[] {
   });
 }
 
-const TITLES: Record<ListKind, string> = { inbox: T.views.inbox, today: T.views.today, all: T.views.all, done: T.views.done };
+const TITLES: Record<ListKind, string> = { inbox: T.views.inbox, today: T.views.today, planned: T.views.planned, all: T.views.all, done: T.views.done };
 
 export function ListScreen({ kind }: { kind: ListKind }) {
   const repo = useRepo();
@@ -85,6 +85,16 @@ export function ListScreen({ kind }: { kind: ListKind }) {
         sec(T.today.due, t.due, true);
         sec(T.today.plannedToday, t.plannedToday);
         sec(T.today.plannedEarlier, t.plannedEarlier);
+        return out;
+      }
+      case "planned": {
+        const out: Item[] = [];
+        for (const g of plannedView(idx, tz)) {
+          const items = tasks(g.items);
+          if (!items.length) continue;
+          const title = plannedGroupTitle(g, idx.today);
+          out.push({ type: "header", key: `h-${g.kind}-${g.date}`, title, count: items.length }, ...items);
+        }
         return out;
       }
       case "all":

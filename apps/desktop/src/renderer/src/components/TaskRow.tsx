@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { TaskView } from "@markdoist/core";
 import { COMPLETE_COLLAPSE_MS, COMPLETE_FADE_MS, T, type CompletionPhase } from "@markdoist/app";
 import { reducedMotion } from "../completion";
-import { Temporal } from "@markdoist/core";
+import { inInbox, Temporal } from "@markdoist/core";
 import { dateLabel } from "../format";
 import { IconCalendar, IconComment, IconDots, IconInbox, IconPencil, IconRepeat, IconTime, IconTrash, IconWarning, IconDone } from "./Icons";
 import { Menu, MenuItem } from "./Menu";
@@ -121,7 +121,7 @@ export function TaskRow({ view, selected, today, tz, showScheduledHint, phase, o
             )}
             {ro && <span className="flagged warn">{T.badges.readOnly}</span>}
           </div>
-          {f.inbox && !done && (
+          {inInbox(view) && !done && (
             <span className="project">
               {T.badges.inbox} <IconInbox size={12} />
             </span>

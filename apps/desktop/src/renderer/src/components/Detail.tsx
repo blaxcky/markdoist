@@ -31,6 +31,8 @@ import {
   type Status,
   type TaskAction,
   type TaskView,
+  hasDate,
+  inInbox,
 } from "@markdoist/core";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { DictateButton } from "./DictateButton";
@@ -355,8 +357,8 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
       <div ref={dialogRef} className="detail" role="dialog" aria-modal="true" data-detail aria-label={f.title || T.fields.title} data-testid="detail" tabIndex={-1}>
         <header className="detail-head">
           <div className="crumb">
-            {f.isList ? <IconList size={16} /> : f.isDevItem || f.isDevList ? <IconCode size={16} /> : f.inbox ? <IconInbox size={16} /> : <IconFolder size={16} />}
-            <span>{f.isList ? T.views.lists : f.isDevItem || f.isDevList ? devCrumb : f.inbox ? T.views.inbox : folderName}</span>
+            {f.isList ? <IconList size={16} /> : f.isDevItem || f.isDevList ? <IconCode size={16} /> : inInbox(view) ? <IconInbox size={16} /> : <IconFolder size={16} />}
+            <span>{f.isList ? T.views.lists : f.isDevItem || f.isDevList ? devCrumb : inInbox(view) ? T.views.inbox : folderName}</span>
           </div>
           <div className="detail-tools">
             {f.isDevItem && (
@@ -788,7 +790,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
               <div className="side-label">{T.fields.inbox}</div>
               <label className="side-value toggle">
                 <IconInbox size={16} />
-                <span>{f.inbox ? "Im Eingang" : "Einsortiert"}</span>
+                <span>{f.inbox ? (hasDate(view) ? T.planned.inboxDated : "Im Eingang") : "Einsortiert"}</span>
                 <input
                   type="checkbox"
                   checked={f.inbox}

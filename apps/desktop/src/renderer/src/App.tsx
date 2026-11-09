@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { startDevWorkAction, T, type Outcome, type Repository } from "@markdoist/app";
+import { plannedGroupTitle, startDevWorkAction, T, type Outcome, type Repository } from "@markdoist/app";
 import {
   allOpenView,
   DEFAULT_DEV_ITEM_OPTIONS,
@@ -13,6 +13,7 @@ import {
   LIST_FILTER_LABELS,
   LIST_SORT_LABELS,
   matchesFilter,
+  plannedView,
   problemsView,
   search,
   SORT_LABELS,
@@ -67,10 +68,11 @@ import {
   IconTrash,
   IconUndo,
   IconUpcoming,
+  IconAll,
   IconWarning,
 } from "./components/Icons";
 
-type ViewName = "inbox" | "today" | "all" | "done" | "lists" | "waste" | "dev" | "problems" | "trash" | "history";
+type ViewName = "inbox" | "today" | "planned" | "all" | "done" | "lists" | "waste" | "dev" | "problems" | "trash" | "history";
 type FocusField = "due" | "scheduled" | "priority" | "title" | "note";
 
 interface Toast {
@@ -225,6 +227,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           { title: T.today.plannedEarlier, items: filtered(t.plannedEarlier) },
         ];
       }
+      case "planned":
+        return plannedView(idx, tz).map((g) => ({ title: plannedGroupTitle(g, idx.today), items: filtered(g.items) }));
       case "all":
         return [{ title: null, items: filtered(allOpenView(idx, tz)) }];
       case "done":
@@ -323,11 +327,11 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         searchRef.current?.focus();
         return;
       }
-      if (ctrl && ["1", "2", "3", "4", "5", "6", "7"].includes(e.key)) {
+      if (ctrl && ["1", "2", "3", "4", "5", "6", "7", "8"].includes(e.key)) {
         e.preventDefault();
         setOpen(false);
         setQuery("");
-        const next = (["inbox", "today", "all", "done", "lists", "waste", "dev"] as ViewName[])[Number(e.key) - 1]!;
+        const next = (["inbox", "today", "planned", "all", "done", "lists", "waste", "dev"] as ViewName[])[Number(e.key) - 1]!;
         if (next === "lists") setOpenList(null);
         if (next === "waste") setOpenWaste(null);
         if (next === "dev") setOpenDev(null);
@@ -605,7 +609,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           </label>
           {nav("inbox", T.views.inbox, <IconInbox size={24} />, counts.inbox)}
           {nav("today", T.views.today, view === "today" && !query ? <IconToday size={24} day={day} /> : <IconTodayOutline size={24} day={day} />, counts.today)}
-          {nav("all", T.views.all, <IconUpcoming size={24} />)}
+          {nav("planned", T.views.planned, <IconUpcoming size={24} />)}
+          {nav("all", T.views.all, <IconAll size={24} />)}
           {nav("done", T.views.done, <IconDone size={24} />)}
           {nav("lists", T.views.lists, <IconList size={24} />)}
           {nav("waste", T.views.waste, <IconBin size={24} />)}
@@ -943,7 +948,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                   ) : null,
                 )}
                 {!state.loading && !wasteTask && shown.every((s) => s.items.length === 0) && (
-                  <div className="empty">{query ? "Keine Treffer." : T.empty[view as "inbox" | "today" | "all" | "done"]}</div>
+                  <div className="empty">{query ? "Keine Treffer." : T.empty[view as "inbox" | "today" | "planned" | "all" | "done"]}</div>
                 )}
                 {!query && view !== "done" && view !== "waste" && (
                   <button className="add-inline" onClick={() => setCapture(true)}>
@@ -1063,7 +1068,7 @@ const SHORTCUTS: [string, string][] = [
   ["P", "Priorität setzen"],
   ["Entf", "Löschen"],
   ["Ctrl+Z", "Rückgängig"],
-  ["Ctrl+1 … 7", "Eingang, Heute, Alle offenen, Erledigt, Listen, Müllabfuhr, Programmieren"],
+  ["Ctrl+1 … 8", "Eingang, Heute, Geplant, Alle offenen, Erledigt, Listen, Müllabfuhr, Programmieren"],
   ["F5", "Neu einlesen"],
   ["Ctrl + / Ctrl − / Ctrl+0", "Ansicht größer, kleiner, Normalgröße"],
 ];

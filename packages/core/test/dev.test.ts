@@ -10,6 +10,7 @@ import {
   doneView,
   hashText,
   inboxView,
+  plannedView,
   listsView,
   newTaskText,
   readTaskFile,
@@ -79,7 +80,9 @@ describe("Programmieren: Ansichten (4.8)", () => {
   const names = (vs: { task: { fields: { title: string } } }[]) => vs.map((v) => v.task.fields.title);
 
   it("erscheinen in keiner Aufgaben- oder Listenansicht, aber in der Suche", () => {
-    expect(names(inboxView(idx, TZ))).toEqual(["Absturz melden"]);
+    // Die Vergleichsaufgabe hat einen Termin und steht darum in Geplant statt im Eingang (4.1).
+    expect(inboxView(idx, TZ)).toEqual([]);
+    expect(names(plannedView(idx, TZ).flatMap((g) => g.items))).toEqual(["Absturz melden"]);
     expect(names(allOpenView(idx, TZ))).toEqual(["Absturz melden"]);
     expect(names(todayView(idx, TZ).due)).toEqual(["Absturz melden"]);
     expect(doneView(idx).tasks).toEqual([]);

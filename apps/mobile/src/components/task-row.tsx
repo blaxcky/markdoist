@@ -7,7 +7,7 @@ import ReanimatedSwipeable, { type SwipeableMethods } from "react-native-gesture
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { COMPLETE_FADE_MS, T, type CompletionPhase } from "@markdoist/app";
-import type { Temporal, TaskView } from "@markdoist/core";
+import { inInbox, type Temporal, type TaskView } from "@markdoist/core";
 import { dateLabel, toneColor } from "../format";
 import { prioColor, useTheme } from "../theme";
 import { CalendarIcon, ClockIcon, Glyph, InboxIcon } from "./icons";
@@ -66,7 +66,7 @@ export function TaskRow({ view, today, tz, scheduledHint, first = true, last = t
   const ring = prioColor(c, f.priority);
   const due = view.due ? dateLabel(view.due, today, tz, view.overdue) : null;
   const sch = view.scheduled ? dateLabel(view.scheduled, today, tz) : null;
-  const meta = !!(due || sch || view.series || warn || f.status === "in-progress" || (showInbox && f.inbox && !done));
+  const meta = !!(due || sch || view.series || warn || f.status === "in-progress" || (showInbox && inInbox(view) && !done));
   const radius = { borderTopLeftRadius: first ? 12 : 0, borderTopRightRadius: first ? 12 : 0, borderBottomLeftRadius: last ? 12 : 0, borderBottomRightRadius: last ? 12 : 0 };
   return (
     <Animated.View pointerEvents={phase === "leaving" ? "none" : "auto"} style={[{ marginHorizontal: 8, marginBottom: last ? 0 : 2, overflow: "hidden", ...radius }, fadeStyle]}>
@@ -156,7 +156,7 @@ export function TaskRow({ view, today, tz, scheduledHint, first = true, last = t
                   {f.status === "in-progress" && <Text style={{ color: c.p3, fontSize: 13 }}>{T.status["in-progress"]}</Text>}
                   {warn && <Text style={{ color: c.warn, fontSize: 13 }}>⚠ {T.badges.warning}</Text>}
                 </View>
-                {showInbox && f.inbox && !done && (
+                {showInbox && inInbox(view) && !done && (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                     <Text style={{ color: c.muted, fontSize: 13 }}>{T.badges.inbox}</Text>
                     <InboxIcon color={c.muted} size={12} />

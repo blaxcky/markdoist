@@ -1,4 +1,5 @@
 # Datumsauswahl: Der Knopf „Heute“ übernimmt sofort den heutigen Tag (kein OK nötig).
+# Mit Termin verlässt die Aufgabe den Eingang und steht in Heute und Geplant (4.1, AK-02).
 appId: de.markdoist.aufgaben
 ---
 - runFlow: ../launch.yaml
@@ -18,6 +19,12 @@ appId: de.markdoist.aufgaben
 - tapOn:
     id: act-due
 - tapOn: "(?i)heute"
+- assertNotVisible:
+    id: row-Maestro Heute
+- tapOn:
+    id: tab-planned
+- assertVisible:
+    id: row-Maestro Heute
 - tapOn:
     id: tab-today
 - assertVisible:
