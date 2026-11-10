@@ -465,8 +465,9 @@ Zwei Bereiche auf einer Seite. Jede Aufgabe erscheint höchstens einmal [F-Start
 | Bereich | Bedingung | Sortierung [V] |
 |---|---|---|
 | **Fällig** | `status ≠ done` und Datumsteil von `due` ≤ heute | Überfällige zuerst (`due` aufsteigend), dann Priorität absteigend, dann Titel |
-| **Geplant** | `status ≠ done`, Datumsteil von `scheduled` ≤ heute, nicht in „Fällig“. Untergruppen „Heute eingeplant“ und „Früher eingeplant“ (scheduled < heute) | `scheduled` aufsteigend, Priorität, Titel |
+| **Geplant** | `status ≠ done`, Datumsteil von `scheduled` ≤ heute, nicht in „Fällig“. Untergruppen „Heute eingeplant“ und „Früher eingeplant“ (scheduled < heute) | Aufgaben mit `due` zuerst (`due` aufsteigend), dann `scheduled` aufsteigend, Priorität, Titel |
 
+- Fristen gehen in „Heute eingeplant“ und „Früher eingeplant“ vor (Wunsch vom 10.11.2026): Eine eingeplante Aufgabe mit künftiger Frist steht über allen Aufgaben, die nur ein Planungsdatum haben, auch wenn deren Planungsdatum früher liegt. So verschwindet eine Frist nicht unter einer langen Liste von „irgendwann“-Aufgaben, bis sie fällig ist.
 - Steht eine Aufgabe unter „Fällig“, wird ihr `scheduled` als Zusatz gezeigt („geplant Do 15.10.“).
 - Eine überschrittene Frist bekommt die Kennzeichnung „überfällig“. Ein verstrichenes `scheduled` gilt **nicht** als überfällig; es erscheint nur in „Früher eingeplant“.
 - Aufgaben in Heute haben immer einen Termin und stehen darum nie im Eingang (4.1); ein Kennzeichen „Eingang“ entfällt hier seit 09.11.2026.
@@ -1054,6 +1055,7 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | AK-49 | Diktieren (4.9): Nur Programmier-Einträge haben den Diktierknopf. Ohne Schlüssel erscheint der Hinweis und die Einstellungen öffnen sich. Der Schlüssel ist nach dem Speichern nur maskiert sichtbar und steht weder im Aufgabenordner noch im Klartext in den Desktop-Einstellungen. Aufnahme → „Fertig“ schickt das Audio mit dem eingestellten Erkennungsmodell und Deutsch an `/audio/transcriptions` und den Rohtext an `/responses`; der bereinigte Text wird mit Leerzeile an die Notiz angehängt und gespeichert. Scheitert die Bereinigung, kommt der Rohtext; scheitert die Erkennung, bietet „Erneut versuchen“ dieselbe Aufnahme noch einmal an. |
 | AK-50 | Android: Zurück bei offener Tastatur schließt das Eingabeblatt (Erfassung, Listeneintrag, Neue Liste) in einem Schritt, ohne zu erfassen und ohne die Ansicht darunter zu verlassen. Blendet man die Beschreibung wieder aus, bleibt das Blatt offen. |
 | AK-51 | Geplant (4.2a): Offene Aufgaben mit Termin stehen gruppiert nach dem früheren Datum, verstrichene unter „Früher“, dann „Heute“, „Morgen“ und je Tag „Do 15.10.“; Aufgaben ohne Termin, Erledigte, Listen und Programmier-Einträge fehlen. Desktop: Seitenleiste und Ctrl+3; Android: Reiter „Geplant“. |
+| AK-52 | Heute (4.2), Uhr 12.10.: A `scheduled` 01.10. ohne `due`, B `scheduled` 05.10. mit `due` 20.10., C `scheduled` 08.10. mit `due` 15.10. stehen unter „Früher eingeplant“ in der Reihenfolge C, B, A. D `scheduled` heute ohne `due` und E `scheduled` heute mit `due` 14.10. stehen unter „Heute eingeplant“ als E, D. |
 
 ## 10. Build-Plan
 

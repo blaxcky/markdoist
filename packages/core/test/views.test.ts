@@ -129,6 +129,22 @@ describe("Heute (AK-04, AK-05)", () => {
       }),
     );
   });
+  it("AK-52: eingeplante Aufgaben mit Frist stehen vor solchen ohne, nächste Frist zuerst", () => {
+    const idx = buildIndex(
+      [
+        t("A", ["scheduled: 2026-10-01"]),
+        t("B", ["scheduled: 2026-10-05", "due: 2026-10-20"]),
+        t("C", ["scheduled: 2026-10-08", "due: 2026-10-15"]),
+        t("D", ["scheduled: 2026-10-12"]),
+        t("E", ["scheduled: 2026-10-12", "due: 2026-10-14"]),
+      ],
+      clock,
+    );
+    const tv = todayView(idx, TZ);
+    const titles = (l: typeof tv.due) => l.map((v) => v.task.fields.title);
+    expect(titles(tv.plannedEarlier)).toEqual(["C", "B", "A"]);
+    expect(titles(tv.plannedToday)).toEqual(["E", "D"]);
+  });
 });
 
 describe("Überfällig (AK-06, AK-18)", () => {

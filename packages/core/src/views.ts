@@ -367,7 +367,8 @@ export function todayView(idx: Index, tz: string): TodayView {
     if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
     return compareBy(["due", "priority", "title"], tz)(a, b);
   });
-  const planned = compareBy(["scheduled", "priority", "title"], tz);
+  // Mit Frist zuerst (nächste Frist oben), dann nur eingeplante nach `scheduled` (4.2, AK-52).
+  const planned = compareBy(["due", "scheduled", "priority", "title"], tz);
   plannedToday.sort(planned);
   plannedEarlier.sort(planned);
   return { due, plannedToday, plannedEarlier };
