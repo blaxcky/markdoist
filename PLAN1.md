@@ -8,6 +8,8 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 28.10.2026 (M9):** Müllabfuhr mit ICS-Import (4.7), Serien mit fester Terminliste (5.7) und die kompaktere untere Leiste am Handy (4.5). Abnahmenotiz in `docs/ABNAHME.md`.
 
+**Beschlossen am 10.11.2026, noch nicht umgesetzt:** Programmieren als Board mit Art und automatischem Titel (4.10). Ersetzt die Listenansicht aus 4.8 und erweitert 4.9.
+
 **Umgesetzt am 07.11.2026:** Diktieren für Notizen von Programmier-Einträgen (4.9).
 
 **Umgesetzt am 03.11.2026:** Bereich „Programmieren“ (4.8). Desktop-E2E grün; Android-E2E (alle 20 Flows, inkl. Flow 38) am 04.11.2026 grün.
@@ -624,9 +626,9 @@ Wunsch und Entscheidungen vom 03.11.2026 (`.fragen/2026-11-03-2036-programmieren
   - Ein Eintrag trägt `kind: dev-item` und `dev_list: <ID der Liste>`, sonst dieselben Felder. „In Arbeit“ setzt `status: in-progress`; Erledigen setzt wie bei Aufgaben `status: done` und `completedDate`.
   - Der Body eines Eintrags ist seine Notiz. Editor, Vorschau, Entwürfe, Konfliktschutz, Undo und Papierkorb gelten unverändert. `status` und `inbox: false` stehen nur für ältere App-Stände da; dort erscheinen Einträge höchstens unter „Alle offenen“.
   - Eine Liste ohne ID erhält beim ersten neuen Eintrag eine. Einträge ohne oder mit unbekanntem `dev_list` stehen unter „Ohne Liste“, z. B. nach dem Löschen der Liste oder bei einem Sync-Rückstand.
-- **Kein weiteres Merkmal [F]:** keine Art (Idee/Bug/Aufgabe), sie steht bei Bedarf im Titel. Keine Termine, keine Priorität, kein Eingang, keine Wiederholung. Programmier-Listen und Einträge erscheinen nie in Eingang, Heute, Alle offenen, Erledigt oder Listen, wohl aber in der Suche (auch erledigte Einträge).
+- **Kein weiteres Merkmal [F]:** ~~keine Art (Idee/Bug/Aufgabe), sie steht bei Bedarf im Titel.~~ Aufgehoben am 10.11.2026: Einträge haben eine Art (4.10). Keine Termine, keine Priorität, kein Eingang, keine Wiederholung. Programmier-Listen und Einträge erscheinen nie in Eingang, Heute, Alle offenen, Erledigt oder Listen, wohl aber in der Suche (auch erledigte Einträge).
 - **Übersicht:** alle Programmier-Listen mit Fortschritt „erledigt/gesamt“, darunter „Ohne Liste“, wenn es solche Einträge gibt. Sortierung und Filter wie die Listen-Übersicht (4.6), mit eigener Wahl je Sitzung; „Offene Einträge“ zählt offene Eintragsdateien.
-- **Geöffnete Liste:**
+- **Geöffnete Liste:** (Ab 4.10 ein Board; was dort nicht neu geregelt ist, gilt weiter wie hier.)
   - Offene Einträge stehen oben. Die Sortierung ist wählbar nach „Erstellt“ (Standard, neueste zuerst), „Zuletzt geändert“ oder „Titel“, jeweils auf- oder absteigend; Gleichstand nach Titel. Ziehen gibt es nicht [F].
   - Erledigte Einträge stehen im einklappbaren Bereich „Erledigt (n)“, zuletzt erledigte zuerst [F].
   - Der Kreis hat eine Zwischenstufe (Wunsch vom 06.11.2026): Der erste Klick bzw. Tipp auf einen offenen Eintrag setzt ihn „In Arbeit“; der Kreis ist dann links halb gefüllt wie ein Halbmond, der Eintrag bleibt an seiner Stelle. Erst der zweite erledigt ihn, mit demselben Ablauf wie in Listen. Ein erledigter Eintrag wird mit einem Klick wieder offen. Ein Erfolg beim Erledigen wird nicht gemeldet, „In Arbeit“ schon (mit Rückgängig).
@@ -641,7 +643,7 @@ Wunsch und Entscheidungen vom 03.11.2026 (`.fragen/2026-11-03-2036-programmieren
 - **Bedienung:**
   - Desktop: Seitenleiste „Programmieren“, Ctrl+7. Escape führt von der Liste zur Übersicht zurück. „Anzeige“ gilt in der Übersicht für Sortierung und Filter, in einer Liste für die Sortierung der Einträge.
   - Android: „⋯ Mehr → Programmieren“ [F]. Anzeige-Knopf in der Übersicht und in der Kopfzeile der Liste. Langes Drücken auf einen Eintrag für Öffnen und Löschen.
-- **Nicht vorgesehen:** Art oder Schlagworte, Termine, Priorität, Ziehen, Eintrag in eine andere Liste verschieben, automatisches Aufräumen erledigter Einträge.
+- **Nicht vorgesehen:** Schlagworte, Termine, Priorität, Eintrag in eine andere Liste verschieben, automatisches Aufräumen erledigter Einträge. (Art und Ziehen zwischen Spalten am Desktop kommen mit 4.10.)
 
 ### 4.9 Diktieren [F]/[V]
 
@@ -653,7 +655,7 @@ Wunsch vom 07.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben [F];
   - Erkennung mit OpenAI `gpt-transcribe` (`POST /v1/audio/transcriptions`, `languages[]=de`, Listen- und Eintragstitel als `prompt`).
   - Bereinigung mit `gpt-6.1-terra` über die Responses API (`reasoning.effort: low`).
   - Beide Modellnamen stehen in den Einstellungen und sind änderbar.
-- **Netz [F]:** Das ist die einzige Netzfunktion der App. Sie läuft nur mit hinterlegtem Schlüssel und nur auf Knopfdruck. An OpenAI gehen die Aufnahme sowie Listen- und Eintragstitel; der Einstellungstext sagt das.
+- **Netz [F]:** Das ist die einzige Netzfunktion der App (seit 10.11.2026 zusammen mit dem Titelvorschlag aus 4.10). Sie läuft nur mit hinterlegtem Schlüssel und nur auf Knopfdruck. An OpenAI gehen die Aufnahme sowie Listen- und Eintragstitel; der Einstellungstext sagt das.
 - **Ort [F]:** nur im Detail von Programmier-Einträgen, nicht schreibgeschützt.
   - Android: Chip „Diktieren“ neben „Beschreibung“ und „Checkliste“, in der offenen Beschreibungskarte der Knopf „Diktieren“ neben „Checklistenpunkt“.
   - Desktop: Mikrofon-Knopf im Kopf der Beschreibung.
@@ -680,7 +682,44 @@ Wunsch vom 07.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben [F];
 - **Upload am Handy [V, 08.11.2026]:** Die Aufnahme geht nativ über `File.upload` von `expo-file-system` (multipart) hinaus, nicht über React Natives `fetch` mit `FormData`: Dieser Weg scheiterte am Gerät reproduzierbar mit „Network request failed“. Die Bereinigung bleibt bei `fetch` (nur JSON). Netz-, Zeit- und Serverfehler zeigen die technische Ursache in Klammern.
 - **Aufnahmeformat [V]:** Android m4a/AAC mono mit 64 kbit/s (10 min ≈ 5 MB). Desktop WebM/Opus mit 48 kbit/s. Grenze der API: 25 MB. Die Android-Aufnahme liegt im Cache und wird nach Erfolg oder Abbruch gelöscht.
 - **Mikrofon am Desktop [V]:** Electron erlaubt `media` nur für das eigene Fenster und nur Audio; andere Berechtigungsanfragen werden abgelehnt.
-- **Nicht vorgesehen:** Diktieren bei normalen Aufgaben, in Listen oder bei der Erfassung, Einfügen an der Cursorposition, Live-Mitschrift während des Sprechens, andere Anbieter.
+- **Nicht vorgesehen:** Diktieren bei normalen Aufgaben, in Listen oder bei der Erfassung normaler Aufgaben, Einfügen an der Cursorposition, Live-Mitschrift während des Sprechens, andere Anbieter. (Diktieren beim Anlegen eines Programmier-Eintrags kommt mit 4.10.)
+
+### 4.10 Programmieren als Board [F]/[V]
+
+Wunsch und Entscheidungen vom 10.11.2026 (Chat und `.fragen/2026-11-10-2312-tracker-board.md`) [F]; Umsetzung [V]. Entwurf: Design-Leinwand „Markdoist als Tracker – 5 Ansichten“, Ansicht 2 „Board“ und Kern-Fläche „Erfassen“.
+
+- **Zweck [F]:** Programmier-Listen werden ein Bug- und Feature-Tracker statt einer Todo-Liste. Man schreibt oder diktiert nur den Text; Titel und Art schlägt die KI vor. Die Daten bleiben lokale Markdown-Dateien wie in 4.8, keine Datenbank. Normale Aufgaben und Listen (4.6) bleiben unverändert.
+- **Dateien [F]/[V]:**
+  - Neues Feld `dev_type: bug | feature | idea` bei `kind: dev-item`. Fehlt es, hat der Eintrag keine Art; ein unbekannter Wert bleibt erhalten und gilt als keine Art.
+  - Neues Feld `title_pending: true`, solange der Titel nur vorläufig ist (siehe Titel). Es verschwindet, sobald der KI-Titel geschrieben ist oder man den Titel von Hand ändert.
+  - Status wie bisher: `open` (Spalte „Neu“), `in-progress` („In Arbeit“), `done` mit `completedDate` („Erledigt“). Ältere App-Stände ignorieren die neuen Felder.
+  - Bestehende Einträge ohne Art bleiben ohne Art; ihre Karte hat keinen Chip. Die Art lässt sich von Hand setzen. Kein Nachklassifizieren [F].
+- **Board [F]:**
+  - Desktop: drei Spalten nebeneinander, „Neu (n)“, „In Arbeit (n)“, „Erledigt (n)“.
+  - Android: Reiter oben „Neu n · In Arbeit n · Erledigt n“, je Reiter eine volle Kartenliste; Wischen wechselt den Reiter.
+  - „Erledigt“ zeigt die letzten 10, zuletzt erledigte zuerst; darunter „Alle erledigten (n)“ zeigt den Rest.
+  - Neu und In Arbeit sind wie bisher über „Anzeige“ sortierbar (4.8: Erstellt, Zuletzt geändert, Titel).
+  - Filter-Chips über dem Board: „Alle · Bugs · Features · Ideen“, mit eigener Wahl je Sitzung. Einträge ohne Art stehen nur unter „Alle“.
+  - Karte: Art-Chip (Bug, Feature, Idee), Alter („heute“, „gestern“, „3 Tage“ …), Titel, die ersten zwei Zeilen der Notiz als Klartext. Ein vorläufiger Titel steht gedämpft da. Erledigte Karten sind durchgestrichen und blasser.
+- **Spalte wechseln [F]:**
+  - Desktop: Karte zwischen Spalten ziehen. Nach „Erledigt“ setzt `status: done` und `completedDate`, zurück setzt `open` bzw. `in-progress` und entfernt `completedDate`. Ziehen innerhalb einer Spalte ändert nichts; die Reihenfolge kommt aus der Sortierung. Jeder Wechsel ist rückgängig zu machen.
+  - Beide Geräte: Der Kreis auf der Karte folgt der Stufung aus 4.8 (Neu → In Arbeit → Erledigt). Das Menü der Karte (Desktop Rechtsklick, Android langes Drücken) hat „Öffnen“, „Status: Neu / In Arbeit / Erledigt“, „Art: Bug / Feature / Idee / Keine“ und „Löschen“.
+  - Kein Ziehen am Handy [F].
+- **Anlegen [F]:**
+  - Es gibt kein Titelfeld mehr, nur den Text. Desktop: mehrzeiliges Eingabefeld über dem Board mit Mikrofon-Knopf; Strg+Enter legt ab. Android: Plus öffnet das Eingabeblatt mit Textfeld und Mikrofon; Tippen und „Ablegen“ oder Mikrofon antippen.
+  - Das Mikrofon im Eingabeblatt startet die Aufnahme sofort (Ablauf, Fehler und Bedienung wie 4.9). Nach „Fertig“ und Bereinigung wird der Eintrag direkt angelegt, ohne weiteren Tipp, mit „Eintrag angelegt · Rückgängig“ [V]. Das Blatt bleibt für den nächsten Eintrag offen.
+  - Getippter Text kommt unverändert in die Notiz; diktierter Text bereinigt wie in 4.9.
+  - Der Eintrag wird immer sofort gespeichert, mit vorläufigem Titel und `title_pending: true`, damit nichts verloren geht. Danach läuft der Titelvorschlag.
+- **Titel und Art [F]/[V]:**
+  - Modell `gpt-6.1-luna` über die Responses API (`reasoning.effort: low`), mit demselben Schlüssel wie 4.9. Eingabe: die Notiz und der Listentitel. Ausgabe als JSON: ein deutscher Titel (höchstens 80 Zeichen, kein Schlusspunkt) und die Art (`bug`, `feature` oder `idea`) [V].
+  - Vorläufiger Titel: die ersten Wörter der Notiz, an einer Wortgrenze auf höchstens 60 Zeichen gekürzt, mit „…“, wenn gekürzt [V].
+  - Kommt die Antwort, ersetzt sie den vorläufigen Titel und setzt die Art, beides über den normalen Speicherpfad (Konfliktschutz). Hat man inzwischen Titel oder Art von Hand geändert, bleibt die Handänderung.
+  - Ohne Netz, ohne Schlüssel oder bei einem Fehler bleibt der vorläufige Titel, ohne Fehlermeldung. Beim nächsten Öffnen einer Programmier-Liste mit Schlüssel holt die App den Vorschlag für alle Einträge mit `title_pending: true` nach, einen nach dem anderen.
+  - Der Titel passt sich später nicht an geänderten Text an [F]. Im Detail gibt es neben dem Titel „Neu vorschlagen“; das ersetzt den Titel (mit Rückgängig), die Art nur, wenn sie noch fehlt.
+  - Der Titel ist im Detail wie bisher von Hand änderbar; das entfernt `title_pending`.
+- **Detail:** wie 4.8, dazu die Art (Desktop Auswahl, Android Chip mit Menü) und „Neu vorschlagen“ am Titel. Unter dem Titel steht klein „Titel automatisch“, solange er von der KI stammt und nicht von Hand geändert wurde [V].
+- **Einstellungen „Diktieren“** bekommen zusätzlich das Modell für den Titel (Standard `gpt-6.1-luna`) und den Schalter „Titel und Art vorschlagen“ (Standard an). Der Einstellungstext nennt, dass dafür Notiz und Listentitel an OpenAI gehen.
+- **Nicht vorgesehen [F]:** Nummern für Einträge, automatische Wahl der Liste, Ziehen am Handy, Reihenfolge per Ziehen innerhalb einer Spalte, weitere Arten, automatisches Nachziehen des Titels nach Textänderungen, nachträgliches Einordnen alter Einträge per KI.
 
 ## 5. Wiederholungen
 
@@ -1057,6 +1096,8 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | AK-50 | Android: Zurück bei offener Tastatur schließt das Eingabeblatt (Erfassung, Listeneintrag, Neue Liste) in einem Schritt, ohne zu erfassen und ohne die Ansicht darunter zu verlassen. Blendet man die Beschreibung wieder aus, bleibt das Blatt offen. |
 | AK-51 | Geplant (4.2a): Offene Aufgaben mit Termin stehen gruppiert nach dem früheren Datum, verstrichene unter „Früher“, dann „Heute“, „Morgen“ und je Tag „Do 15.10.“; Aufgaben ohne Termin, Erledigte, Listen und Programmier-Einträge fehlen. Desktop: Seitenleiste und Ctrl+3; Android: Reiter „Geplant“. |
 | AK-52 | Heute (4.2), Uhr 12.10.: A `scheduled` 01.10. ohne `due`, B `scheduled` 05.10. mit `due` 20.10., C `scheduled` 08.10. mit `due` 15.10. stehen unter „Früher eingeplant“ in der Reihenfolge C, B, A. D `scheduled` heute ohne `due` und E `scheduled` heute mit `due` 14.10. stehen unter „Heute eingeplant“ als E, D. |
+| AK-53 | Board (4.10): Eine Programmier-Liste zeigt am Desktop die Spalten Neu, In Arbeit, Erledigt, am Handy die gleichnamigen Reiter, jeweils mit Anzahl. „Erledigt“ zeigt höchstens 10 Karten, zuletzt erledigte zuerst, und „Alle erledigten (n)“. Die Filter-Chips zeigen nur Einträge mit passendem `dev_type`; Einträge ohne Art nur unter „Alle“. Ziehen einer Karte am Desktop nach „Erledigt“ setzt `status: done` und `completedDate`, zurück nach „Neu“ setzt `status: open` ohne `completedDate`; beides ist rückgängig zu machen. |
+| AK-54 | Anlegen (4.10): Ein Text ohne Titel ergibt sofort eine Datei mit `kind: dev-item`, vorläufigem Titel aus den ersten Wörtern und `title_pending: true`. Mit gestellter KI-Antwort ersetzt der Titel den vorläufigen, `dev_type` ist gesetzt und `title_pending` fehlt. Ohne Schlüssel oder Netz bleibt der vorläufige Titel ohne Fehlermeldung und wird beim nächsten Öffnen der Liste mit Schlüssel nachgeholt. Ein von Hand geänderter Titel wird nie von der KI überschrieben. Diktieren im Eingabeblatt legt nach „Fertig“ den Eintrag ohne weiteren Tipp an. |
 
 ## 10. Build-Plan
 
