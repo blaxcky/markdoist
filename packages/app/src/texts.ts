@@ -1,5 +1,5 @@
 // Zentrale deutsche Texte (Plan 4.5).
-import type { PlannedGroup, Priority, Status, Temporal } from "@markdoist/core";
+import type { DevType, DevTypeFilter, PlannedGroup, Priority, Status, Temporal } from "@markdoist/core";
 import type { WriteResult } from "./storage";
 import { T_DICTATION } from "./dictation";
 
@@ -42,6 +42,26 @@ export const T = {
     copy: "Titel und Notiz kopieren",
     copied: "Kopiert",
     copyFailed: "Kopieren fehlgeschlagen",
+    // Board (4.10)
+    columns: { open: "Neu", work: "In Arbeit", done: "Erledigt" },
+    statusNew: "Neu",
+    typeLabels: { bug: "Bug", feature: "Feature", idea: "Idee" } satisfies Record<DevType, string>,
+    noType: "Keine Art",
+    typeMenu: "Art",
+    filters: { all: "Alle", bug: "Bugs", feature: "Features", idea: "Ideen" } satisfies Record<DevTypeFilter, string>,
+    composePlaceholder: "Was ist dir aufgefallen? Titel und Art ergänzt Markdoist.",
+    composeHint: "Strg+Enter legt ab",
+    file: "Ablegen",
+    created: "Eintrag angelegt",
+    allDone: (n: number) => `Alle erledigten (${n})`,
+    fewerDone: "Weniger erledigte",
+    titlePending: "Titel folgt",
+    titleAuto: "Titel automatisch",
+    suggestTitle: "Neu vorschlagen",
+    suggesting: "Wird vorgeschlagen …",
+    suggestFailed: "Kein Vorschlag",
+    age: (days: number) => (days <= 0 ? "heute" : days === 1 ? "gestern" : days < 14 ? `${days} Tage` : days < 60 ? `${Math.floor(days / 7)} Wochen` : `${Math.floor(days / 30)} Monate`),
+    moveTo: (col: string) => `Nach „${col}“`,
   },
   lists: {
     newList: "Neue Liste",

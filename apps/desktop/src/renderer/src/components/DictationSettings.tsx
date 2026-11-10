@@ -1,4 +1,4 @@
-// Einstellungen „Diktieren“ (4.9): Schlüssel nur maskiert, Modelle, Bereinigung an/aus.
+// Einstellungen „Diktieren“ (4.9, 4.10): Schlüssel nur maskiert, Modelle, Bereinigung und Titelvorschlag an/aus.
 import { useEffect, useState } from "react";
 import { T } from "@markdoist/app";
 import { bridge, type DictationStatus } from "../bridge";
@@ -9,13 +9,13 @@ export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
   const dialog = useDialog<HTMLDivElement>(onClose);
   const [st, setSt] = useState<DictationStatus | null>(null);
   const [key, setKey] = useState("");
-  const [models, setModels] = useState({ transcribeModel: "", cleanupModel: "" });
+  const [models, setModels] = useState({ transcribeModel: "", cleanupModel: "", titleModel: "" });
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const apply = (s: DictationStatus) => {
     setSt(s);
-    setModels({ transcribeModel: s.settings.transcribeModel, cleanupModel: s.settings.cleanupModel });
+    setModels({ transcribeModel: s.settings.transcribeModel, cleanupModel: s.settings.cleanupModel, titleModel: s.settings.titleModel });
   };
   useEffect(() => void bridge().dictation.status().then(apply), []);
   if (!st) return null;
@@ -107,6 +107,30 @@ export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
             onBlur={saveModels}
             spellCheck={false}
             data-testid="dictation-model-cleanup"
+          />
+        </div>
+        <label className="menu-row" style={{ padding: 0 }}>
+          <input
+            type="checkbox"
+            checked={st.settings.autoTitle}
+            onChange={(e) => void bridge().dictation.setSettings({ ...models, autoTitle: e.target.checked }).then(apply)}
+            data-testid="dictation-auto-title"
+          />
+          <span>
+            {D.autoTitle}
+            <br />
+            <span className="hint">{D.autoTitleHint}</span>
+          </span>
+        </label>
+        <div className="fields" style={{ gridTemplateColumns: "180px 1fr" }}>
+          <label htmlFor="dictation-model-title">{D.modelTitle}</label>
+          <input
+            id="dictation-model-title"
+            value={models.titleModel}
+            onChange={(e) => setModels((m) => ({ ...m, titleModel: e.target.value }))}
+            onBlur={saveModels}
+            spellCheck={false}
+            data-testid="dictation-model-title"
           />
         </div>
         <div className="buttons">

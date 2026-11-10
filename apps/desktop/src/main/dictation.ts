@@ -6,11 +6,13 @@ import {
   maskKey,
   parseDictationSettings,
   runDictation,
+  suggestTitle,
   type DictationContext,
   type DictationErrorKind,
   type DictationResult,
   type DictationSettings,
   type FetchLike,
+  type TitleSuggestion,
 } from "@markdoist/app";
 
 /** Teil von Electrons safeStorage, den der Dienst braucht (für Tests ersetzbar). */
@@ -35,6 +37,8 @@ export interface DictationStatus {
   insecure: boolean;
   settings: DictationSettings;
 }
+
+export type TitleResult = { ok: true; suggestion: TitleSuggestion } | { ok: false; kind: DictationErrorKind | "off" };
 
 export type DictationRunResult = { ok: true; result: DictationResult } | { ok: false; kind: DictationErrorKind };
 
@@ -119,6 +123,28 @@ export class DictationService {
         },
       });
       return { ok: true, result };
+    } catch (e) {
+      return { ok: false, kind: e instanceof DictationError ? e.kind : "server" };
+    }
+  }
+
+  /**
+   * Titel und Art eines Programmier-Eintrags (4.10). Ohne `force` nur, wenn „Titel und Art vorschlagen“
+   * eingeschaltet ist; „Neu vorschlagen“ im Detail fragt immer.
+   */
+  async suggestTitle(note: string, list: string, force = false): Promise<TitleResult> {
+    const settings = this.settings();
+    if (!force && !settings.autoTitle) return { ok: false, kind: "off" };
+    try {
+      const suggestion = await suggestTitle({
+        fetch: this.fetch,
+        key: this.key() ?? "",
+        model: settings.titleModel,
+        note: typeof note === "string" ? note : "",
+        list: typeof list === "string" ? list : "",
+        baseUrl: this.baseUrl,
+      });
+      return { ok: true, suggestion };
     } catch (e) {
       return { ok: false, kind: e instanceof DictationError ? e.kind : "server" };
     }

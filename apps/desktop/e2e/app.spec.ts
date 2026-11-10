@@ -592,64 +592,100 @@ test("Listen: X zum Löschen bleibt erreichbar, wenn die Maus aus der Zeile hin�
   await expect(next.locator(".row-actions")).toHaveCSS("opacity", "1");
 });
 
-test("Programmieren: Liste anlegen, Eintrag mit Notiz, erledigen, Erledigte entfernen, Liste löschen (4.8)", async () => {
+test("Programmieren als Board: Text ablegen, Art, Filter, Ziehen, erledigen, Liste löschen (4.8, 4.10, AK-53)", async () => {
+  test.setTimeout(120_000);
   await page.keyboard.press("Control+8");
   await expect(page.getByTestId("dev-empty")).toBeVisible();
   await page.getByTestId("new-dev-list").click();
   await page.getByTestId("new-dev-list-title").fill("Markdoist");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("dev-title")).toHaveText("Markdoist");
+  // Nur Text, kein Titelfeld; Strg+Enter legt ab, Enter bricht um.
   const add = page.getByTestId("dev-add-item");
   await expect(add).toBeFocused();
-  await add.fill("Bug: Absturz unter Mesa");
+  await add.fill("Absturz unter Mesa");
   await add.press("Enter");
+  await add.pressSequentially("Beim Start mit Mesa 26");
+  await add.press("Control+Enter");
+  await expect(add).toHaveValue("");
   await add.fill("Idee: Programmieren-Bereich");
-  await add.press("Enter");
+  await add.press("Control+Enter");
   const item = (t: string) => page.locator(`[data-testid="dev-item-row"][data-text="${t}"]`);
-  await expect(item("Bug: Absturz unter Mesa")).toBeVisible();
+  const first = item("Absturz unter Mesa Beim Start mit Mesa 26");
+  await expect(first).toBeVisible();
+  await expect(first.locator(".dev-pending")).toHaveText("Titel folgt");
+  // Der Auszug wiederholt einen vorläufigen Titel nicht.
+  await expect(first.getByTestId("dev-item-note")).toHaveCount(0);
+  await expect(page.getByTestId("dev-col-open").getByTestId("dev-item-row")).toHaveCount(2);
   const listId = /\nid: (\S+)\n/.exec(await file("Markdoist.md"))![1];
-  await expect.poll(() => file("Bug Absturz unter Mesa.md")).toContain(`kind: dev-item\ndev_list: ${listId}\n`);
+  const name = "Absturz unter Mesa Beim Start mit Mesa 26.md";
+  await expect.poll(() => file(name)).toContain(`kind: dev-item\ndev_list: ${listId}\ntitle_pending: true\n`);
+  expect(await file(name)).toMatch(/---\nAbsturz unter Mesa\nBeim Start mit Mesa 26\n$/);
 
-  // Notiz wie bei Aufgaben; Termine, Eingang und Priorität gibt es nicht.
-  await item("Bug: Absturz unter Mesa").getByTestId("dev-item-open").click();
+  // Detail: Art wählen, Titel von Hand ändern (dann nie mehr vorläufig), kopieren.
+  await first.getByTestId("dev-item-open").click();
   await expect(page.getByTestId("detail")).toBeVisible();
   await expect(page.locator(".detail-head .crumb")).toHaveText("Programmieren · Markdoist");
   await expect(page.getByTestId("field-inbox")).toHaveCount(0);
-  await page.locator(".cm-content").click();
-  await page.keyboard.type("Nur mit Mesa 26.");
-  await expect(page.getByTestId("save-state")).toHaveText("Gespeichert", { timeout: 5000 });
-  expect(await file("Bug Absturz unter Mesa.md")).toMatch(/---\nNur mit Mesa 26\.\n?$/);
-  // Kopier-Icon: Titel und Notiz in einem Stück, z. B. für die KI.
+  await expect(page.getByTestId("dev-title-pending")).toBeVisible();
+  await page.getByTestId("dev-type-select").selectOption("bug");
+  await expect.poll(() => file(name)).toContain("dev_type: bug\n");
+  await page.getByTestId("field-title").fill("Bug: Absturz unter Mesa");
+  await page.getByTestId("field-title").press("Enter");
+  await expect.poll(() => file(name)).toMatch(/title: "?Bug: Absturz unter Mesa"?\n/);
+  expect(await file(name)).not.toContain("title_pending");
+  await expect(page.getByTestId("dev-title-pending")).toHaveCount(0);
   await page.getByTestId("copy-item").click();
   await expect(page.getByTestId("toast")).toHaveText("Kopiert");
-  expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe("Bug: Absturz unter Mesa\n\nNur mit Mesa 26.");
+  expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe("Bug: Absturz unter Mesa\n\nAbsturz unter Mesa\nBeim Start mit Mesa 26");
   await page.getByTestId("detail").getByRole("button", { name: "Schließen", exact: true }).click();
-  await expect(item("Bug: Absturz unter Mesa").getByTestId("dev-item-note")).toBeVisible();
+  const bug = item("Bug: Absturz unter Mesa");
+  await expect(bug.getByTestId("dev-type")).toHaveText("Bug");
 
-  // Erster Klick: In Arbeit (halber Kreis), der Eintrag bleibt offen.
-  const check = item("Bug: Absturz unter Mesa").getByTestId("dev-item-check");
+  // Filter nach Art: Einträge ohne Art nur unter „Alle“.
+  await expect(page.getByTestId("dev-filter-bug")).toContainText("1");
+  await page.getByTestId("dev-filter-bug").click();
+  await expect(page.getByTestId("dev-item-row")).toHaveCount(1);
+  await page.getByTestId("dev-filter-idea").click();
+  await expect(page.getByTestId("dev-item-row")).toHaveCount(0);
+  await page.getByTestId("dev-filter-all").click();
+  await expect(page.getByTestId("dev-item-row")).toHaveCount(2);
+
+  // Erster Klick: In Arbeit (halber Kreis), die Karte wandert in die mittlere Spalte.
+  const check = bug.getByTestId("dev-item-check");
   await check.click();
   await expect(check).toHaveAttribute("aria-checked", "mixed");
-  await expect.poll(() => file("Bug Absturz unter Mesa.md")).toContain("status: in-progress");
-  await expect(page.getByTestId("dev-done-toggle")).toHaveCount(0);
-  // Im Detail ebenfalls halb; „Nicht mehr in Arbeit“ setzt ihn zurück auf offen.
-  await item("Bug: Absturz unter Mesa").getByTestId("dev-item-open").click();
+  await expect.poll(() => file(name)).toContain("status: in-progress");
+  await expect(page.getByTestId("dev-col-work").getByTestId("dev-item-row")).toHaveCount(1);
+  // Im Detail ebenfalls halb; „Nicht mehr in Arbeit“ setzt ihn zurück auf Neu.
+  await bug.getByTestId("dev-item-open").click();
   await expect(page.locator(".detail .check.big")).toHaveAttribute("aria-checked", "mixed");
   await page.getByTestId("detail-more").click();
   await page.getByTestId("stop-work").click();
-  await expect.poll(() => file("Bug Absturz unter Mesa.md")).toContain("status: open");
+  await expect.poll(() => file(name)).toContain("status: open");
   await page.getByTestId("detail").getByRole("button", { name: "Schließen", exact: true }).click();
-  await expect(check).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByTestId("dev-col-open").getByTestId("dev-item-row")).toHaveCount(2);
 
-  // Zwei Klicks erledigen: wandert nach „Erledigt“, erscheint nirgends zwischen den Aufgaben.
+  // Ziehen nach „Erledigt“ setzt completedDate, zurück nach „Neu“ entfernt es; Rückgängig geht.
+  await bug.dragTo(page.getByTestId("dev-col-done"));
+  await expect.poll(() => file(name)).toContain("status: done");
+  expect(await file(name)).toContain("completedDate: ");
+  await expect(page.getByTestId("dev-col-count-done")).toHaveText("1");
+  await bug.dragTo(page.getByTestId("dev-col-open"));
+  await expect.poll(() => file(name)).toContain("status: open");
+  expect(await file(name)).not.toContain("completedDate");
+  // Menü der Karte: Status setzen
+  await bug.getByTestId("dev-card-menu").click();
+  await page.getByTestId("dev-move-work").click();
+  await expect.poll(() => file(name)).toContain("status: in-progress");
+
+  // Kreis aus „In Arbeit“ erledigt: wandert nach „Erledigt“, erscheint nirgends zwischen den Aufgaben.
   await check.click();
-  await expect(check).toHaveAttribute("aria-checked", "mixed");
-  await check.click();
-  await expect.poll(() => file("Bug Absturz unter Mesa.md")).toContain("status: done");
-  await expect(page.getByTestId("dev-done-toggle")).toContainText("1");
+  await expect.poll(() => file(name)).toContain("status: done");
+  await expect(page.getByTestId("dev-col-count-done")).toHaveText("1");
   await page.getByTestId("dev-menu").click();
   await page.getByTestId("dev-remove-done").click();
-  await expect.poll(() => readdir(folder)).not.toContain("Bug Absturz unter Mesa.md");
+  await expect.poll(() => readdir(folder)).not.toContain(name);
   for (const nav of ["nav-inbox", "nav-all", "nav-done", "nav-lists"]) {
     await page.getByTestId(nav).click();
     await expect(page.getByText("Idee: Programmieren-Bereich")).toHaveCount(0);
@@ -754,7 +790,7 @@ test("Müllabfuhr: ICS importieren, Abfuhrart öffnen, Termin überspringen, ern
   await expect(page.getByTestId("waste-import-apply")).toBeDisabled();
 });
 
-test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler und erneuter Versuch (4.9)", async () => {
+test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, erneuter Versuch und Titelvorschlag (4.9, 4.10)", async () => {
   // Lokaler Ersatz für die OpenAI-API; das Mikrofon liefert Chromiums Testton.
   const seen: { path: string; auth: string; body: string }[] = [];
   let mode: "ok" | "401" = "ok";
@@ -767,7 +803,10 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler un
       res.setHeader("Content-Type", "application/json");
       if (mode === "401") return void res.writeHead(401).end("{}");
       if (req.url === "/v1/audio/transcriptions") return void res.end(JSON.stringify({ text: "äh also der Knopf soll äh rot sein" }));
-      if (req.url === "/v1/responses") return void res.end(JSON.stringify({ output: [{ type: "reasoning" }, { type: "message", content: [{ type: "output_text", text: "Der Knopf soll rot sein." }] }] }));
+      const out = (text: string) => res.end(JSON.stringify({ output: [{ type: "reasoning" }, { type: "message", content: [{ type: "output_text", text }] }] }));
+      // Titelvorschlag (4.10): strukturierte Ausgabe
+      if (req.url === "/v1/responses" && body.includes('"json_schema"')) return void out(JSON.stringify({ title: "Knopf rot färben", type: "feature" }));
+      if (req.url === "/v1/responses") return void out("Der Knopf soll rot sein.");
       res.end(JSON.stringify({ data: [] }));
     });
   });
@@ -796,8 +835,10 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler un
     await page.keyboard.press("Enter");
     const add = page.getByTestId("dev-add-item");
     await add.fill("Farbe des Knopfs");
-    await add.press("Enter");
+    await add.press("Control+Enter");
+    // Ohne Schlüssel kein Vorschlag: Der vorläufige Titel bleibt, ohne Fehlermeldung.
     const item = page.locator('[data-testid="dev-item-row"][data-text="Farbe des Knopfs"]');
+    await expect(item.locator(".dev-pending")).toBeVisible();
     await item.getByTestId("dev-item-open").click();
 
     // Ohne Schlüssel: Hinweis und Einstellungen öffnen sich.
@@ -817,9 +858,9 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler un
     await expect(page.getByTestId("dictate-state")).toContainText("Aufnahme");
     await page.waitForTimeout(1500);
     await page.getByTestId("dictate-stop").click();
-    await expect(page.locator(".cm-content")).toHaveText("Der Knopf soll rot sein.");
+    await expect(page.locator(".cm-content")).toHaveText(/Farbe des Knopfs\s*Der Knopf soll rot sein\./);
     await expect(page.getByTestId("save-state")).toHaveText("Gespeichert", { timeout: 5000 });
-    expect(await file("Farbe des Knopfs.md")).toMatch(/---\nDer Knopf soll rot sein\.\n$/);
+    expect(await file("Farbe des Knopfs.md")).toMatch(/---\nFarbe des Knopfs\n\nDer Knopf soll rot sein\.\n$/);
     const upload = seen.find((s) => s.path === "/v1/audio/transcriptions")!;
     expect(upload.auth).toBe("Bearer sk-test-e2e-geheim-1234");
     expect(upload.body).toContain('filename="diktat.webm"');
@@ -837,8 +878,30 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler un
     mode = "ok";
     await page.getByTestId("dictate-retry").click();
     await expect(page.locator(".cm-content")).toHaveText(/Der Knopf soll rot sein\.\s*Der Knopf soll rot sein\./);
-    await expect.poll(() => file("Farbe des Knopfs.md")).toMatch(/---\nDer Knopf soll rot sein\.\n\nDer Knopf soll rot sein\.\n$/);
+    await expect.poll(() => file("Farbe des Knopfs.md")).toMatch(/---\nFarbe des Knopfs\n\nDer Knopf soll rot sein\.\n\nDer Knopf soll rot sein\.\n$/);
     await expect(page.getByTestId("dictate")).toBeVisible();
+
+    // „Neu vorschlagen“ im Detail: Titel und Art von der KI (4.10).
+    await page.getByTestId("dev-suggest-title").click();
+    await expect(page.getByTestId("field-title")).toHaveValue("Knopf rot färben");
+    await expect.poll(() => file("Farbe des Knopfs.md")).toContain("dev_type: feature\n");
+    expect(await file("Farbe des Knopfs.md")).not.toContain("title_pending");
+    expect(seen.filter((x) => x.body.includes('"json_schema"')).at(-1)!.body).toContain('"model":"gpt-6.1-luna"');
+    await page.getByTestId("detail").getByRole("button", { name: "Schließen", exact: true }).click();
+
+    // Diktieren im Eingabefeld des Boards legt den Eintrag direkt an; Titel und Art folgen (AK-54).
+    const before = seen.length;
+    await page.getByTestId("dev-dictate").click();
+    await expect(page.getByTestId("dictate-state")).toContainText("Aufnahme");
+    await page.waitForTimeout(800);
+    await page.getByTestId("dictate-stop").click();
+    await expect(page.getByTestId("toast")).toContainText("Eintrag angelegt");
+    await expect(page.locator('[data-testid="dev-item-row"][data-text="Knopf rot färben"]')).toHaveCount(2);
+    expect(seen.slice(before).map((x) => x.path)).toEqual(["/v1/audio/transcriptions", "/v1/responses", "/v1/responses"]);
+    const created = (await readdir(folder)).find((n) => n.startsWith("Der Knopf soll rot sein"))!;
+    await expect.poll(() => file(created)).toContain("dev_type: feature\n");
+    expect(await file(created)).toMatch(/title: Knopf rot färben\n/);
+    expect(await file(created)).toMatch(/---\nDer Knopf soll rot sein\.\n$/);
   } finally {
     server.close();
   }

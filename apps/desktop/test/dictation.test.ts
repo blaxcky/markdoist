@@ -55,7 +55,7 @@ describe("Diktieren am Desktop (4.9)", () => {
     await svc.setSettings({ transcribeModel: "x-transcribe", cleanup: false });
     const st = await svc.clearKey();
     expect(st.hasKey).toBe(false);
-    expect(stored()).toEqual({ transcribeModel: "x-transcribe", cleanupModel: "gpt-6.1-terra", cleanup: false });
+    expect(stored()).toEqual({ transcribeModel: "x-transcribe", cleanupModel: "gpt-6.1-terra", cleanup: false, titleModel: "gpt-6.1-luna", autoTitle: true });
     expect(svc.settings().transcribeModel).toBe("x-transcribe");
   });
 

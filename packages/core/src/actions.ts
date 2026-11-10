@@ -31,6 +31,7 @@ import {
 import {
   BASE_FORMAT_VERSION,
   DATE_LIST_FORMAT_VERSION,
+  type DevType,
   type Priority,
   type Status,
   type Task,
@@ -60,6 +61,13 @@ export type TaskAction =
   | { type: "setPriority"; priority: Priority }
   | { type: "setInbox"; inbox: boolean }
   | { type: "setTitle"; title: string }
+  /** Art eines Programmier-Eintrags setzen oder (`null`) entfernen (4.10) */
+  | { type: "setDevType"; devType: DevType | null }
+  /**
+   * KI-Titel eines Programmier-Eintrags übernehmen (4.10). Ohne `force` nur, solange der Titel
+   * vorläufig ist; die Art nur, wenn noch keine gesetzt ist.
+   */
+  | { type: "applyTitleSuggestion"; title: string; devType: DevType | null; force: boolean }
   | { type: "setDate"; field: "due" | "scheduled"; value: string | null }
   | { type: "setBody"; body: string }
   /** `expect`: angezeigter Eintragstext; weicht die Zeile inzwischen ab, wird nichts geschrieben (4.6). */
@@ -365,7 +373,26 @@ function planInner(
     case "setTitle": {
       const t = action.title.trim();
       if (!t) return blocked("Titel darf nicht leer sein");
-      return { kind: "edit", set: { title: t }, remove: [] };
+      // Ein von Hand gesetzter Titel ist nie mehr vorläufig (4.10).
+      return { kind: "edit", set: { title: t }, remove: "title_pending" in task.data ? ["title_pending"] : [] };
+    }
+    case "setDevType": {
+      if (!task.fields.isDevItem) return blocked("Nur Programmier-Einträge haben eine Art");
+      if (action.devType === null) return "dev_type" in task.data ? { kind: "edit", set: {}, remove: ["dev_type"] } : noop;
+      if (task.data.dev_type === action.devType) return noop;
+      return { kind: "edit", set: { dev_type: action.devType }, remove: [] };
+    }
+    case "applyTitleSuggestion": {
+      if (!task.fields.isDevItem) return blocked("Nur Programmier-Einträge haben einen KI-Titel");
+      if (!action.force && !task.fields.titlePending) return noop;
+      const t = action.title.trim();
+      if (!t) return noop;
+      const set: Record<string, YamlValue> = {};
+      if (t !== task.fields.title) set.title = t;
+      if (action.devType && !task.fields.devType) set.dev_type = action.devType;
+      const remove = "title_pending" in task.data ? ["title_pending"] : [];
+      if (!Object.keys(set).length && !remove.length) return noop;
+      return { kind: "edit", set, remove };
     }
     case "setBody":
       return { kind: "edit", set: {}, remove: [], body: action.body };
@@ -923,6 +950,10 @@ export interface NewTaskInput {
   kind?: "list" | "dev-list" | "dev-item";
   /** bei `dev-item`: ID der Programmier-Liste */
   devList?: string;
+  /** bei `dev-item`: Art (4.10) */
+  devType?: DevType | null;
+  /** bei `dev-item`: Titel ist vorläufig, die KI ersetzt ihn (4.10) */
+  titlePending?: boolean;
 }
 
 /** Felder, die eine neue Liste über die Aufgabenstandards hinaus bzw. abweichend erhält (4.6). */
@@ -931,7 +962,14 @@ export const NEW_LIST_DATA = { kind: "list", inbox: false } as const;
 /** Wie `NEW_LIST_DATA` für eine neue Programmier-Liste bzw. einen Eintrag (4.8). */
 export function newDevData(input: NewTaskInput): Record<string, string | boolean> | null {
   if (input.kind === "dev-list") return { kind: "dev-list", inbox: false };
-  if (input.kind === "dev-item") return { kind: "dev-item", dev_list: input.devList ?? "", inbox: false };
+  if (input.kind === "dev-item")
+    return {
+      kind: "dev-item",
+      dev_list: input.devList ?? "",
+      ...(input.devType ? { dev_type: input.devType } : {}),
+      ...(input.titlePending ? { title_pending: true } : {}),
+      inbox: false,
+    };
   return null;
 }
 
@@ -951,6 +989,8 @@ export function newTaskText(input: NewTaskInput, ctx: ActionContext): { id: stri
         ["title", input.title.trim()],
         ["kind", input.kind],
         ["dev_list", input.kind === "dev-item" ? input.devList : undefined],
+        ["dev_type", input.kind === "dev-item" && input.devType ? input.devType : undefined],
+        ["title_pending", input.kind === "dev-item" && input.titlePending ? true : undefined],
         ["status", "open"],
         ["inbox", false],
         ["dateCreated", now],

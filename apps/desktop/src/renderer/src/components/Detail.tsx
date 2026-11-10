@@ -14,6 +14,7 @@ import {
   skippedBeyondStrip,
   startDevWorkAction,
   stripByMonth,
+  suggestDevTitle,
   T,
   type DictationResult,
   type Outcome,
@@ -23,10 +24,12 @@ import {
 import {
   describeOccurrence,
   describeSeries,
+  DEV_TYPES,
   devIndex,
   formatGermanDate,
   parseKey,
   Temporal,
+  type DevType,
   type Priority,
   type Status,
   type TaskAction,
@@ -36,6 +39,7 @@ import {
 } from "@markdoist/core";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { DictateButton } from "./DictateButton";
+import { suggestTitleForced } from "../bridge";
 import { RecurrenceEditor } from "./RecurrenceEditor";
 import { DateListEditor } from "./Waste";
 import { Menu, MenuItem } from "./Menu";
@@ -134,6 +138,7 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
   const [editRule, setEditRule] = useState<false | "edit" | "continue">(false);
   const [extraException, setExtraException] = useState("");
   const [menu, setMenu] = useState<false | "task" | "series">(false);
+  const [suggesting, setSuggesting] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef(false);
@@ -440,6 +445,46 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                 data-testid="field-title"
               />
             </div>
+            {f.isDevItem && (
+              <div className="dev-meta" data-testid="dev-meta">
+                <label htmlFor="dev-type-select">{T.dev.typeMenu}</label>
+                <select
+                  id="dev-type-select"
+                  value={f.devType ?? ""}
+                  disabled={ro}
+                  onChange={(e) => {
+                    const devType = (e.target.value || null) as DevType | null;
+                    void act({ type: "setDevType", devType }, `${T.dev.typeMenu}: ${devType ? T.dev.typeLabels[devType] : T.dev.noType}`);
+                  }}
+                  data-testid="dev-type-select"
+                >
+                  <option value="">{T.dev.noType}</option>
+                  {DEV_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {T.dev.typeLabels[t]}
+                    </option>
+                  ))}
+                </select>
+                {f.titlePending && <span className="dev-pending" data-testid="dev-title-pending">{T.dev.titlePending}</span>}
+                <span className="spacer" />
+                {!ro && (
+                  <button
+                    className="btn small"
+                    disabled={suggesting}
+                    onClick={() => {
+                      setSuggesting(true);
+                      void flush()
+                        .then(() => suggestDevTitle(repo, ref, suggestTitleForced, true))
+                        .then((o) => onOutcome(o, T.dev.suggestTitle))
+                        .finally(() => setSuggesting(false));
+                    }}
+                    data-testid="dev-suggest-title"
+                  >
+                    {suggesting ? T.dev.suggesting : T.dev.suggestTitle}
+                  </button>
+                )}
+              </div>
+            )}
             {view.diagnostics.map((d, i) => (
               <div key={i} className={`diag ${d.severity === "error" ? "error" : d.severity === "info" ? "info" : "warn"}`}>
                 {d.message}

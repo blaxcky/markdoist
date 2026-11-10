@@ -1,4 +1,4 @@
-# Diktieren (4.9): Knopf nur bei Programmier-Einträgen; ohne Schlüssel Hinweis und Einstellungen;
+# Diktieren (4.9, 4.10): Knopf nur bei Programmier-Einträgen und im Eingabeblatt eines Boards; ohne Schlüssel Hinweis und Einstellungen;
 # Schlüssel speichern (nur maskiert sichtbar) und entfernen; Aufnahme starten und abbrechen.
 # Netz und OpenAI prüft Maestro nicht (kein echter Schlüssel im Test).
 appId: de.markdoist.aufgaben
@@ -16,16 +16,18 @@ appId: de.markdoist.aufgaben
 - tapOn:
     id: fab-add-dev-item
 - inputText: "Sprachnotiz"
-- pressKey: Enter
+- tapOn:
+    id: add-item-send
 - tapOn:
     id: sheet-close
 - tapOn:
     id: "text-Sprachnotiz"
+# Die Notiz enthält schon den Text, darum steht „Diktieren“ in der Beschreibungskarte.
 - assertVisible:
-    id: dictate-chip
+    id: dictate
 # Ohne Schlüssel: Hinweis, dann die Einstellungen
 - tapOn:
-    id: dictate-chip
+    id: dictate
 - extendedWaitUntil:
     visible: ".*API-Schlüssel in den Einstellungen.*"
     timeout: 4000
@@ -90,8 +92,27 @@ appId: de.markdoist.aufgaben
     visible:
       id: dictate
     timeout: 3000
-# Detail → Liste → Übersicht mit unterer Leiste
+# Detail → Board. Diktieren im Eingabeblatt (4.10): startet sofort; mit ungültigem Schlüssel bleibt die
+# Aufnahme für „Erneut versuchen“ erhalten.
 - back
+- tapOn:
+    id: fab-add-dev-item
+- tapOn:
+    id: dictate
+- extendedWaitUntil:
+    visible: "Aufnahme 0:0[2-9]"
+    timeout: 8000
+- tapOn:
+    id: dictate-stop
+- extendedWaitUntil:
+    visible:
+      id: dictate-retry
+    timeout: 30000
+- tapOn:
+    id: dictate-cancel
+- tapOn:
+    id: sheet-close
+# Board → Übersicht mit unterer Leiste
 - back
 # Gewöhnliche Aufgaben haben keinen Diktierknopf.
 - tapOn:

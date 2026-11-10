@@ -27,6 +27,14 @@ export const light = {
   doneContainer: "#E3F1E6",
   onDoneContainer: "#056B20",
   divider: "#EFEAE5",
+  // Arten eines Programmier-Eintrags (4.10)
+  bugBg: "#FDECEA",
+  bugFg: "#A8281F",
+  featureBg: "#E8F0FD",
+  featureFg: "#1D4FB8",
+  ideaBg: "#F1EBFB",
+  ideaFg: "#6B3FB0",
+  work: "#C76A00",
 };
 
 export const dark: typeof light = {
@@ -54,6 +62,13 @@ export const dark: typeof light = {
   doneContainer: "#1E3B25",
   onDoneContainer: "#7BD88F",
   divider: "#303030",
+  bugBg: "#3A2422",
+  bugFg: "#FF9A90",
+  featureBg: "#1F2B40",
+  featureFg: "#9CBCFF",
+  ideaBg: "#2C2440",
+  ideaFg: "#C9B0F5",
+  work: "#F0A24A",
 };
 
 export type Theme = typeof light;

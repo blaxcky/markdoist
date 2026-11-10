@@ -1,5 +1,5 @@
 // Brücke zum Main-Prozess: StorageAdapter und Schlüssel-Wert-Speicher über IPC.
-import type { DictationContext, DictationErrorKind, DictationResult, DictationSettings, KeyValueStore, StorageAdapter } from "@markdoist/app";
+import type { DictationContext, DictationErrorKind, DictationResult, DictationSettings, KeyValueStore, StorageAdapter, TitleSuggester, TitleSuggestion } from "@markdoist/app";
 
 export interface Settings {
   folder: string | null;
@@ -39,6 +39,8 @@ interface Bridge {
     setSettings(s: Partial<DictationSettings>): Promise<DictationStatus>;
     run(audio: ArrayBuffer, mime: string, ctx: DictationContext): Promise<{ ok: true; result: DictationResult } | { ok: false; kind: DictationErrorKind }>;
     onPhase(fn: (p: "transcribing" | "cleaning") => void): () => void;
+    /** Titel und Art eines Programmier-Eintrags (4.10); `force` = „Neu vorschlagen“ */
+    title(note: string, list: string, force: boolean): Promise<{ ok: true; suggestion: TitleSuggestion } | { ok: false; kind: DictationErrorKind | "off" }>;
   };
   onStorageChanged(fn: (overflow: boolean) => void): () => void;
   onFocus(fn: () => void): () => void;
@@ -68,3 +70,15 @@ export function ipcAdapter(folder: string): StorageAdapter {
     resolveRecovery: (id) => s.resolveRecovery(folder, id),
   };
 }
+
+/** Titelvorschlag über den Main-Prozess (4.10); null ohne Vorschlag. */
+export const suggestTitleAuto: TitleSuggester = async (note, list) => {
+  const r = await bridge().dictation.title(note, list, false);
+  return r.ok ? r.suggestion : null;
+};
+
+/** „Neu vorschlagen“: fragt auch bei abgeschaltetem Automatismus. */
+export const suggestTitleForced: TitleSuggester = async (note, list) => {
+  const r = await bridge().dictation.title(note, list, true);
+  return r.ok ? r.suggestion : null;
+};

@@ -71,7 +71,7 @@ describe("Diktieren (4.9)", () => {
 
   it("eigene Basis-URL und Modelle", async () => {
     const { fetch, calls } = fakeFetch([() => ({ status: 200, json: { text: "Hallo" } }), () => ({ status: 200, json: message("Hallo.") })]);
-    const settings = { transcribeModel: "neu-transcribe", cleanupModel: "neu-clean", cleanup: true };
+    const settings = { ...DEFAULT_DICTATION, transcribeModel: "neu-transcribe", cleanupModel: "neu-clean", cleanup: true };
     await runDictation({ fetch, key: "k", settings, ctx: {}, form, baseUrl: "http://127.0.0.1:9/v1" });
     expect(calls[0]!.url).toBe("http://127.0.0.1:9/v1/audio/transcriptions");
     expect((calls[0]!.body as ReturnType<typeof form>).fields).toContainEqual(["model", "neu-transcribe"]);
@@ -190,6 +190,8 @@ describe("Diktieren (4.9)", () => {
       transcribeModel: "x",
       cleanupModel: "gpt-6.1-terra",
       cleanup: false,
+      titleModel: "gpt-6.1-luna",
+      autoTitle: true,
     });
     expect(maskKey("sk-proj-abcdefghijklmnop1234")).toBe("sk-…1234");
     expect(maskKey("kurz")).toBe("…rz");

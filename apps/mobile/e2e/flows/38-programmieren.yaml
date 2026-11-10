@@ -1,4 +1,5 @@
-# Programmieren (4.8): Liste anlegen, Eintrag mit Notiz, erledigen, Erledigte entfernen, Liste löschen.
+# Programmieren als Board (4.8, 4.10): Liste anlegen, Einträge nur als Text, Art, Filter, Reiter,
+# erledigen, Erledigte entfernen, Liste löschen.
 # Einträge sind eigene Dateien und erscheinen nicht zwischen den Aufgaben.
 appId: de.markdoist.aufgaben
 ---
@@ -12,22 +13,35 @@ appId: de.markdoist.aufgaben
 - inputText: "Markdoist"
 - tapOn:
     id: new-list-create
-# Einträge über das Eingabeblatt der Erfassung; es bleibt nach jedem Eintrag offen.
+# Einträge nur als Text (4.10): Enter bricht um, abgelegt wird mit dem Knopf; das Blatt bleibt offen.
 - tapOn:
     id: fab-add-dev-item
+- assertVisible:
+    id: dictate
 - inputText: "Absturz unter Mesa"
-- pressKey: Enter
+- tapOn:
+    id: add-item-send
 - assertVisible:
     id: add-item
 - inputText: "Dunkles Design"
-- pressKey: Enter
+- tapOn:
+    id: add-item-send
 - tapOn:
     id: sheet-close
 - extendedWaitUntil:
     visible:
       id: "check-Absturz unter Mesa"
     timeout: 3000
-# Notiz wie bei Aufgaben; Termine, Eingang und Priorität gibt es nicht.
+# Ohne Schlüssel bleibt der vorläufige Titel aus den ersten Wörtern.
+- assertVisible:
+    id: "pending-Absturz unter Mesa"
+# Der Auszug wiederholt einen vorläufigen Titel nicht.
+- assertNotVisible:
+    id: "note-Absturz unter Mesa"
+- assertVisible:
+    id: dev-count-open
+    text: "2"
+# Detail: Art setzen; Termine, Eingang und Priorität gibt es nicht.
 - tapOn:
     id: "text-Absturz unter Mesa"
 # Der Text steht im Kind von detail-badge, darum getrennt prüfen.
@@ -38,43 +52,80 @@ appId: de.markdoist.aufgaben
     id: field-inbox
 - assertNotVisible:
     id: field-due
+- assertVisible:
+    id: dev-title-pending
 - tapOn:
-    id: show-note
-- inputText: "Nur mit Mesa 26."
-- scrollUntilVisible:
-    element:
-      id: save-state
-    direction: UP
-    timeout: 6000
-    optional: true
-- extendedWaitUntil:
-    visible: "Gespeichert"
-    timeout: 8000
-- back
-- back
+    id: dev-type-chip
+- tapOn:
+    id: dev-set-type-bug
 - extendedWaitUntil:
     visible:
-      id: "note-Absturz unter Mesa"
+      id: dev-type-bug
     timeout: 3000
-# Erster Tipp: nur „In Arbeit“ (halber Kreis), der Eintrag bleibt offen.
+- back
+# Filter nach Art: Einträge ohne Art nur unter „Alle“.
+- assertVisible:
+    id: dev-type-bug
+- tapOn:
+    id: dev-filter-bug
+- assertNotVisible:
+    id: "check-Dunkles Design"
+- tapOn:
+    id: dev-filter-all
+- assertVisible:
+    id: "check-Dunkles Design"
+# Erster Tipp: „In Arbeit“, die Karte wandert in den mittleren Reiter.
 - tapOn:
     id: "check-Absturz unter Mesa"
-- assertVisible: "0 von 2 erledigt"
-- assertNotVisible:
-    id: dev-done-toggle
+- extendedWaitUntil:
+    visible:
+      id: dev-count-work
+      text: "1"
+    timeout: 3000
+- tapOn:
+    id: dev-tab-work
+- extendedWaitUntil:
+    visible:
+      id: "check-Absturz unter Mesa"
+    timeout: 3000
 # Zweiter Tipp erledigt: wandert nach „Erledigt“.
 - tapOn:
     id: "check-Absturz unter Mesa"
 - extendedWaitUntil:
     visible:
-      id: dev-done-toggle
+      id: dev-count-done
+      text: "1"
+    timeout: 4000
+# Wischen wechselt den Reiter.
+- swipe:
+    start: 85%, 60%
+    end: 10%, 60%
+    duration: 300
+- extendedWaitUntil:
+    visible:
+      id: "check-Absturz unter Mesa"
     timeout: 3000
-- assertVisible: "1 von 2 erledigt"
+# Status über das Menü der Karte (langes Drücken)
+- tapOn:
+    id: dev-tab-open
+- longPressOn:
+    id: "text-Dunkles Design"
+- tapOn:
+    id: dev-move-work
+- extendedWaitUntil:
+    visible:
+      id: dev-count-work
+      text: "1"
+    timeout: 3000
 - tapOn:
     id: dev-menu
 - tapOn:
     id: dev-remove-done
-- assertVisible: "0 von 1 erledigt"
+- extendedWaitUntil:
+    visible:
+      id: dev-count-done
+      text: "0"
+    timeout: 3000
 - pressKey: back
 - assertVisible:
     id: "dev-progress-Markdoist"

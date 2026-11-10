@@ -8,7 +8,7 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 28.10.2026 (M9):** Müllabfuhr mit ICS-Import (4.7), Serien mit fester Terminliste (5.7) und die kompaktere untere Leiste am Handy (4.5). Abnahmenotiz in `docs/ABNAHME.md`.
 
-**Beschlossen am 10.11.2026, noch nicht umgesetzt:** Programmieren als Board mit Art und automatischem Titel (4.10). Ersetzt die Listenansicht aus 4.8 und erweitert 4.9.
+**Umgesetzt am 10.11.2026:** Programmieren als Board mit Art und automatischem Titel (4.10). Ersetzt die Listenansicht aus 4.8 und erweitert 4.9.
 
 **Umgesetzt am 07.11.2026:** Diktieren für Notizen von Programmier-Einträgen (4.9).
 
@@ -717,7 +717,7 @@ Wunsch und Entscheidungen vom 10.11.2026 (Chat und `.fragen/2026-11-10-2312-trac
   - Ohne Netz, ohne Schlüssel oder bei einem Fehler bleibt der vorläufige Titel, ohne Fehlermeldung. Beim nächsten Öffnen einer Programmier-Liste mit Schlüssel holt die App den Vorschlag für alle Einträge mit `title_pending: true` nach, einen nach dem anderen.
   - Der Titel passt sich später nicht an geänderten Text an [F]. Im Detail gibt es neben dem Titel „Neu vorschlagen“; das ersetzt den Titel (mit Rückgängig), die Art nur, wenn sie noch fehlt.
   - Der Titel ist im Detail wie bisher von Hand änderbar; das entfernt `title_pending`.
-- **Detail:** wie 4.8, dazu die Art (Desktop Auswahl, Android Chip mit Menü) und „Neu vorschlagen“ am Titel. Unter dem Titel steht klein „Titel automatisch“, solange er von der KI stammt und nicht von Hand geändert wurde [V].
+- **Detail:** wie 4.8, dazu die Art (Desktop Auswahl, Android Chip mit Menü) und „Neu vorschlagen“ am Titel. Solange der Titel vorläufig ist, steht daneben „Titel folgt“ [V, Umsetzung: Ein Hinweis „Titel automatisch“ für einen übernommenen KI-Titel bräuchte ein weiteres Feld in der Datei und entfällt].
 - **Einstellungen „Diktieren“** bekommen zusätzlich das Modell für den Titel (Standard `gpt-6.1-luna`) und den Schalter „Titel und Art vorschlagen“ (Standard an). Der Einstellungstext nennt, dass dafür Notiz und Listentitel an OpenAI gehen.
 - **Nicht vorgesehen [F]:** Nummern für Einträge, automatische Wahl der Liste, Ziehen am Handy, Reihenfolge per Ziehen innerhalb einer Spalte, weitere Arten, automatisches Nachziehen des Titels nach Textänderungen, nachträgliches Einordnen alter Einträge per KI.
 

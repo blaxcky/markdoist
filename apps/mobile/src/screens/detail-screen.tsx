@@ -11,7 +11,7 @@ import { diffLines } from "diff";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { appendDictation, dictationErrorText, pastSkippedCount, previewAction, renderMarkdown, seriesStrip, skippedBeyondStrip, splitDateValue, startDevWorkAction, stripByMonth as byMonth, T, type DictationContext, type DictationResult, type Outcome, type StripCell } from "@markdoist/app";
+import { appendDictation, dictationErrorText, pastSkippedCount, previewAction, renderMarkdown, seriesStrip, skippedBeyondStrip, splitDateValue, startDevWorkAction, stripByMonth as byMonth, suggestDevTitle, T, type DictationContext, type DictationResult, type Outcome, type StripCell } from "@markdoist/app";
 import {
   describeOccurrence,
   describeSeries,
@@ -32,6 +32,8 @@ import { Menu } from "../components/menu";
 import { GroupedSheet } from "../components/series-sheet";
 import { DictateBar } from "../components/dictate-bar";
 import { useDictation } from "../dictation/use-dictation";
+import { suggestTitleForced } from "../dictation/title";
+import { DevTypeChip } from "../components/dev-type-chip";
 import {
   CalendarIcon,
   CheckCircleIcon,
@@ -206,7 +208,8 @@ export function DetailScreen() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef(false);
   const html = useMemo(() => (tab === "preview" ? previewHtml(body, c) : ""), [tab, body, c]);
-  const [menu, setMenu] = useState<"priority" | "inbox" | "more" | "series" | "due" | "scheduled" | null>(null);
+  const [menu, setMenu] = useState<"priority" | "inbox" | "more" | "series" | "due" | "scheduled" | "devtype" | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const editor = useRef<ComponentRef<typeof TextInput>>(null);
   const insets = useSafeAreaInsets();
@@ -488,6 +491,43 @@ export function DetailScreen() {
               {d.message}
             </Text>
           ))}
+          {/* Art und KI-Titel eines Programmier-Eintrags (4.10) */}
+          {f.isDevItem && (
+            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, paddingLeft: 56, paddingRight: 12, paddingBottom: 12 }} testID="dev-meta">
+              <Pressable onPress={ro ? undefined : () => setMenu("devtype")} accessibilityRole="button" accessibilityLabel={`${T.dev.typeMenu}: ${f.devType ? T.dev.typeLabels[f.devType] : T.dev.noType}`} testID="dev-type-chip" hitSlop={6}>
+                {f.devType ? (
+                  <DevTypeChip type={f.devType} />
+                ) : (
+                  <View style={{ paddingHorizontal: 10, height: 26, borderRadius: 13, justifyContent: "center", borderWidth: 1, borderColor: c.outline }}>
+                    <Text style={{ color: c.muted, fontSize: 12 }}>{T.dev.typeMenu} …</Text>
+                  </View>
+                )}
+              </Pressable>
+              {f.titlePending && (
+                <Text style={{ color: c.muted, fontSize: 12 }} testID="dev-title-pending">
+                  {T.dev.titlePending}
+                </Text>
+              )}
+              <View style={{ flex: 1 }} />
+              {!ro && (
+                <Pressable
+                  disabled={suggesting}
+                  onPress={() => {
+                    setSuggesting(true);
+                    void flush()
+                      .then(() => suggestDevTitle(repo, ref, suggestTitleForced, true))
+                      .then((o) => notify(o, T.dev.suggestTitle))
+                      .finally(() => setSuggesting(false));
+                  }}
+                  hitSlop={6}
+                  testID="dev-suggest-title"
+                  style={{ paddingHorizontal: 12, height: 30, borderRadius: 15, justifyContent: "center", borderWidth: 1, borderColor: c.outline }}
+                >
+                  <Text style={{ color: c.primary, fontSize: 13, fontWeight: "500" }}>{suggesting ? T.dev.suggesting : T.dev.suggestTitle}</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
           {/* Listen haben keine Termine, Priorität oder Wiederholung (4.6). */}
           {!plain && dateRow("due")}
           {!plain && dateRow("scheduled")}
@@ -769,6 +809,17 @@ export function DetailScreen() {
       />
       {dateMenu("due")}
       {dateMenu("scheduled")}
+      <Menu
+        open={menu === "devtype"}
+        onClose={() => setMenu(null)}
+        title={T.dev.typeMenu}
+        items={(["bug", "feature", "idea", null] as const).map((t) => ({
+          label: t ? T.dev.typeLabels[t] : T.dev.noType,
+          checked: f.devType === t,
+          testID: `dev-set-type-${t ?? "none"}`,
+          onPress: () => f.devType !== t && act({ type: "setDevType", devType: t }, `${T.dev.typeMenu}: ${t ? T.dev.typeLabels[t] : T.dev.noType}`),
+        }))}
+      />
       <Menu
         open={menu === "more"}
         onClose={() => setMenu(null)}

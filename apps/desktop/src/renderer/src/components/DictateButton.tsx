@@ -13,7 +13,7 @@ function pickMime(): string {
   return want.find((m) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) ?? "";
 }
 
-export function DictateButton({ ctx, onResult, onError }: { ctx: () => DictationContext; onResult(r: DictationResult): void; onError(kind: DictationErrorKind): void }) {
+export function DictateButton({ ctx, onResult, onError, testId = "dictate", label }: { ctx: () => DictationContext; onResult(r: DictationResult): void; onError(kind: DictationErrorKind): void; testId?: string; label?: string }) {
   const D = T.dictation;
   const [phase, setPhase] = useState<Phase>("idle");
   const [ms, setMs] = useState(0);
@@ -128,7 +128,7 @@ export function DictateButton({ ctx, onResult, onError }: { ctx: () => Dictation
 
   if (phase === "idle")
     return (
-      <button className="icon-btn small" onClick={() => void start()} title={D.record} aria-label={D.record} data-testid="dictate">
+      <button className="icon-btn small" onClick={() => void start()} title={label ?? D.record} aria-label={label ?? D.record} data-testid={testId}>
         <IconMic size={18} />
       </button>
     );

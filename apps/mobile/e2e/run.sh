@@ -75,14 +75,18 @@ SEED
 adb push "$TMP/Restmuell.md" "$DIR/" >/dev/null
 rm -rf "$TMP"
 fail=0
-for flow in flows/*.yaml; do
+# Ohne Argumente alle Flows samt Dateiprüfungen; mit Argumenten nur diese Flows (z. B. flows/00-choose-folder.yaml
+# flows/38-programmieren.yaml), ohne die Dateiprüfungen des vollen Laufs.
+if [ $# -gt 0 ]; then FLOWS=("$@"); SUBSET=1; else FLOWS=(flows/*.yaml); SUBSET=0; fi
+for flow in "${FLOWS[@]}"; do
   echo "== $flow"
   maestro test -e NEXT_LABEL="$NEXT_LABEL" -e SKIP_KEY="$SKIP_KEY" -e WASTE_SKIP="$W2" -e MAESTRO_DEV="${MAESTRO_DEV:-false}" "$flow" || { fail=1; break; }
 done
 check() { # Datei, erwarteter Text
   if adb shell "cat '$DIR/$1'" | grep -qF -- "$2"; then echo "OK   $1 enthält: $2"; else echo "FEHL $1 enthält nicht: $2"; fail=1; fi
 }
-if [ $fail = 0 ]; then
+if [ $fail = 0 ] && [ $SUBSET = 1 ]; then echo "Nur ausgewählte Flows: Dateiprüfungen übersprungen"; fi
+if [ $fail = 0 ] && [ $SUBSET = 0 ]; then
   check "Maestro Aufgabe.md" "inbox: true"
   if adb shell "cat '$DIR/Maestro Aufgabe.md'" | grep -qE '^(due|scheduled):'; then echo "FEHL Erfassung hat Termin"; fail=1; else echo "OK   Erfassung ohne Termin"; fi
   check "Per Verknuepfung.md" "inbox: true"
@@ -113,7 +117,8 @@ if [ $fail = 0 ]; then
     echo "OK   Einkauf.md: Brot vor Milch, beide offen"
   else echo "FEHL Einkauf.md: Reihenfolge oder Haken falsch"; fail=1; fi
   # Löschen (4.4): „Wegwerfen“ aus Flow 12 liegt im Papierkorb, „Auch weg“ hat der Verlauf zurückgeholt.
-  # Programmieren (4.8, Flow 38): Erledigte entfernt, dann Liste samt Eintrag gelöscht.
+  # Programmieren (4.8, 4.10, Flow 38): Erledigte entfernt, dann Liste samt Eintrag gelöscht. Die Namen
+  # kommen aus dem vorläufigen Titel, also aus dem Text (ohne Schlüssel kein KI-Titel).
   # Ohne Groß-/Kleinschreibung: Die Emulator-Tastatur korrigiert „unter“ teils zu „Unter“.
   for f in "Wegwerfen.md" "Absturz unter Mesa.md" "Dunkles Design.md" "Markdoist.md"; do
     if adb shell ls "$DIR/.todo-trash" | tr -d '\r' | grep -qixF -- "$f"; then echo "OK   im Papierkorb: $f"; else echo "FEHL nicht im Papierkorb: $f"; fail=1; fi

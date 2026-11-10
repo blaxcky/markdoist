@@ -22,11 +22,13 @@ interface Props {
   /** Chips links neben dem Senden-Knopf */
   chips?: ReactNode;
   accessibilityLabel?: string;
+  /** Freier Text mit Absätzen (Programmier-Eintrag, 4.10): Enter bricht um, gesendet wird nur mit dem Knopf. */
+  paragraphs?: boolean;
   submitLabel: string;
   testID: { input: string; submit: string };
 }
 
-export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready, keepOpen, extra, chips, accessibilityLabel, submitLabel, testID }: Props) {
+export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready, keepOpen, extra, chips, accessibilityLabel, paragraphs, submitLabel, testID }: Props) {
   const c = useTheme();
   const nav = useNavigation();
   // Ohne Tastatur Abstand zur Gestenleiste halten (randlose Darstellung).
@@ -72,13 +74,13 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
           // Mehrzeilig, damit lange Titel umbrechen und ganz sichtbar bleiben. Enter sendet weiterhin;
           // eingefügte Zeilenumbrüche werden zu Leerzeichen, der Titel bleibt eine Zeile.
           multiline
-          onChangeText={(text) => onChangeText(text.replace(/[ \t]*[\r\n]+[ \t]*/g, " "))}
-          onSubmitEditing={onSubmit}
-          returnKeyType={keepOpen ? "next" : "done"}
-          submitBehavior="submit"
+          onChangeText={(text) => onChangeText(paragraphs ? text : text.replace(/[ \t]*[\r\n]+[ \t]*/g, " "))}
+          onSubmitEditing={paragraphs ? undefined : onSubmit}
+          returnKeyType={paragraphs ? "default" : keepOpen ? "next" : "done"}
+          submitBehavior={paragraphs ? "newline" : "submit"}
           cursorColor={c.primary}
           selectionColor={`${c.primary}55`}
-          style={{ color: c.fg, fontSize: 20, lineHeight: 26, paddingHorizontal: 18, paddingVertical: 10, maxHeight: 5 * 26 + 20, textAlignVertical: "top" }}
+          style={paragraphs ? { color: c.fg, fontSize: 17, lineHeight: 24, paddingHorizontal: 18, paddingVertical: 10, minHeight: 3 * 24 + 20, maxHeight: 8 * 24 + 20, textAlignVertical: "top" } : { color: c.fg, fontSize: 20, lineHeight: 26, paddingHorizontal: 18, paddingVertical: 10, maxHeight: 5 * 26 + 20, textAlignVertical: "top" }}
           testID={testID.input}
           accessibilityLabel={accessibilityLabel}
         />

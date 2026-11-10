@@ -5,12 +5,18 @@ export interface DictationSettings {
   transcribeModel: string;
   cleanupModel: string;
   cleanup: boolean;
+  /** Modell für Titel und Art eines Programmier-Eintrags (4.10) */
+  titleModel: string;
+  /** Titel und Art vorschlagen lassen (4.10) */
+  autoTitle: boolean;
 }
 
 export const DEFAULT_DICTATION: DictationSettings = {
   transcribeModel: "gpt-transcribe",
   cleanupModel: "gpt-6.1-terra",
   cleanup: true,
+  titleModel: "gpt-6.1-luna",
+  autoTitle: true,
 };
 
 export const OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -23,6 +29,8 @@ export function parseDictationSettings(raw: unknown): DictationSettings {
     transcribeModel: str(o.transcribeModel, DEFAULT_DICTATION.transcribeModel),
     cleanupModel: str(o.cleanupModel, DEFAULT_DICTATION.cleanupModel),
     cleanup: typeof o.cleanup === "boolean" ? o.cleanup : DEFAULT_DICTATION.cleanup,
+    titleModel: str(o.titleModel, DEFAULT_DICTATION.titleModel),
+    autoTitle: typeof o.autoTitle === "boolean" ? o.autoTitle : DEFAULT_DICTATION.autoTitle,
   };
 }
 
@@ -181,7 +189,7 @@ export interface DictationResult {
 
 type Send = (url: string, headers: Record<string, string>, signal?: AbortSignal) => ReturnType<FetchLike>;
 
-async function request(run: DictationRun, path: string, init: { method: string; headers: Record<string, string>; body?: unknown }, send?: Send): Promise<unknown> {
+export async function request(run: DictationRun, path: string, init: { method: string; headers: Record<string, string>; body?: unknown }, send?: Send): Promise<unknown> {
   const ctrl = typeof AbortController === "function" ? new AbortController() : undefined;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), run.timeoutMs ?? 120_000) : undefined;
   let res: Awaited<ReturnType<FetchLike>>;
@@ -262,7 +270,7 @@ export const T_DICTATION = {
   notCleaned: "Nicht bereinigt eingefügt",
   keyLabel: "OpenAI-API-Schlüssel",
   keyPlaceholder: "sk-…",
-  keyHint: "Der Schlüssel bleibt nur auf diesem Gerät und wird verschlüsselt gespeichert. Aufnahmen sowie Listen- und Eintragstitel gehen beim Diktieren an OpenAI.",
+  keyHint: "Der Schlüssel bleibt nur auf diesem Gerät und wird verschlüsselt gespeichert. Aufnahmen sowie Listen- und Eintragstitel gehen beim Diktieren an OpenAI, für Titelvorschläge die Notiz und der Listentitel.",
   keySave: "Speichern",
   keyCheck: "Prüfen",
   keyRemove: "Entfernen",
@@ -274,6 +282,9 @@ export const T_DICTATION = {
   modelCleanup: "Modell für die Bereinigung",
   cleanup: "Text bereinigen",
   cleanupHint: "Füllwörter entfernen, Selbstkorrekturen auflösen, Satzzeichen und Absätze setzen.",
+  modelTitle: "Modell für Titel und Art",
+  autoTitle: "Titel und Art vorschlagen",
+  autoTitleHint: "Neue Programmier-Einträge bekommen Titel und Art aus der Notiz. Dafür gehen Notiz und Listentitel an OpenAI.",
   errors: {
     nokey: "Für das Diktieren einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen",
     auth: "API-Schlüssel ungültig",

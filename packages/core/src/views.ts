@@ -5,6 +5,7 @@ import { datePart, isOverdue, sortKey, todayOf, type Clock, type DateValue } fro
 import { readSeries, parseKey, remainingListDates, type Series } from "./recurrence/series";
 import {
   PRIORITY_RANK,
+  type DevType,
   type Diagnostic,
   type IndexedFile,
   type Priority,
@@ -805,6 +806,46 @@ export function devItemsView(
     return c || byTitle(a, b);
   });
   return { open, done };
+}
+
+// Board (4.10): Spalten Neu, In Arbeit, Erledigt; Filter nach Art.
+
+export type DevTypeFilter = "all" | DevType;
+
+/** Die Spalte „Erledigt“ zeigt zunächst nur so viele Karten (4.10). */
+export const DEV_DONE_LIMIT = 10;
+
+export interface DevBoard {
+  /** Spalte „Neu“ (`status: open`) */
+  open: TaskView[];
+  /** Spalte „In Arbeit“ */
+  work: TaskView[];
+  /** Spalte „Erledigt“, zuletzt erledigte zuerst (alle; die Oberfläche kürzt auf `DEV_DONE_LIMIT`) */
+  done: TaskView[];
+  /** nicht erledigte Einträge je Filter, für die Chips */
+  counts: Record<DevTypeFilter, number>;
+}
+
+/** Board einer Programmier-Liste (`null` = ohne Liste). Einträge ohne Art erscheinen nur unter „all“. */
+export function devBoardView(
+  idx: Index,
+  list: TaskView | null,
+  opts: DevItemOptions = DEFAULT_DEV_ITEM_OPTIONS,
+  filter: DevTypeFilter = "all",
+): DevBoard {
+  const { open, done } = devItemsView(idx, list, opts);
+  const counts: Record<DevTypeFilter, number> = { all: open.length, bug: 0, feature: 0, idea: 0 };
+  for (const v of open) {
+    const t = v.task.fields.devType;
+    if (t) counts[t]++;
+  }
+  const match = (v: TaskView) => filter === "all" || v.task.fields.devType === filter;
+  return {
+    open: open.filter((v) => v.task.fields.status !== "in-progress" && match(v)),
+    work: open.filter((v) => v.task.fields.status === "in-progress" && match(v)),
+    done: done.filter(match),
+    counts,
+  };
 }
 
 /** Abfuhrart einer Müllabfuhr-Serie (4.7), sonst null. */

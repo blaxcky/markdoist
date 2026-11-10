@@ -1,4 +1,4 @@
-// Einstellungen „Diktieren“ (4.9): API-Schlüssel (nur maskiert sichtbar), Modelle, Bereinigung an/aus.
+// Einstellungen „Diktieren“ (4.9, 4.10): API-Schlüssel (nur maskiert sichtbar), Modelle, Bereinigung und Titelvorschlag an/aus.
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Switch, Text, TextInput, View } from "react-native";
 import { checkKey, maskKey, T, type FetchLike } from "@markdoist/app";
@@ -10,10 +10,13 @@ export function DictationSettings() {
   const D = T.dictation;
   const { key, settings, loaded } = useDictationConfig();
   const [input, setInput] = useState("");
-  const [models, setModels] = useState({ transcribeModel: settings.transcribeModel, cleanupModel: settings.cleanupModel });
+  const [models, setModels] = useState({ transcribeModel: settings.transcribeModel, cleanupModel: settings.cleanupModel, titleModel: settings.titleModel });
   const [status, setStatus] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => setModels({ transcribeModel: settings.transcribeModel, cleanupModel: settings.cleanupModel }), [settings.transcribeModel, settings.cleanupModel]);
+  useEffect(
+    () => setModels({ transcribeModel: settings.transcribeModel, cleanupModel: settings.cleanupModel, titleModel: settings.titleModel }),
+    [settings.transcribeModel, settings.cleanupModel, settings.titleModel],
+  );
 
   const field = { color: c.fg, fontSize: 15, borderWidth: 1, borderColor: c.outline, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: c.surface } as const;
   const btn = (label: string, onPress: () => void, testID: string, disabled?: boolean) => (
@@ -104,6 +107,23 @@ export function DictationSettings() {
         editable={settings.cleanup}
         style={[field, { opacity: settings.cleanup ? 1 : 0.5 }]}
         testID="dictation-model-cleanup"
+      />
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: c.fg, fontSize: 15 }}>{D.autoTitle}</Text>
+          <Text style={{ color: c.muted, fontSize: 13 }}>{D.autoTitleHint}</Text>
+        </View>
+        <Switch value={settings.autoTitle} onValueChange={(v) => void saveDictationSettings({ ...settings, ...models, autoTitle: v })} trackColor={{ true: c.primary }} testID="dictation-auto-title" />
+      </View>
+      <Text style={{ color: c.fg, fontSize: 15 }}>{D.modelTitle}</Text>
+      <TextInput
+        value={models.titleModel}
+        onChangeText={(v) => setModels((m) => ({ ...m, titleModel: v }))}
+        onEndEditing={saveModels}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={field}
+        testID="dictation-model-title"
       />
     </View>
   );

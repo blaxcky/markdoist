@@ -1,6 +1,6 @@
 // Programmieren (4.8): Abläufe, die mehrere Dateien betreffen. Jeder Schritt ist ein eigener
 // Schreibvorgang mit eigenem Verlaufseintrag.
-import { devItemsOf, type Index, type TaskAction, type TaskView } from "@markdoist/core";
+import { devItemsOf, type DevType, type Index, type TaskAction, type TaskView } from "@markdoist/core";
 import type { Outcome, Repository } from "./repository";
 import { T } from "./texts";
 
@@ -34,6 +34,7 @@ export async function createDevItem(
   list: TaskView,
   title: string,
   shown?: (ref: string) => void,
+  extra: { note?: string; titlePending?: boolean; devType?: DevType | null } = {},
 ): Promise<Outcome> {
   let id = list.task.fields.id;
   if (!id) {
@@ -42,7 +43,7 @@ export async function createDevItem(
     id = repo.findTask(o.ref ?? list.task.ref)?.fields.id ?? null;
     if (!id) return { status: "error", message: "Liste hat keine ID" };
   }
-  return repo.create({ title, kind: "dev-item", devList: id }, shown);
+  return repo.create({ title, kind: "dev-item", devList: id, ...extra }, shown);
 }
 
 /** Erste nicht erfolgreiche Antwort, sonst die letzte. */

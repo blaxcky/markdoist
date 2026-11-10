@@ -844,7 +844,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           )}
         </header>
         <div className="scroll">
-          <div className="page">
+          <div className={`page${devPage && openDev ? " page-wide" : ""}`}>
             {!listsPage && !wastePage && !devPage && <h1 className="page-title">{viewTitle}</h1>}
             {listView && (
               <div className="page-count">

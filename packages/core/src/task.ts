@@ -13,6 +13,9 @@ export const DATE_LIST_FORMAT_VERSION = 2;
 
 export type Status = "open" | "in-progress" | "done";
 export type Priority = "none" | "low" | "normal" | "high";
+/** Art eines Programmier-Eintrags (`dev_type`, 4.10) */
+export type DevType = "bug" | "feature" | "idea";
+export const DEV_TYPES: DevType[] = ["bug", "feature", "idea"];
 
 export const PRIORITY_RANK: Record<Priority, number> = { high: 3, normal: 2, low: 1, none: 0 };
 
@@ -77,6 +80,10 @@ export interface TaskFields {
   isDevItem: boolean;
   /** `dev_list` eines Eintrags: ID seiner Programmier-Liste */
   devList: string | null;
+  /** `dev_type` eines Eintrags (4.10); unbekannt oder fehlend = keine Art */
+  devType: DevType | null;
+  /** `title_pending: true`: Titel ist nur vorläufig und wird von der KI ersetzt (4.10) */
+  titlePending: boolean;
 }
 
 export interface Task extends FileRef {
@@ -303,6 +310,8 @@ export function readTaskFile(input: ReadInput): IndexedFile {
     isDevList: data.kind === "dev-list",
     isDevItem: data.kind === "dev-item",
     devList: data.kind === "dev-item" && typeof data.dev_list === "string" && data.dev_list.trim() ? data.dev_list.trim() : null,
+    devType: data.kind === "dev-item" && DEV_TYPES.includes(data.dev_type as DevType) ? (data.dev_type as DevType) : null,
+    titlePending: data.kind === "dev-item" && data.title_pending === true,
   };
 
   return {
