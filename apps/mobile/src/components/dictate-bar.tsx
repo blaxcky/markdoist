@@ -1,5 +1,5 @@
 // Diktieren (4.9): Leiste in der Beschreibungskarte. Ruhezustand: Knopf „Diktieren“ neben „Checklistenpunkt“;
-// während der Aufnahme Laufzeit mit „Abbrechen“ und „Fertig“; danach Fortschritt bzw. Fehler mit „Erneut versuchen“.
+// beim Start „Mikrofon startet …“, während der Aufnahme Laufzeit mit „Abbrechen“ und „Fertig“; danach Fortschritt bzw. Fehler mit „Erneut versuchen“.
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { dictationErrorText, formatDuration, T } from "@markdoist/app";
 import { useTheme } from "../theme";
@@ -21,7 +21,19 @@ export function DictateBar({ state, onStart, onStop, onCancel, onRetry }: { stat
   );
   const row = { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 52, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: c.divider } as const;
 
-  if (state.phase === "recording" || state.phase === "starting") {
+  // Bis das Mikrofon wirklich läuft, kein roter Punkt und keine Laufzeit: sonst spricht man ins Leere.
+  if (state.phase === "starting") {
+    return (
+      <View style={row} testID="dictate-starting">
+        <ActivityIndicator color={c.muted} size="small" />
+        <Text style={{ flex: 1, color: c.muted, fontSize: 14 }} testID="dictate-state">
+          {D.starting}
+        </Text>
+        {btn(D.cancel, onCancel, "dictate-cancel")}
+      </View>
+    );
+  }
+  if (state.phase === "recording") {
     return (
       <View style={row} testID="dictate-recording">
         <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.danger }} />

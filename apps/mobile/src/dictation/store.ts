@@ -43,6 +43,12 @@ export async function saveDictationSettings(s: DictationSettings): Promise<void>
   changed();
 }
 
+/** Meldet Änderungen an Schlüssel oder Einstellungen; Rückgabe meldet ab. */
+export function onDictationConfigChange(l: Listener): () => void {
+  listeners.add(l);
+  return () => void listeners.delete(l);
+}
+
 /** Aktueller Schlüssel (nur in den Einstellungen gebraucht, um die Maske zu zeigen) und Einstellungen. */
 export function useDictationConfig(): { key: string | null; settings: DictationSettings; loaded: boolean } {
   const [state, setState] = useState<{ key: string | null; settings: DictationSettings; loaded: boolean }>({ key: null, settings: parseDictationSettings(null), loaded: false });

@@ -219,6 +219,7 @@ export function DetailScreen() {
   const dictCtx = useRef<DictationContext>({});
   const onDictated = useRef<(r: DictationResult) => void>(() => {});
   const dictation = useDictation({
+    enabled: !!view && view.task.fields.isDevItem && !view.readOnly,
     ctx: () => dictCtx.current,
     onResult: (r) => onDictated.current(r),
     onError: (kind, detail) => {

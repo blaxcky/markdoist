@@ -662,6 +662,7 @@ Wunsch vom 07.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben [F];
   - Antippen startet die Aufnahme: roter Punkt, Laufzeit, „Abbrechen“ und „Fertig“.
   - Danach „Wird erkannt …“ und „Wird bereinigt …“. „Abbrechen“ verwirft auch eine laufende Übertragung.
   - Nach 10 Minuten stoppt die Aufnahme von selbst. Geht die Android-App in den Hintergrund, endet die Aufnahme wie mit „Fertig“; eine Hintergrundaufnahme gibt es nicht.
+  - **Android [V, 10.11.2026]:** Während der Aufnahme bleibt das Display an (`expo-keep-awake`); vorher schaltete es nach der Bildschirmzeit ab, und die Aufnahme endete. Die Aufnahme startet ohne spürbare Pause: Solange das Detail offen ist, liegen Schlüssel und Mikrofonberechtigung schon vor und der Recorder ist vorbereitet (ohne Aufnahme). Die Berechtigung wird nur abgefragt, wenn sie fehlt; vorher öffnete jedes Antippen die Berechtigungsseite des Systems. Bis das Mikrofon wirklich läuft, steht „Mikrofon startet …“ da, ohne roten Punkt.
   - Verlassen des Details bricht ab. Am Desktop gilt das auch beim Wechsel zu einem anderen Eintrag.
 - **Fehler [F]:**
   - Scheitert die Bereinigung, wird der Rohtext eingefügt, mit der Meldung „Nicht bereinigt eingefügt“.

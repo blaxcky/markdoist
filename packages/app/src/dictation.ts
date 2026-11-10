@@ -252,6 +252,7 @@ export const T_DICTATION = {
   dictate: "Diktieren",
   record: "Notiz diktieren",
   recording: "Aufnahme",
+  starting: "Mikrofon startet …",
   stop: "Fertig",
   cancel: "Abbrechen",
   transcribing: "Wird erkannt …",
