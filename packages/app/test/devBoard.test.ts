@@ -14,6 +14,7 @@ import {
   Repository,
   suggestDevTitle,
   suggestTitle,
+  T,
   titleRequest,
   type FetchLike,
   type TitleSuggester,
@@ -217,5 +218,38 @@ describe("Alter einer Karte (4.10)", () => {
     expect(ageDays("2026-10-25T08:00:00+02:00", "2026-11-10")).toBe(16);
     expect(ageDays(null, "2026-11-10")).toBeNull();
     expect([0, 1, 3, 16, 90].map(T.dev.age)).toEqual(["heute", "gestern", "3 Tage", "2 Wochen", "3 Monate"]);
+  });
+});
+
+describe("Titelvorschlag: Fehler sichtbar, Ersatzanfrage (4.10)", () => {
+  const ok = (text: string) => ({ ok: true, status: 200, json: async () => ({ output: [{ type: "message", content: [{ type: "output_text", text }] }] }) });
+  const fail = (status: number, message: string) => ({ ok: false, status, json: async () => ({ error: { message } }) });
+
+  it("lehnt das Modell die strukturierte Anfrage ab, folgt die einfache ohne reasoning", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const fetch: FetchLike = async (_url, init) => {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      bodies.push(body);
+      return bodies.length === 1 ? fail(400, "Unsupported parameter: 'reasoning.effort'") : ok('```json\n{"title": "Widget zeigt alte Anzahl", "type": "bug"}\n```');
+    };
+    const s = await suggestTitle({ fetch, key: "sk", model: "gpt-6.1-luna", note: "Widget …", list: "" });
+    expect(s).toEqual({ title: "Widget zeigt alte Anzahl", devType: "bug" });
+    expect(bodies[0]).toHaveProperty("reasoning");
+    expect(bodies[0]).toHaveProperty("text");
+    expect(bodies[1]).not.toHaveProperty("reasoning");
+    expect(bodies[1]).not.toHaveProperty("text");
+  });
+
+  it("„Neu vorschlagen“ zeigt die Ursache; ohne Schlüssel den Hinweis", async () => {
+    const { repo, list } = await withList();
+    const r = await createDevItemFromText(repo, list(), "Etwas");
+    const ref = r.status === "ok" ? r.ref! : "";
+    const fetch: FetchLike = async () => fail(404, "The model `gpt-6.1-luna` does not exist");
+    const viaApi = (key: string): TitleSuggester => (note, l) => suggestTitle({ fetch, key, model: "gpt-6.1-luna", note, list: l });
+    expect(await suggestDevTitle(repo, ref, viaApi("sk"), true)).toEqual({ status: "blocked", message: "Kein Vorschlag: HTTP 404: The model `gpt-6.1-luna` does not exist" });
+    expect(await suggestDevTitle(repo, ref, viaApi(""), true)).toEqual({ status: "blocked", message: T.dictation.titleNoKey });
+    const auth: FetchLike = async () => fail(401, "Incorrect API key");
+    expect(await suggestDevTitle(repo, ref, (n, l) => suggestTitle({ fetch: auth, key: "sk", model: "m", note: n, list: l }), true)).toEqual({ status: "blocked", message: "Kein Vorschlag: API-Schlüssel ungültig" });
+    expect(repo.findTask(ref)!.fields.titlePending).toBe(true);
   });
 });

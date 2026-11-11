@@ -38,7 +38,7 @@ import {
   inInbox,
 } from "@markdoist/core";
 import { MarkdownEditor } from "./MarkdownEditor";
-import { DictateButton } from "./DictateButton";
+import { DictateButton, OPEN_DICTATION_SETTINGS } from "./DictateButton";
 import { suggestTitleForced } from "../bridge";
 import { RecurrenceEditor } from "./RecurrenceEditor";
 import { DateListEditor } from "./Waste";
@@ -475,7 +475,10 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                       setSuggesting(true);
                       void flush()
                         .then(() => suggestDevTitle(repo, ref, suggestTitleForced, true))
-                        .then((o) => onOutcome(o, T.dev.suggestTitle))
+                        .then((o) => {
+                          onOutcome(o, T.dev.suggestTitle);
+                          if (o.status === "blocked" && o.message === T.dictation.titleNoKey) window.dispatchEvent(new CustomEvent(OPEN_DICTATION_SETTINGS));
+                        })
                         .finally(() => setSuggesting(false));
                     }}
                     data-testid="dev-suggest-title"

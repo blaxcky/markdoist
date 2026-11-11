@@ -516,7 +516,10 @@ export function DetailScreen() {
                     setSuggesting(true);
                     void flush()
                       .then(() => suggestDevTitle(repo, ref, suggestTitleForced, true))
-                      .then((o) => notify(o, T.dev.suggestTitle))
+                      .then((o) => {
+                        notify(o, T.dev.suggestTitle);
+                        if (o.status === "blocked" && o.message === T.dictation.titleNoKey) nav.navigate("Settings");
+                      })
                       .finally(() => setSuggesting(false));
                   }}
                   hitSlop={6}

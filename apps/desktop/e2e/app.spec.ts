@@ -613,7 +613,7 @@ test("Programmieren als Board: Text ablegen, Art, Filter, Ziehen, erledigen, Lis
   const item = (t: string) => page.locator(`[data-testid="dev-item-row"][data-text="${t}"]`);
   const first = item("Absturz unter Mesa Beim Start mit Mesa 26");
   await expect(first).toBeVisible();
-  await expect(first.locator(".dev-pending")).toHaveText("Titel folgt");
+  await expect(first.locator(".dev-pending")).toHaveText("Titel vorläufig");
   // Der Auszug wiederholt einen vorläufigen Titel nicht.
   await expect(first.getByTestId("dev-item-note")).toHaveCount(0);
   await expect(page.getByTestId("dev-col-open").getByTestId("dev-item-row")).toHaveCount(2);

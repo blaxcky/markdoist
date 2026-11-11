@@ -55,7 +55,7 @@ export const T = {
     created: "Eintrag angelegt",
     allDone: (n: number) => `Alle erledigten (${n})`,
     fewerDone: "Weniger erledigte",
-    titlePending: "Titel folgt",
+    titlePending: "Titel vorläufig",
     titleAuto: "Titel automatisch",
     suggestTitle: "Neu vorschlagen",
     suggesting: "Wird vorgeschlagen …",

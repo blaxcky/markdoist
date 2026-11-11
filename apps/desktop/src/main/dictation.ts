@@ -38,7 +38,7 @@ export interface DictationStatus {
   settings: DictationSettings;
 }
 
-export type TitleResult = { ok: true; suggestion: TitleSuggestion } | { ok: false; kind: DictationErrorKind | "off" };
+export type TitleResult = { ok: true; suggestion: TitleSuggestion } | { ok: false; kind: DictationErrorKind | "off"; detail?: string; status?: number };
 
 export type DictationRunResult = { ok: true; result: DictationResult } | { ok: false; kind: DictationErrorKind };
 
@@ -146,7 +146,8 @@ export class DictationService {
       });
       return { ok: true, suggestion };
     } catch (e) {
-      return { ok: false, kind: e instanceof DictationError ? e.kind : "server" };
+      if (e instanceof DictationError) return { ok: false, kind: e.kind, detail: e.message, ...(e.status ? { status: e.status } : {}) };
+      return { ok: false, kind: "server", detail: e instanceof Error ? e.message : String(e) };
     }
   }
 }

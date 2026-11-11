@@ -2,7 +2,7 @@
 // (`gpt-6.1-luna` über die Responses API); bis dahin gilt ein vorläufiger Titel aus den ersten Wörtern.
 import { DEV_TYPES, devItemsOf, type DevType, type Index, type TaskView } from "@markdoist/core";
 import { createDevItem } from "./devActions";
-import { DictationError, extractOutputText, OPENAI_BASE_URL, request, type FetchLike } from "./dictation";
+import { DictationError, dictationErrorText, extractOutputText, OPENAI_BASE_URL, request, T_DICTATION, type FetchLike } from "./dictation";
 import type { Outcome, Repository } from "./repository";
 import { T } from "./texts";
 
@@ -90,9 +90,11 @@ export function cleanSuggestedTitle(raw: string): string {
 /** Liest die Antwort der Responses API; ohne brauchbaren Titel ein Fehler. */
 export function parseTitleSuggestion(json: unknown): TitleSuggestion {
   const text = extractOutputText(json);
+  // Ohne strukturierte Ausgabe (Ersatzanfrage) kann das JSON in einem Codeblock oder Text stehen.
+  const raw = /\{[\s\S]*\}/.exec(text)?.[0] ?? text;
   let data: unknown;
   try {
-    data = JSON.parse(text);
+    data = JSON.parse(raw);
   } catch {
     throw new DictationError("server", "Antwort ist kein JSON");
   }
@@ -113,26 +115,51 @@ export interface TitleRun {
   timeoutMs?: number;
 }
 
+/**
+ * Einfachere Anfrage ohne `reasoning` und ohne strukturierte Ausgabe, falls das Modell diese Parameter
+ * ablehnt (HTTP 400). Das JSON wird dann nur über die Anweisung verlangt.
+ */
+export function titleRequestPlain(note: string, list: string, model: string): Record<string, unknown> {
+  const strict = titleRequest(note, list, model);
+  return {
+    model,
+    instructions: `${String(strict.instructions)}\n\nAntworte ausschließlich mit einem JSON-Objekt der Form {"title": "…", "type": "bug" | "feature" | "idea"}, ohne Codeblock.`,
+    input: note,
+  };
+}
+
 /** Fragt Titel und Art ab. Wirft `DictationError` (ohne Schlüssel `nokey`). */
 export async function suggestTitle(run: TitleRun): Promise<TitleSuggestion> {
   if (!run.key.trim()) throw new DictationError("nokey");
   if (!run.note.trim()) throw new DictationError("empty");
-  const json = await request(
-    {
-      fetch: run.fetch,
-      key: run.key,
-      baseUrl: run.baseUrl ?? OPENAI_BASE_URL,
-      timeoutMs: run.timeoutMs ?? 60_000,
-      settings: { transcribeModel: "", cleanupModel: "", cleanup: false, titleModel: run.model, autoTitle: true },
-      ctx: {},
-    },
-    "/responses",
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(titleRequest(run.note, run.list, run.model)) },
-  );
-  return parseTitleSuggestion(json);
+  const send = (body: Record<string, unknown>) =>
+    request(
+      {
+        fetch: run.fetch,
+        key: run.key,
+        baseUrl: run.baseUrl ?? OPENAI_BASE_URL,
+        timeoutMs: run.timeoutMs ?? 60_000,
+        settings: { transcribeModel: "", cleanupModel: "", cleanup: false, titleModel: run.model, autoTitle: true },
+        ctx: {},
+      },
+      "/responses",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    );
+  try {
+    return parseTitleSuggestion(await send(titleRequest(run.note, run.list, run.model)));
+  } catch (e) {
+    // Abgelehnte Parameter (z. B. `reasoning` oder `text.format` bei diesem Modell) oder unbrauchbare Antwort:
+    // einmal mit der einfachen Anfrage.
+    const retry = e instanceof DictationError && (e.status === 400 || (e.kind === "server" && e.status === undefined));
+    if (!retry) throw e;
+    return parseTitleSuggestion(await send(titleRequestPlain(run.note, run.list, run.model)));
+  }
 }
 
-/** Plattformseitiger Vorschlag; null, wenn es keinen gibt (kein Schlüssel, abgeschaltet, Fehler). */
+/**
+ * Plattformseitiger Vorschlag; null, wenn der automatische Vorschlag abgeschaltet ist. Fehler (auch ein
+ * fehlender Schlüssel) kommen als `DictationError`, damit „Neu vorschlagen“ die Ursache zeigen kann.
+ */
 export type TitleSuggester = (note: string, list: string) => Promise<TitleSuggestion | null>;
 
 /** Legt einen Eintrag nur aus Text an: vorläufiger Titel, `title_pending: true` (4.10). */
@@ -176,7 +203,12 @@ export async function suggestDevTitle(
   if (inflight.has(key)) return { status: "noop" };
   inflight.add(key);
   try {
-    const s = await suggest(task.body, listTitleOf(repo, repo.getState().index, key));
+    let s: TitleSuggestion | null;
+    try {
+      s = await suggest(task.body, listTitleOf(repo, repo.getState().index, key));
+    } catch (e) {
+      return { status: "blocked", message: titleErrorText(e) };
+    }
     if (!s) return { status: "blocked", message: T.dev.suggestFailed };
     const now = repo.findTask(key);
     if (!now) return { status: "noop" };
@@ -188,6 +220,18 @@ export async function suggestDevTitle(
   } finally {
     inflight.delete(key);
   }
+}
+
+/** Meldung für einen gescheiterten Titelvorschlag, mit Ursache. */
+export function titleErrorText(e: unknown): string {
+  if (e instanceof DictationError) {
+    if (e.kind === "nokey") return T_DICTATION.titleNoKey;
+    const detail = e.message !== e.kind ? e.message : undefined;
+    // Bei 400/404 zählt die Meldung von OpenAI (falsches Modell, abgelehnter Parameter).
+    if (e.status === 400 || e.status === 404) return `${T.dev.suggestFailed}: ${detail ?? `HTTP ${e.status}`}`;
+    return `${T.dev.suggestFailed}: ${dictationErrorText(e.kind, detail)}`;
+  }
+  return `${T.dev.suggestFailed}: ${e instanceof Error ? e.message : String(e)}`;
 }
 
 /** Einträge einer Liste (`null` = ohne Liste) mit vorläufigem Titel. */

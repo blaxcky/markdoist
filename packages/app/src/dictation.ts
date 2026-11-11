@@ -116,6 +116,8 @@ export class DictationError extends Error {
   constructor(
     readonly kind: DictationErrorKind,
     message?: string,
+    /** HTTP-Status der Antwort, falls OpenAI geantwortet hat */
+    readonly status?: number,
   ) {
     super(message ?? kind);
     this.name = "DictationError";
@@ -202,7 +204,17 @@ export async function request(run: DictationRun, path: string, init: { method: s
   } finally {
     if (timer) clearTimeout(timer);
   }
-  if (!res.ok) throw new DictationError(classifyStatus(res.status), `HTTP ${res.status}`);
+  if (!res.ok) {
+    // Die Fehlermeldung von OpenAI (z. B. „Unsupported parameter …“) macht die Ursache sichtbar.
+    let reason = "";
+    try {
+      const m = ((await res.json()) as { error?: { message?: unknown } } | null)?.error?.message;
+      if (typeof m === "string") reason = m;
+    } catch {
+      // kein JSON
+    }
+    throw new DictationError(classifyStatus(res.status), reason ? `HTTP ${res.status}: ${reason}` : `HTTP ${res.status}`, res.status);
+  }
   try {
     return await res.json();
   } catch (e) {
@@ -283,6 +295,7 @@ export const T_DICTATION = {
   cleanup: "Text bereinigen",
   cleanupHint: "Füllwörter entfernen, Selbstkorrekturen auflösen, Satzzeichen und Absätze setzen.",
   modelTitle: "Modell für Titel und Art",
+  titleNoKey: "Für Titelvorschläge einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen",
   autoTitle: "Titel und Art vorschlagen",
   autoTitleHint: "Neue Programmier-Einträge bekommen Titel und Art aus der Notiz. Dafür gehen Notiz und Listentitel an OpenAI.",
   errors: {

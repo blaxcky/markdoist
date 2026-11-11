@@ -5,12 +5,9 @@ import { getApiKey, loadDictationSettings } from "./store";
 function suggester(force: boolean): TitleSuggester {
   return async (note, list) => {
     const [key, settings] = await Promise.all([getApiKey(), loadDictationSettings()]);
-    if (!key || (!force && !settings.autoTitle)) return null;
-    try {
-      return await suggestTitle({ fetch: fetch as unknown as FetchLike, key, model: settings.titleModel, note, list });
-    } catch {
-      return null;
-    }
+    if (!force && !settings.autoTitle) return null;
+    // Fehler (auch ein fehlender Schlüssel) gehen als DictationError weiter: „Neu vorschlagen“ zeigt die Ursache.
+    return suggestTitle({ fetch: fetch as unknown as FetchLike, key: key ?? "", model: settings.titleModel, note, list });
   };
 }
 

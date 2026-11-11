@@ -1,5 +1,5 @@
 // Brücke zum Main-Prozess: StorageAdapter und Schlüssel-Wert-Speicher über IPC.
-import type { DictationContext, DictationErrorKind, DictationResult, DictationSettings, KeyValueStore, StorageAdapter, TitleSuggester, TitleSuggestion } from "@markdoist/app";
+import { DictationError, type DictationContext, type DictationErrorKind, type DictationResult, type DictationSettings, type KeyValueStore, type StorageAdapter, type TitleSuggester, type TitleSuggestion } from "@markdoist/app";
 
 export interface Settings {
   folder: string | null;
@@ -40,7 +40,7 @@ interface Bridge {
     run(audio: ArrayBuffer, mime: string, ctx: DictationContext): Promise<{ ok: true; result: DictationResult } | { ok: false; kind: DictationErrorKind }>;
     onPhase(fn: (p: "transcribing" | "cleaning") => void): () => void;
     /** Titel und Art eines Programmier-Eintrags (4.10); `force` = „Neu vorschlagen“ */
-    title(note: string, list: string, force: boolean): Promise<{ ok: true; suggestion: TitleSuggestion } | { ok: false; kind: DictationErrorKind | "off" }>;
+    title(note: string, list: string, force: boolean): Promise<{ ok: true; suggestion: TitleSuggestion } | { ok: false; kind: DictationErrorKind | "off"; detail?: string; status?: number }>;
   };
   onStorageChanged(fn: (overflow: boolean) => void): () => void;
   onFocus(fn: () => void): () => void;
@@ -71,14 +71,15 @@ export function ipcAdapter(folder: string): StorageAdapter {
   };
 }
 
-/** Titelvorschlag über den Main-Prozess (4.10); null ohne Vorschlag. */
-export const suggestTitleAuto: TitleSuggester = async (note, list) => {
-  const r = await bridge().dictation.title(note, list, false);
-  return r.ok ? r.suggestion : null;
-};
+/** Titelvorschlag über den Main-Prozess (4.10); null, wenn abgeschaltet. Fehler kommen als `DictationError`. */
+async function suggestVia(note: string, list: string, force: boolean): Promise<TitleSuggestion | null> {
+  const r = await bridge().dictation.title(note, list, force);
+  if (r.ok) return r.suggestion;
+  if (r.kind === "off") return null;
+  throw new DictationError(r.kind, r.detail, r.status);
+}
+
+export const suggestTitleAuto: TitleSuggester = (note, list) => suggestVia(note, list, false);
 
 /** „Neu vorschlagen“: fragt auch bei abgeschaltetem Automatismus. */
-export const suggestTitleForced: TitleSuggester = async (note, list) => {
-  const r = await bridge().dictation.title(note, list, true);
-  return r.ok ? r.suggestion : null;
-};
+export const suggestTitleForced: TitleSuggester = (note, list) => suggestVia(note, list, true);
