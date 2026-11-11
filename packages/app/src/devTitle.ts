@@ -1,5 +1,5 @@
 // Board (4.10): Programmier-Einträge entstehen nur aus Text. Titel und Art schlägt die KI vor
-// (`gpt-6.1-luna` über die Responses API); bis dahin gilt ein vorläufiger Titel aus den ersten Wörtern.
+// (`gpt-6-luna` über die Responses API); bis dahin gilt ein vorläufiger Titel aus den ersten Wörtern.
 import { DEV_TYPES, devItemsOf, type DevType, type Index, type TaskView } from "@markdoist/core";
 import { createDevItem } from "./devActions";
 import { DictationError, dictationErrorText, extractOutputText, OPENAI_BASE_URL, request, T_DICTATION, type FetchLike } from "./dictation";

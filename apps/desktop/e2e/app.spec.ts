@@ -886,7 +886,7 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
     await expect(page.getByTestId("field-title")).toHaveValue("Knopf rot färben");
     await expect.poll(() => file("Farbe des Knopfs.md")).toContain("dev_type: feature\n");
     expect(await file("Farbe des Knopfs.md")).not.toContain("title_pending");
-    expect(seen.filter((x) => x.body.includes('"json_schema"')).at(-1)!.body).toContain('"model":"gpt-6.1-luna"');
+    expect(seen.filter((x) => x.body.includes('"json_schema"')).at(-1)!.body).toContain('"model":"gpt-6-luna"');
     await page.getByTestId("detail").getByRole("button", { name: "Schließen", exact: true }).click();
 
     // Diktieren im Eingabefeld des Boards legt den Eintrag direkt an; Titel und Art folgen (AK-54).

@@ -15,7 +15,7 @@ export const DEFAULT_DICTATION: DictationSettings = {
   transcribeModel: "gpt-transcribe",
   cleanupModel: "gpt-6.1-terra",
   cleanup: true,
-  titleModel: "gpt-6.1-luna",
+  titleModel: "gpt-6-luna",
   autoTitle: true,
 };
 
@@ -29,7 +29,8 @@ export function parseDictationSettings(raw: unknown): DictationSettings {
     transcribeModel: str(o.transcribeModel, DEFAULT_DICTATION.transcribeModel),
     cleanupModel: str(o.cleanupModel, DEFAULT_DICTATION.cleanupModel),
     cleanup: typeof o.cleanup === "boolean" ? o.cleanup : DEFAULT_DICTATION.cleanup,
-    titleModel: str(o.titleModel, DEFAULT_DICTATION.titleModel),
+    // „gpt-6.1-luna“ war der erste, falsche Standard (10.11.2026); das Modell heißt „gpt-6-luna“.
+    titleModel: o.titleModel === "gpt-6.1-luna" ? DEFAULT_DICTATION.titleModel : str(o.titleModel, DEFAULT_DICTATION.titleModel),
     autoTitle: typeof o.autoTitle === "boolean" ? o.autoTitle : DEFAULT_DICTATION.autoTitle,
   };
 }

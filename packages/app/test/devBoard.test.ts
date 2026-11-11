@@ -58,8 +58,8 @@ describe("Vorläufiger Titel (4.10)", () => {
 
 describe("Titelvorschlag (4.10)", () => {
   it("Anfrage mit Modell, Liste und JSON-Schema", () => {
-    const r = titleRequest("Text", "Markdoist", "gpt-6.1-luna") as { model: string; instructions: string; input: string; text: { format: { type: string; schema: { properties: { type: { enum: string[] } } } } } };
-    expect(r.model).toBe("gpt-6.1-luna");
+    const r = titleRequest("Text", "Markdoist", "gpt-6-luna") as { model: string; instructions: string; input: string; text: { format: { type: string; schema: { properties: { type: { enum: string[] } } } } } };
+    expect(r.model).toBe("gpt-6-luna");
     expect(r.input).toBe("Text");
     expect(r.instructions).toContain("App bzw. Liste: Markdoist");
     expect(r.text.format.type).toBe("json_schema");
@@ -80,7 +80,7 @@ describe("Titelvorschlag (4.10)", () => {
       calls.push({ url, body: String(init.body), auth: init.headers.Authorization! });
       return { ok: true, status: 200, json: async () => ({ output: [{ type: "message", content: [{ type: "output_text", text: '{"title":"Suche findet Checklistenpunkte","type":"feature"}' }] }] }) };
     };
-    const s = await suggestTitle({ fetch, key: "sk-test", model: "gpt-6.1-luna", note: "Suche soll auch Checklisten finden", list: "Markdoist", baseUrl: "http://x" });
+    const s = await suggestTitle({ fetch, key: "sk-test", model: "gpt-6-luna", note: "Suche soll auch Checklisten finden", list: "Markdoist", baseUrl: "http://x" });
     expect(s).toEqual({ title: "Suche findet Checklistenpunkte", devType: "feature" });
     expect(calls[0]!.url).toBe("http://x/responses");
     expect(calls[0]!.auth).toBe("Bearer sk-test");
@@ -89,8 +89,10 @@ describe("Titelvorschlag (4.10)", () => {
   });
 
   it("Einstellungen: Modell und Schalter mit Standardwerten", () => {
-    expect(parseDictationSettings({})).toMatchObject({ titleModel: "gpt-6.1-luna", autoTitle: true });
+    expect(parseDictationSettings({})).toMatchObject({ titleModel: "gpt-6-luna", autoTitle: true });
     expect(parseDictationSettings({ titleModel: " m2 ", autoTitle: false })).toMatchObject({ titleModel: "m2", autoTitle: false });
+    // Der erste Standard hieß falsch „gpt-6.1-luna“; gespeicherte Einstellungen werden berichtigt.
+    expect(parseDictationSettings({ titleModel: "gpt-6.1-luna" }).titleModel).toBe("gpt-6-luna");
   });
 });
 
@@ -232,7 +234,7 @@ describe("Titelvorschlag: Fehler sichtbar, Ersatzanfrage (4.10)", () => {
       bodies.push(body);
       return bodies.length === 1 ? fail(400, "Unsupported parameter: 'reasoning.effort'") : ok('```json\n{"title": "Widget zeigt alte Anzahl", "type": "bug"}\n```');
     };
-    const s = await suggestTitle({ fetch, key: "sk", model: "gpt-6.1-luna", note: "Widget …", list: "" });
+    const s = await suggestTitle({ fetch, key: "sk", model: "gpt-6-luna", note: "Widget …", list: "" });
     expect(s).toEqual({ title: "Widget zeigt alte Anzahl", devType: "bug" });
     expect(bodies[0]).toHaveProperty("reasoning");
     expect(bodies[0]).toHaveProperty("text");
@@ -244,9 +246,9 @@ describe("Titelvorschlag: Fehler sichtbar, Ersatzanfrage (4.10)", () => {
     const { repo, list } = await withList();
     const r = await createDevItemFromText(repo, list(), "Etwas");
     const ref = r.status === "ok" ? r.ref! : "";
-    const fetch: FetchLike = async () => fail(404, "The model `gpt-6.1-luna` does not exist");
-    const viaApi = (key: string): TitleSuggester => (note, l) => suggestTitle({ fetch, key, model: "gpt-6.1-luna", note, list: l });
-    expect(await suggestDevTitle(repo, ref, viaApi("sk"), true)).toEqual({ status: "blocked", message: "Kein Vorschlag: HTTP 404: The model `gpt-6.1-luna` does not exist" });
+    const fetch: FetchLike = async () => fail(404, "The model `gpt-6-luna` does not exist");
+    const viaApi = (key: string): TitleSuggester => (note, l) => suggestTitle({ fetch, key, model: "gpt-6-luna", note, list: l });
+    expect(await suggestDevTitle(repo, ref, viaApi("sk"), true)).toEqual({ status: "blocked", message: "Kein Vorschlag: HTTP 404: The model `gpt-6-luna` does not exist" });
     expect(await suggestDevTitle(repo, ref, viaApi(""), true)).toEqual({ status: "blocked", message: T.dictation.titleNoKey });
     const auth: FetchLike = async () => fail(401, "Incorrect API key");
     expect(await suggestDevTitle(repo, ref, (n, l) => suggestTitle({ fetch: auth, key: "sk", model: "m", note: n, list: l }), true)).toEqual({ status: "blocked", message: "Kein Vorschlag: API-Schlüssel ungültig" });

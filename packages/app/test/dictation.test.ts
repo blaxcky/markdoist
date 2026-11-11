@@ -190,7 +190,7 @@ describe("Diktieren (4.9)", () => {
       transcribeModel: "x",
       cleanupModel: "gpt-6.1-terra",
       cleanup: false,
-      titleModel: "gpt-6.1-luna",
+      titleModel: "gpt-6-luna",
       autoTitle: true,
     });
     expect(maskKey("sk-proj-abcdefghijklmnop1234")).toBe("sk-…1234");

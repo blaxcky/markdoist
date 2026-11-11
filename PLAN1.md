@@ -711,14 +711,14 @@ Wunsch und Entscheidungen vom 10.11.2026 (Chat und `.fragen/2026-11-10-2312-trac
   - Getippter Text kommt unverändert in die Notiz; diktierter Text bereinigt wie in 4.9.
   - Der Eintrag wird immer sofort gespeichert, mit vorläufigem Titel und `title_pending: true`, damit nichts verloren geht. Danach läuft der Titelvorschlag.
 - **Titel und Art [F]/[V]:**
-  - Modell `gpt-6.1-luna` über die Responses API (`reasoning.effort: low`), mit demselben Schlüssel wie 4.9. Eingabe: die Notiz und der Listentitel. Ausgabe als JSON: ein deutscher Titel (höchstens 80 Zeichen, kein Schlusspunkt) und die Art (`bug`, `feature` oder `idea`) [V].
+  - Modell `gpt-6-luna` über die Responses API (`reasoning.effort: low`), mit demselben Schlüssel wie 4.9. Eingabe: die Notiz und der Listentitel. Ausgabe als JSON: ein deutscher Titel (höchstens 80 Zeichen, kein Schlusspunkt) und die Art (`bug`, `feature` oder `idea`) [V].
   - Vorläufiger Titel: die ersten Wörter der Notiz, an einer Wortgrenze auf höchstens 60 Zeichen gekürzt, mit „…“, wenn gekürzt [V].
   - Kommt die Antwort, ersetzt sie den vorläufigen Titel und setzt die Art, beides über den normalen Speicherpfad (Konfliktschutz). Hat man inzwischen Titel oder Art von Hand geändert, bleibt die Handänderung.
   - Ohne Netz, ohne Schlüssel oder bei einem Fehler bleibt der vorläufige Titel, ohne Fehlermeldung. Beim nächsten Öffnen einer Programmier-Liste mit Schlüssel holt die App den Vorschlag für alle Einträge mit `title_pending: true` nach, einen nach dem anderen.
   - Der Titel passt sich später nicht an geänderten Text an [F]. Im Detail gibt es neben dem Titel „Neu vorschlagen“; das ersetzt den Titel (mit Rückgängig), die Art nur, wenn sie noch fehlt.
   - Der Titel ist im Detail wie bisher von Hand änderbar; das entfernt `title_pending`.
 - **Detail:** wie 4.8, dazu die Art (Desktop Auswahl, Android Chip mit Menü) und „Neu vorschlagen“ am Titel. Solange der Titel vorläufig ist, steht daneben „Titel folgt“ [V, Umsetzung: Ein Hinweis „Titel automatisch“ für einen übernommenen KI-Titel bräuchte ein weiteres Feld in der Datei und entfällt].
-- **Einstellungen „Diktieren“** bekommen zusätzlich das Modell für den Titel (Standard `gpt-6.1-luna`) und den Schalter „Titel und Art vorschlagen“ (Standard an). Der Einstellungstext nennt, dass dafür Notiz und Listentitel an OpenAI gehen.
+- **Einstellungen „Diktieren“** bekommen zusätzlich das Modell für den Titel (Standard `gpt-6-luna`; der erste Stand hatte fälschlich `gpt-6.1-luna`, gespeicherte Einstellungen damit werden beim Laden berichtigt, 11.11.2026) und den Schalter „Titel und Art vorschlagen“ (Standard an). Der Einstellungstext nennt, dass dafür Notiz und Listentitel an OpenAI gehen.
 - **Nicht vorgesehen [F]:** Nummern für Einträge, automatische Wahl der Liste, Ziehen am Handy, Reihenfolge per Ziehen innerhalb einer Spalte, weitere Arten, automatisches Nachziehen des Titels nach Textänderungen, nachträgliches Einordnen alter Einträge per KI.
 
 ## 5. Wiederholungen
