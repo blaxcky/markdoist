@@ -25,20 +25,46 @@ interface Props {
   /** Eintrag im Detail mit Notiz öffnen */
   onOpenItem(ref: string): void;
   onOutcome(o: Outcome, label?: string): void;
+  /** Eingabefeld für eine neue Liste öffnen („+“ in der Seitenleiste) */
+  startAdding?: boolean;
+  onStartedAdding?(): void;
 }
 
-export function Dev({ repo, idx, opts, itemOpts, openRef, onOpen, onOpenItem, onOutcome }: Props) {
+export function Dev({ repo, idx, opts, itemOpts, openRef, onOpen, onOpenItem, onOutcome, startAdding, onStartedAdding }: Props) {
   // Eine geöffnete Liste bleibt offen, auch wenn der Filter sie inzwischen ausblendet.
   if (openRef === DEV_ORPHANS)
     return <DevDetail repo={repo} idx={idx} list={null} itemOpts={itemOpts} onBack={() => onOpen(null)} onOpenItem={onOpenItem} onOutcome={onOutcome} />;
   const open = openRef ? devIndex(idx).lists.find((v) => v.task.ref === openRef) : undefined;
   if (open)
     return <DevDetail key={open.task.ref} repo={repo} idx={idx} list={open} itemOpts={itemOpts} onBack={() => onOpen(null)} onOpenItem={onOpenItem} onOutcome={onOutcome} />;
-  return <DevOverview repo={repo} idx={idx} lists={devListsView(idx, opts)} filter={opts.filter} onOpen={onOpen} onOutcome={onOutcome} />;
+  return <DevOverview repo={repo} idx={idx} lists={devListsView(idx, opts)} filter={opts.filter} onOpen={onOpen} onOutcome={onOutcome} startAdding={startAdding} onStartedAdding={onStartedAdding} />;
 }
 
-function DevOverview({ repo, idx, lists, filter, onOpen, onOutcome }: { repo: Repository; idx: Index; lists: TaskView[]; filter: ListOptions["filter"]; onOpen(ref: string): void; onOutcome(o: Outcome, label?: string): void }) {
+function DevOverview({
+  repo,
+  idx,
+  lists,
+  filter,
+  onOpen,
+  onOutcome,
+  startAdding,
+  onStartedAdding,
+}: {
+  repo: Repository;
+  idx: Index;
+  lists: TaskView[];
+  filter: ListOptions["filter"];
+  onOpen(ref: string): void;
+  onOutcome(o: Outcome, label?: string): void;
+  startAdding?: boolean;
+  onStartedAdding?(): void;
+}) {
   const [adding, setAdding] = useState(false);
+  useEffect(() => {
+    if (!startAdding) return;
+    setAdding(true);
+    onStartedAdding?.();
+  }, [startAdding, onStartedAdding]);
   const [title, setTitle] = useState("");
   const orphans = devListProgress(idx, null);
   const create = () => {

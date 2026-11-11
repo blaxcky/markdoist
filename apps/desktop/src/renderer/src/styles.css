@@ -370,17 +370,121 @@ button:disabled {
 .nav.search.active .nav-icon {
   color: var(--fg-active);
 }
+/* Abschnitte und Bereiche der Seitenleiste (4.5) */
 .side-section {
-  margin: 26px 0 4px;
-  padding: 0 6px;
-  min-height: 30px;
   display: flex;
   align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 28px;
+  margin: 14px 0 2px;
+  padding: 0 6px 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: none;
   color: var(--fg-muted);
+  font-size: 13px;
   font-weight: 600;
+  text-align: left;
+}
+.side-section:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+.side-section-label {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.side-section .side-chevron {
+  opacity: 0;
+}
+.side-section:hover .side-chevron,
+.side-section:focus-visible .side-chevron,
+.side-section[aria-expanded="false"] .side-chevron {
+  opacity: 1;
+}
+.side-chevron {
+  flex: none;
+  transition: transform 0.15s;
+}
+.side-chevron.closed {
+  transform: rotate(-90deg);
+}
+.side-group {
+  display: flex;
+  align-items: center;
+  border-radius: 5px;
+}
+.side-group:hover {
+  background: var(--bg-hover);
+}
+.side-group.active {
+  background: var(--bg-active);
+}
+.side-group > .nav {
+  flex: 1;
+  min-width: 0;
+  background: none;
+}
+.side-group.active > .nav,
+.side-group.active > .nav .nav-icon,
+.side-group.active > .nav .count {
+  color: var(--fg-active);
+}
+.side-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--fg-muted);
+}
+.side-btn:last-child {
+  margin-right: 4px;
+}
+.side-btn:hover {
+  background: var(--bg-hover-strong);
+  color: var(--fg);
+}
+.side-add {
+  opacity: 0;
+}
+.side-group:hover .side-add,
+.side-group:focus-within .side-add {
+  opacity: 1;
+}
+.side-kids {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 4px 17px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-strong);
+}
+.nav.sub {
+  min-height: 30px;
+  padding-left: 10px;
+  font-size: 13.5px;
+}
+.nav.sub .count {
+  white-space: nowrap;
+}
+.side-more {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+.side-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 .sidebar .spacer {
   flex: 1;

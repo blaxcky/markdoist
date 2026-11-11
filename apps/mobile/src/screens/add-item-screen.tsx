@@ -1,7 +1,7 @@
 // Einträge einer Liste anfügen (4.6): Eingabeblatt der Erfassung ohne Chips. Bleibt nach jedem Eintrag offen;
 // Zurück oder ein Tipp neben das Blatt schließt es. Mit `dev` legt es Einträge einer Programmier-Liste an (4.10):
 // nur Text mit Absätzen, dazu ein Mikrofon, das sofort aufnimmt; Titel und Art schlägt danach die KI vor.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { createDevItemFromText, dictationErrorText, suggestDevTitle, T, type Outcome } from "@markdoist/app";
@@ -20,7 +20,14 @@ export function AddItemScreen() {
   const repo = useRepo();
   const state = useRepoState();
   const notify = useNotify();
-  const [text, setText] = useState("");
+  const [text, setTextState] = useState("");
+  // Aktueller Text auch als Ref: Enter im mehrzeiligen Feld kann das Absenden zweimal auslösen, bevor neu
+  // gezeichnet wird. Der zweite Aufruf findet dann ein leeres Feld und legt keinen doppelten Eintrag an.
+  const textRef = useRef("");
+  const setText = (next: string | ((cur: string) => string)) => {
+    textRef.current = typeof next === "function" ? next(textRef.current) : next;
+    setTextState(textRef.current);
+  };
   const list = dev ? devIndex(state.index).lists.find((v) => v.task.ref === ref) : undefined;
 
   /** Programmier-Eintrag aus Text; `label` meldet den Erfolg (Diktat), sonst nur Fehlschläge. */
@@ -47,7 +54,8 @@ export function AddItemScreen() {
   });
 
   const add = () => {
-    const t = dev ? text.replace(/\s+$/, "") : text.trim();
+    const raw = textRef.current;
+    const t = dev ? raw.replace(/\s+$/, "") : raw.trim();
     if (!t.trim()) return;
     setText("");
     // Gemeldet wird nur ein Fehlschlag; dann kommt der Text zurück ins Feld.

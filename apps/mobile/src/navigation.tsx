@@ -1,14 +1,15 @@
 // Navigation (Plan 4.5, 4.6, 4.8): untere Leiste Eingang/Heute/Geplant/Alle/⋯ Mehr, Stack für Detail und Dialoge.
-// „Mehr“ öffnet ein Blatt mit Erledigt, Listen, Müllabfuhr und Programmieren; diese bleiben Reiter des Tab-Navigators, nur ohne eigenen Knopf.
+// „Mehr“ öffnet ein Blatt mit den Sammlungen Listen, Müllabfuhr und Programmieren (aufklappbar, Unterpunkte direkt öffnen)
+// und dem Archiv mit Erledigt, Verlauf und Papierkorb; die Übersichten bleiben Reiter des Tab-Navigators, nur ohne eigenen Knopf.
 // Kopfzeilen der Listen zeichnet die Liste selbst (components/list-header).
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { BackHandler, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createBottomTabNavigator, type BottomTabBarButtonProps, type BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { PlatformPressable } from "@react-navigation/elements";
 import { createNativeStackNavigator, type NativeStackScreenProps } from "@react-navigation/native-stack";
 import { createNavigationContainerRef, useFocusEffect, useNavigation, type LinkingOptions, type NavigatorScreenParams } from "@react-navigation/native";
-import { T } from "@markdoist/app";
+import { sideCollections, T } from "@markdoist/app";
 import { ListScreen } from "./screens/list-screen";
 import { ListsScreen } from "./screens/lists-screen";
 import { WasteScreen, WasteTypeScreen } from "./screens/waste-screen";
@@ -29,9 +30,8 @@ import { SeriesHistoryScreen } from "./screens/series-history-screen";
 import { useRepoState } from "./repo";
 import { useTheme } from "./theme";
 import { DevItemOptionsSheet, FilterProvider, FilterSheet, ListOptionsSheet } from "./filter";
-import { GroupedSheet } from "./components/series-sheet";
-import { BinIcon, CalendarIcon, CheckCircleIcon, ChecklistIcon, CodeIcon, GridIcon, InboxIcon, MoreIcon, TilesIcon } from "./components/icons";
-import { wasteView } from "@markdoist/core";
+import { MoreSheet } from "./components/more-sheet";
+import { BinIcon, CalendarIcon, CheckCircleIcon, ChecklistIcon, CodeIcon, Glyph, GridIcon, InboxIcon, MoreIcon, TilesIcon, TrashIcon } from "./components/icons";
 
 export type Tabs = { Inbox: undefined; Today: undefined; Planned: undefined; All: undefined; More: undefined; Done: undefined; Lists: undefined; Waste: undefined; Dev: undefined };
 type MainTab = "Inbox" | "Today" | "Planned" | "All";
@@ -135,7 +135,8 @@ function TabsNav({ navigation }: NativeStackScreenProps<RootStack, "Main">) {
   const lastMain = useRef<MainTab>("Today");
   const moreActive = MORE_TABS.includes(active);
   // Müllabfuhr nur, wenn es Abfuhrarten gibt: Am Handy wird nicht importiert (4.5, 4.7).
-  const hasWaste = wasteView(state.index).length > 0;
+  const side = useMemo(() => sideCollections(state.index), [state.index]);
+  const hasWaste = side.waste.total > 0;
   const hidden = { tabBarButton: () => null, tabBarItemStyle: { display: "none" } } as const;
   const openTab = (screen: keyof Tabs) => navigation.navigate("Main", { screen });
   return (
@@ -213,19 +214,42 @@ function TabsNav({ navigation }: NativeStackScreenProps<RootStack, "Main">) {
           {() => <MoreTarget><DevListsScreen /></MoreTarget>}
         </Tab.Screen>
       </Tab.Navigator>
-      <GroupedSheet
+      <MoreSheet
         open={moreOpen}
         onClose={() => setMoreOpen(false)}
-        title={T.views.more}
         groups={[
           {
-            items: [
-              { label: T.views.done, icon: <CheckCircleIcon color={c.muted} size={18} />, testID: "more-done", onPress: () => openTab("Done") },
-              { label: T.views.lists, icon: <ChecklistIcon color={c.muted} size={17} />, testID: "more-lists", onPress: () => openTab("Lists") },
-              hasWaste && { label: T.views.waste, icon: <BinIcon color={c.muted} size={18} />, testID: "more-waste", onPress: () => openTab("Waste") },
-              { label: T.views.dev, icon: <CodeIcon color={c.muted} size={14} />, testID: "more-dev", onPress: () => openTab("Dev") },
-            ],
+            key: "lists",
+            label: T.views.lists,
+            icon: <ChecklistIcon color={c.muted} size={17} />,
+            data: side.lists,
+            onOpen: () => openTab("Lists"),
+            onOpenChild: (ref) => navigation.navigate("Checklist", { ref }),
+            testID: "more-lists",
           },
+          hasWaste && {
+            key: "waste",
+            label: T.views.waste,
+            icon: <BinIcon color={c.muted} size={18} />,
+            data: side.waste,
+            onOpen: () => openTab("Waste"),
+            onOpenChild: (ref) => navigation.navigate("WasteType", { ref }),
+            testID: "more-waste",
+          },
+          {
+            key: "dev",
+            label: T.views.dev,
+            icon: <CodeIcon color={c.muted} size={14} />,
+            data: side.dev,
+            onOpen: () => openTab("Dev"),
+            onOpenChild: (ref) => navigation.navigate("DevList", { ref }),
+            testID: "more-dev",
+          },
+        ]}
+        archive={[
+          { label: T.views.done, icon: <CheckCircleIcon color={c.muted} size={18} />, testID: "more-done", onPress: () => openTab("Done") },
+          { label: T.views.history, icon: <Glyph color={c.muted} size={22}>↶</Glyph>, testID: "more-history", onPress: () => navigation.navigate("History") },
+          { label: T.views.trash, icon: <TrashIcon color={c.muted} size={18} />, meta: state.trash.length ? String(state.trash.length) : null, testID: "more-trash", onPress: () => navigation.navigate("Trash") },
         ]}
       />
     </LastMainContext.Provider>

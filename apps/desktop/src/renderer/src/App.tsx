@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { plannedGroupTitle, startDevWorkAction, T, type Outcome, type Repository } from "@markdoist/app";
+import { plannedGroupTitle, sideCollections, startDevWorkAction, T, type Outcome, type Repository } from "@markdoist/app";
 import {
   allOpenView,
   DEFAULT_DEV_ITEM_OPTIONS,
@@ -41,6 +41,7 @@ import { ListRow, Lists } from "./components/Lists";
 import { Dev, DevListRow } from "./components/Dev";
 import { DateListEditor, WasteDates, WasteHead, WasteImportDialog, WasteOverview } from "./components/Waste";
 import { Menu, MenuItem } from "./components/Menu";
+import { SideGroup, SideSection, useSideOpen } from "./components/SideNav";
 import { useDialog } from "./dialog";
 import { DictationSettingsDialog } from "./components/DictationSettings";
 import { OPEN_DICTATION_SETTINGS } from "./components/DictateButton";
@@ -181,6 +182,10 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
   const [toast, setToast] = useState<Toast | null>(null);
   const [focusField, setFocusField] = useState<{ field: FocusField; nonce: number } | null>(null);
   const [sidebar, setSidebar] = useState(true);
+  const [sideOpen, toggleSide] = useSideOpen();
+  /** „+“ an Listen bzw. Programmieren: Übersicht öffnet mit dem Eingabefeld für eine neue Liste */
+  const [addList, setAddList] = useState(false);
+  const [addDev, setAddDev] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
   const [help, setHelp] = useState(false);
   const [dictSettings, setDictSettings] = useState(false);
@@ -260,6 +265,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
     () => problemsView(idx).length + state.recovery.length + repo.pendingDrafts(5000).length,
     [idx, state.recovery, state.drafts, state.files, repo],
   );
+  const side = useMemo(() => sideCollections(idx), [idx]);
   const counts = useMemo(() => {
     const t = todayView(idx, tz);
     return { inbox: inboxView(idx, tz).length, today: t.due.length + t.plannedToday.length + t.plannedEarlier.length };
@@ -481,17 +487,19 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
     (devItemOpts.sort !== DEFAULT_DEV_ITEM_OPTIONS.sort ? 1 : 0) + (devItemOpts.desc !== DEV_ITEM_DEFAULT_DESC[devItemOpts.sort] ? 1 : 0);
   const displayCount = listsOverview ? listsDisplay : devList ? devItemsDisplay : activeDisplay;
 
+  /** Ansicht wechseln; bei Listen, Müllabfuhr und Programmieren optional gleich einen Unterpunkt öffnen (4.5) */
+  const goTo = (name: ViewName, child: string | null = null) => {
+    setQuery("");
+    setOpen(false);
+    if (name === "lists") setOpenList(child);
+    if (name === "waste") setOpenWaste(child);
+    if (name === "dev") setOpenDev(child);
+    setView(name);
+  };
   const nav = (name: ViewName, label: string, icon: React.ReactNode, count?: number, testid?: string) => (
     <button
       className={`nav${view === name && !query ? " active" : ""}${name === "problems" ? " problems" : ""}`}
-      onClick={() => {
-        setQuery("");
-        setOpen(false);
-        if (name === "lists") setOpenList(null);
-        if (name === "waste") setOpenWaste(null);
-        if (name === "dev") setOpenDev(null);
-        setView(name);
-      }}
+      onClick={() => goTo(name)}
       data-testid={testid ?? `nav-${name}`}
       aria-current={view === name && !query ? "page" : undefined}
     >
@@ -611,16 +619,53 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
           {nav("today", T.views.today, view === "today" && !query ? <IconToday size={24} day={day} /> : <IconTodayOutline size={24} day={day} />, counts.today)}
           {nav("planned", T.views.planned, <IconUpcoming size={24} />)}
           {nav("all", T.views.all, <IconAll size={24} />)}
-          {nav("done", T.views.done, <IconDone size={24} />)}
-          {nav("lists", T.views.lists, <IconList size={24} />)}
-          {nav("waste", T.views.waste, <IconBin size={24} />)}
-          {nav("dev", T.views.dev, <IconCode size={24} />)}
-          <div className="side-section" title={repo.folder}>
-            {folderName}
-          </div>
-          {problems > 0 && nav("problems", T.views.problems, <IconWarning size={24} />, problems)}
-          {nav("history", T.views.history, <IconUndo size={24} />)}
-          {nav("trash", T.views.trash, <IconTrash size={24} />, state.trash.length)}
+          <SideSection label={T.side.collections} open={sideOpen.collections} onToggle={() => toggleSide("collections")} testid="side-collections">
+            <SideGroup
+              label={T.views.lists}
+              icon={<IconList size={24} />}
+              testid="nav-lists"
+              active={view === "lists" && !query}
+              activeRef={openList}
+              onOpen={() => goTo("lists")}
+              onOpenChild={(ref) => goTo("lists", ref)}
+              data={side.lists}
+              open={sideOpen.lists}
+              onToggle={() => toggleSide("lists")}
+              add={{ label: T.lists.newList, onClick: () => (goTo("lists"), setAddList(true)) }}
+            />
+            <SideGroup
+              label={T.views.waste}
+              icon={<IconBin size={24} />}
+              testid="nav-waste"
+              active={view === "waste" && !query}
+              activeRef={openWaste}
+              onOpen={() => goTo("waste")}
+              onOpenChild={(ref) => goTo("waste", ref)}
+              data={side.waste}
+              open={sideOpen.waste}
+              onToggle={() => toggleSide("waste")}
+              add={{ label: T.waste.import.replace(" …", ""), onClick: () => (goTo("waste"), setImporting(true)) }}
+            />
+            <SideGroup
+              label={T.views.dev}
+              icon={<IconCode size={24} />}
+              testid="nav-dev"
+              active={view === "dev" && !query}
+              activeRef={openDev}
+              onOpen={() => goTo("dev")}
+              onOpenChild={(ref) => goTo("dev", ref)}
+              data={side.dev}
+              open={sideOpen.dev}
+              onToggle={() => toggleSide("dev")}
+              add={{ label: T.dev.newList, onClick: () => (goTo("dev"), setAddDev(true)) }}
+            />
+          </SideSection>
+          <SideSection label={T.side.archive} open={sideOpen.archive} onToggle={() => toggleSide("archive")} testid="side-archive">
+            {nav("done", T.views.done, <IconDone size={24} />)}
+            {problems > 0 && nav("problems", T.views.problems, <IconWarning size={24} />, problems)}
+            {nav("history", T.views.history, <IconUndo size={24} />)}
+            {nav("trash", T.views.trash, <IconTrash size={24} />, state.trash.length)}
+          </SideSection>
           <div className="spacer" />
           <button className="help" onClick={() => setHelp(true)} data-testid="help">
             <IconHelp size={24} />
@@ -874,6 +919,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                 opts={listOpts}
                 openRef={openList}
                 onOpen={setOpenList}
+                startAdding={addList}
+                onStartedAdding={() => setAddList(false)}
                 onOutcome={notify}
                 onEditMarkdown={(ref) => {
                   setSelected(ref);
@@ -889,6 +936,8 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                 itemOpts={devItemOpts}
                 openRef={openDev}
                 onOpen={setOpenDev}
+                startAdding={addDev}
+                onStartedAdding={() => setAddDev(false)}
                 onOpenItem={(ref) => {
                   setSelected(ref);
                   setFocusField(null);

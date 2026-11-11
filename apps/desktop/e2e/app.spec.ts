@@ -515,6 +515,39 @@ test("Listen: anlegen, Einträge hinzufügen, abhaken, Abgehakte entfernen (4.6)
   await expect(row("Packliste Urlaub")).toHaveCount(0);
 });
 
+test("Seitenleiste: Bereiche aufklappen, Liste direkt öffnen, neue Liste über + (4.5)", async () => {
+  const kid = page.getByTestId("nav-lists-item");
+  await expect(kid).toHaveCount(1);
+  await expect(kid).toContainText("Packliste Urlaub");
+  await expect(kid).toContainText("2");
+  await kid.click();
+  await expect(page.getByTestId("list-title")).toHaveText("Packliste Urlaub");
+  await expect(kid).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("nav-lists")).not.toHaveAttribute("aria-current", "page");
+  // Zuklappen: der Bereich trägt die Markierung und zeigt die Zahl der Listen.
+  await page.getByTestId("nav-lists-toggle").click();
+  await expect(kid).toHaveCount(0);
+  await expect(page.getByTestId("nav-lists")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByTestId("nav-lists")).toContainText("1");
+  await page.getByTestId("nav-lists-toggle").click();
+  await expect(kid).toHaveCount(1);
+  // Abschnitt „Archiv“ zuklappen und wieder auf
+  await page.getByTestId("side-archive").click();
+  await expect(page.getByTestId("nav-trash")).toHaveCount(0);
+  await page.getByTestId("side-archive").click();
+  await expect(page.getByTestId("nav-trash")).toBeVisible();
+  // „+“ öffnet die Übersicht mit dem Eingabefeld
+  await page.getByTestId("nav-lists").hover();
+  await page.getByTestId("nav-lists-add").click();
+  await expect(page.getByTestId("new-list-title")).toBeFocused();
+  await page.keyboard.type("Baumarkt");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("list-title")).toHaveText("Baumarkt");
+  await expect(kid).toHaveCount(2);
+  await expect(kid.first()).toContainText("Baumarkt");
+  await expect(kid.first()).toHaveAttribute("aria-current", "page");
+});
+
 test("Listen: nach offenen Einträgen sortieren, Richtung umschalten, filtern (4.6)", async () => {
   await writeFile(
     join(folder, "Baumarkt.md"),

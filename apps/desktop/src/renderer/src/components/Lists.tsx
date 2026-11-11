@@ -16,17 +16,41 @@ interface Props {
   onOpen(ref: string | null): void;
   onOutcome(o: Outcome, label?: string): void;
   onEditMarkdown(ref: string): void;
+  /** Eingabefeld für eine neue Liste öffnen („+“ in der Seitenleiste) */
+  startAdding?: boolean;
+  onStartedAdding?(): void;
 }
 
-export function Lists({ repo, idx, opts, openRef, onOpen, onOutcome, onEditMarkdown }: Props) {
+export function Lists({ repo, idx, opts, openRef, onOpen, onOutcome, onEditMarkdown, startAdding, onStartedAdding }: Props) {
   // Eine geöffnete Liste bleibt offen, auch wenn der Filter sie inzwischen ausblendet.
   const open = openRef ? listsView(idx).find((v) => v.task.ref === openRef) : undefined;
   if (open) return <ListDetail key={open.task.ref} repo={repo} view={open} onBack={() => onOpen(null)} onOutcome={onOutcome} onEditMarkdown={onEditMarkdown} />;
-  return <ListOverview repo={repo} lists={listsView(idx, opts)} filter={opts.filter} onOpen={onOpen} onOutcome={onOutcome} />;
+  return <ListOverview repo={repo} lists={listsView(idx, opts)} filter={opts.filter} onOpen={onOpen} onOutcome={onOutcome} startAdding={startAdding} onStartedAdding={onStartedAdding} />;
 }
 
-function ListOverview({ repo, lists, filter, onOpen, onOutcome }: { repo: Repository; lists: TaskView[]; filter: ListOptions["filter"]; onOpen(ref: string): void; onOutcome(o: Outcome, label?: string): void }) {
+function ListOverview({
+  repo,
+  lists,
+  filter,
+  onOpen,
+  onOutcome,
+  startAdding,
+  onStartedAdding,
+}: {
+  repo: Repository;
+  lists: TaskView[];
+  filter: ListOptions["filter"];
+  onOpen(ref: string): void;
+  onOutcome(o: Outcome, label?: string): void;
+  startAdding?: boolean;
+  onStartedAdding?(): void;
+}) {
   const [adding, setAdding] = useState(false);
+  useEffect(() => {
+    if (!startAdding) return;
+    setAdding(true);
+    onStartedAdding?.();
+  }, [startAdding, onStartedAdding]);
   const [title, setTitle] = useState("");
   const create = () => {
     const t = title.trim();

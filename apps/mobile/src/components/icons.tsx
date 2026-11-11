@@ -142,6 +142,21 @@ export function BinIcon({ color, size = 18 }: P) {
   );
 }
 
+/** Papierkorb: Eimer mit Deckel und zwei Rillen, anders als die Mülltonne der Müllabfuhr. */
+export function TrashIcon({ color, size = 18 }: P) {
+  const b = stroke(size);
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "flex-end", paddingBottom: size * 0.04 }}>
+      <View style={{ width: size * 0.3, height: size * 0.1, borderWidth: b, borderBottomWidth: 0, borderColor: color, borderTopLeftRadius: b, borderTopRightRadius: b }} />
+      <View style={{ width: size * 0.84, height: b, borderRadius: b, backgroundColor: color }} />
+      <View style={{ width: size * 0.64, height: size * 0.62, borderWidth: b, borderTopWidth: 0, borderColor: color, borderBottomLeftRadius: size * 0.1, borderBottomRightRadius: size * 0.1, flexDirection: "row", justifyContent: "center", gap: size * 0.12, paddingTop: size * 0.1 }}>
+        <View style={{ width: b, height: size * 0.36, backgroundColor: color }} />
+        <View style={{ width: b, height: size * 0.36, backgroundColor: color }} />
+      </View>
+    </View>
+  );
+}
+
 /** Blatt mit Zeilen (Anzeige: Filter und Sortierung); `dot` markiert aktive Einstellungen. */
 export function ViewOptionsIcon({ color, size = 20, dot }: P & { dot?: string }) {
   const b = stroke(size);

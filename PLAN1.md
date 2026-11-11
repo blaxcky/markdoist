@@ -8,6 +8,8 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 28.10.2026 (M9):** Müllabfuhr mit ICS-Import (4.7), Serien mit fester Terminliste (5.7) und die kompaktere untere Leiste am Handy (4.5). Abnahmenotiz in `docs/ABNAHME.md`.
 
+**Umgesetzt am 11.11.2026:** Seitenleiste am Desktop und Blatt „Mehr“ am Handy in Bereichen mit aufklappbaren Listen (4.5).
+
 **Umgesetzt am 10.11.2026:** Programmieren als Board mit Art und automatischem Titel (4.10). Ersetzt die Listenansicht aus 4.8 und erweitert 4.9.
 
 **Umgesetzt am 07.11.2026:** Diktieren für Notizen von Programmier-Einträgen (4.9).
@@ -546,7 +548,12 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (ge
 ### 4.5 Bedienung [V]
 
 - **Desktop:**
-  - Aufbau: Seitenleiste (Erfassen, Suche, Eingang mit Zähler, Heute mit Zähler, Geplant, Alle offenen, Erledigt, Listen, Müllabfuhr, Probleme, Papierkorb), zentrierte Liste, Details als Dialog über der Liste (Klick oder Enter öffnet, Escape schließt, ↑/↓ blättert). Gestaltung nach den Vorlage-Screenshots vom 18.10.2026 (Todoist-ähnlich): warme Seitenleiste, große Ansichtsüberschrift mit Aufgabenzahl, runde Haken in Prioritätsfarbe, Sortierung und Filter im Menü „Anzeige“.
+  - Aufbau: Seitenleiste, zentrierte Liste, Details als Dialog über der Liste (Klick oder Enter öffnet, Escape schließt, ↑/↓ blättert). Gestaltung nach den Vorlage-Screenshots vom 18.10.2026 (Todoist-ähnlich): warme Seitenleiste, große Ansichtsüberschrift mit Aufgabenzahl, runde Haken in Prioritätsfarbe, Sortierung und Filter im Menü „Anzeige“.
+  - **Seitenleiste in Bereichen** (Entwurf „Variante B“ vom 11.11.2026, Design-Fläche „Markdoist Seitenleiste“): oben Erfassen und Suche, darunter ohne Überschrift Eingang (Zähler), Heute (Zähler), Geplant und Alle offenen. Abschnitt **Sammlungen** mit Listen, Müllabfuhr und Programmieren, Abschnitt **Archiv** mit Erledigt, Probleme (nur bei Bedarf), Verlauf und Papierkorb (Zähler). Der Ordnername steht nur noch im Kontomenü.
+    - Ein Klick auf den Namen eines Bereichs öffnet wie bisher die Übersicht. Der Pfeil rechts klappt den Bereich auf und zeigt Unterpunkte, die direkt öffnen: bei Listen und Programmieren die drei zuletzt geänderten Listen mit der Zahl offener Einträge, danach „Alle n Listen“; bei der Müllabfuhr alle Abfuhrarten mit nächstem Abholtag („Fr 13.11.“) und einem Farbpunkt der Tonne (am Namen erkannt: Bio braun, Papier blau, Gelb/Verpackung gelb, Glas grün, Rest grau, sonst neutral).
+    - Zugeklappt zeigt der Bereich eine Zusammenfassung: Zahl der Listen bzw. den nächsten Abholtag. Die Markierung trägt der geöffnete Unterpunkt, wenn er sichtbar ist, sonst der Bereich.
+    - Beim Überfahren erscheint ein „+“: Neue Liste, Kalender importieren bzw. Neue Programmier-Liste; es öffnet die Übersicht mit dem Eingabefeld bzw. dem Importdialog.
+    - Auch die Abschnittsüberschriften klappen ihren Abschnitt zu. Was auf- und zugeklappt ist, bleibt gerätelokal erhalten (Standard: Listen und Programmieren auf, Müllabfuhr zu).
   - Tasten:
     - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…8 für Eingang, Heute, Geplant, Alle offenen, Erledigt, Listen, Müllabfuhr und Programmieren; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
     - Aufgabenaktionen: Leertaste erledigt/öffnet wieder, `E` sortiert ein, `D` setzt die Frist, `S` plant ein, `P` setzt die Priorität, Entf löscht.
@@ -557,7 +564,10 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (ge
   - Keine systemweite Schnellerfassung [F, F008]. Erfasst wird im App-Fenster (`N`/Ctrl+N).
 - **Android:**
   - Untere Navigation mit fünf Reitern: Eingang, Heute, Geplant, Alle, ⋯ Mehr (Entscheidung 09.11.2026; davor seit 28.10.2026 vier Reiter ohne Geplant, ursprünglich fünf mit Erledigt und Listen). Suche in der Kopfzeile, Plus-Button zum Erfassen, Ziehen nach unten zum Neueinlesen.
-  - **Mehr:** Der Reiter wechselt nicht selbst die Ansicht, sondern öffnet ein Blatt von unten (wie die übrigen Blätter der App) mit den Einträgen Erledigt, Listen und Müllabfuhr. „Müllabfuhr“ erscheint nur, wenn es mindestens eine Müllabfuhr-Serie gibt, weil am Handy nicht importiert wird (4.7). Ein Eintrag öffnet die jeweilige Übersicht; solange eine dieser drei Ansichten aktiv ist, trägt „Mehr“ die hinterlegte Pille. Die Zurück-Taste führt von dort zur zuletzt gewählten Hauptansicht (Eingang, Heute, Geplant oder Alle).
+  - **Mehr:** Der Reiter wechselt nicht selbst die Ansicht, sondern öffnet ein Blatt von unten (wie die übrigen Blätter der App). Es ist wie die Seitenleiste am Desktop geordnet (11.11.2026): Gruppe **Sammlungen** mit Listen, Müllabfuhr und Programmieren, Gruppe **Archiv** mit Erledigt, Verlauf und Papierkorb (Zähler). „Müllabfuhr“ erscheint nur, wenn es mindestens eine Müllabfuhr-Serie gibt, weil am Handy nicht importiert wird (4.7).
+    - Ein Tippen auf den Namen öffnet die Übersicht; solange eine dieser Übersichten aktiv ist, trägt „Mehr“ die hinterlegte Pille. Die Zurück-Taste führt von dort zur zuletzt gewählten Hauptansicht (Eingang, Heute, Geplant oder Alle).
+    - Der Pfeil rechts klappt einen Bereich auf; die Unterpunkte sind dieselben wie am Desktop (drei zuletzt geänderte Listen und „Alle n Listen“, Abfuhrarten mit Abholtag und Farbpunkt). Ein Unterpunkt öffnet die Liste bzw. Abfuhrart direkt; Zurück führt in die Ansicht, aus der das Blatt geöffnet wurde. Zugeklappt steht die Zusammenfassung rechts. Was aufgeklappt ist, bleibt gerätelokal erhalten (Standard: nur Listen auf).
+    - Verlauf und Papierkorb bleiben zusätzlich im ⋮-Menü der Kopfzeile.
   - Gestaltung nach den Vorlage-Screenshots vom 19.10.2026 (Todoist-ähnlich, wie der Desktop): warmer Grund, Aufgaben als weiße Karten, runde Haken in Prioritätsfarbe, Datum mit Kalendersymbol in Farbstufe, „Eingang“ rechts in der Zeile; Kopfzeile mit großer Überschrift und Aufgabenzahl, Suche, Anzeige (Filter/Sortierung) und ⋮-Menü (Neu einlesen, Probleme, Papierkorb, Einstellungen); aktive Ansicht in der unteren Leiste mit hinterlegter Pille; roter Plus-Button.
   - Details und Erfassung als Blatt von unten über der Liste: Detail mit Eingang/Einsortiert und ⋮-Menü (Status, Wiederholung, Dateiname, Löschen), Titelkarte mit Haken, Terminzeilen, fehlende Eigenschaften als Chips (Beschreibung, Priorität, Frist, Geplant, Wiederholung), „Checklistenpunkt hinzufügen“; Erfassung mit Titelzeile, den Chips Beschreibung und Bearbeiten (ohne Titel ausgegraut; erfasst und öffnet das Detail) und rotem Plus-Knopf über der Tastatur, dessen Plus sich beim ersten Zeichen eine Vierteldrehung dreht. Zurück (Taste oder Geste) schließt das Eingabeblatt samt Tastatur in einem Schritt, ohne zu erfassen; das gilt auch für Listeneinträge und Neue Liste.
   - Wischgesten: nach rechts erledigt, nach links öffnet Aktionen (Einsortieren, Termin, Löschen).

@@ -167,6 +167,14 @@ export const T = {
     remaining: (n: number) => (n === 1 ? "noch 1 Termin" : `noch ${n} Termine`),
     leadTime: "Vorlauf",
   },
+  /** Bereiche der Seitenleiste (Desktop) und des Blatts „Mehr“ (Android), 4.5 */
+  side: {
+    collections: "Sammlungen",
+    archive: "Archiv",
+    allLists: (n: number) => `Alle ${n} Listen`,
+    noDates: "keine Termine",
+    toggle: (label: string) => `${label} auf- oder zuklappen`,
+  },
   unverified: "Anzeige aus dem Zwischenspeicher – wird geprüft …",
   /** Kurzform in der Kopfzeile (Android): ohne eigenes Banner, damit die Liste beim Start nicht springt */
   unverifiedShort: "wird geprüft …",
