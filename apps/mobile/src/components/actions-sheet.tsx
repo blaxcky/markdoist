@@ -1,5 +1,5 @@
 // Aktionen zu einer Aufgabe (Wischen nach links / langes Drücken): Gruppe Frist (Heute, Morgen, In einer Woche,
-// Datum wählen) mit Einplanen, abgesetzt Einsortieren/Eingang, zuletzt Löschen (4.5).
+// Frist setzen …) mit Einplanen, abgesetzt Einsortieren/Eingang, zuletzt Löschen (4.5).
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { T, withDate } from "@markdoist/app";
 import { Temporal, todayOf, type TaskView } from "@markdoist/core";
@@ -91,7 +91,7 @@ export function ActionsSheet({
           onPress: () => setDue(week.toString()),
         },
         {
-          label: "Datum wählen …",
+          label: "Frist setzen …",
           icon: <CalendarIcon color={c.muted} size={16} />,
           testID: "act-due",
           onPress: () =>
