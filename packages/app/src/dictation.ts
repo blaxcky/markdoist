@@ -180,6 +180,8 @@ export interface DictationRun {
   onPhase?: (phase: "transcribing" | "cleaning") => void;
   /** Zeitgrenze je Anfrage in ms */
   timeoutMs?: number;
+  /** Abbruch von außen (Knopf „Abbrechen“) */
+  signal?: AbortSignal;
 }
 
 export interface DictationResult {
@@ -195,6 +197,10 @@ type Send = (url: string, headers: Record<string, string>, signal?: AbortSignal)
 export async function request(run: DictationRun, path: string, init: { method: string; headers: Record<string, string>; body?: unknown }, send?: Send): Promise<unknown> {
   const ctrl = typeof AbortController === "function" ? new AbortController() : undefined;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), run.timeoutMs ?? 120_000) : undefined;
+  const outer = run.signal;
+  const abortOuter = () => ctrl?.abort();
+  if (outer?.aborted) abortOuter();
+  else outer?.addEventListener("abort", abortOuter);
   let res: Awaited<ReturnType<FetchLike>>;
   const url = `${run.baseUrl ?? OPENAI_BASE_URL}${path}`;
   const headers = { Authorization: `Bearer ${run.key.trim()}`, ...init.headers };
@@ -204,6 +210,7 @@ export async function request(run: DictationRun, path: string, init: { method: s
     throw new DictationError(ctrl?.signal.aborted ? "timeout" : "network", e instanceof Error ? e.message : String(e));
   } finally {
     if (timer) clearTimeout(timer);
+    outer?.removeEventListener("abort", abortOuter);
   }
   if (!res.ok) {
     // Die Fehlermeldung von OpenAI (z. B. „Unsupported parameter …“) macht die Ursache sichtbar.
@@ -283,7 +290,7 @@ export const T_DICTATION = {
   notCleaned: "Nicht bereinigt eingefügt",
   keyLabel: "OpenAI-API-Schlüssel",
   keyPlaceholder: "sk-…",
-  keyHint: "Der Schlüssel bleibt nur auf diesem Gerät und wird verschlüsselt gespeichert. Aufnahmen sowie Listen- und Eintragstitel gehen beim Diktieren an OpenAI, für Titelvorschläge die Notiz und der Listentitel.",
+  keyHint: "Der Schlüssel bleibt nur auf diesem Gerät und wird verschlüsselt gespeichert. Aufnahmen sowie Listen- und Eintragstitel gehen beim Diktieren an OpenAI, für Titelvorschläge die Notiz und der Listentitel, für „Checkliste einfügen“ der eingefügte Text und der Listentitel.",
   keySave: "Speichern",
   keyCheck: "Prüfen",
   keyRemove: "Entfernen",
@@ -295,7 +302,7 @@ export const T_DICTATION = {
   modelCleanup: "Modell für die Bereinigung",
   cleanup: "Text bereinigen",
   cleanupHint: "Füllwörter entfernen, Selbstkorrekturen auflösen, Satzzeichen und Absätze setzen.",
-  modelTitle: "Modell für Titel und Art",
+  modelTitle: "Modell für Titel und Listen",
   titleNoKey: "Für Titelvorschläge einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen",
   autoTitle: "Titel und Art vorschlagen",
   autoTitleHint: "Neue Programmier-Einträge bekommen Titel und Art aus der Notiz. Dafür gehen Notiz und Listentitel an OpenAI.",

@@ -11,7 +11,7 @@ import { scheduleOnRN } from "react-native-worklets";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { COMPLETE_COLLAPSE_MS, T, type CompletionPhase } from "@markdoist/app";
+import { COMPLETE_COLLAPSE_MS, T, T_CHECKLIST, type CompletionPhase } from "@markdoist/app";
 import { findCheckboxes, type Checkbox, type TaskAction } from "@markdoist/core";
 import { Menu } from "../components/menu";
 import { ChevronIcon, DotsIcon, GripIcon, PlusIcon } from "../components/icons";
@@ -223,6 +223,7 @@ export function ChecklistScreen() {
           { label: T.lists.removeChecked, onPress: () => void act({ type: "removeCheckedItems" }, `${T.lists.removeChecked}: ${checked.length}`), disabled: ro || !checked.length, testID: "remove-checked" },
           { label: T.lists.resetAll, onPress: () => void act({ type: "resetItems" }, T.lists.resetAll), disabled: ro || !checked.length, testID: "reset-items" },
           { label: T.lists.editMarkdown, onPress: () => nav.navigate("Detail", { ref }), testID: "edit-markdown" },
+          { label: T_CHECKLIST.menu, onPress: () => nav.navigate("PasteChecklist", { ref }), disabled: ro, testID: "paste-checklist" },
           {
             label: T.lists.deleteList,
             danger: true,

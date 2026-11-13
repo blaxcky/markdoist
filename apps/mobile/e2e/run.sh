@@ -132,9 +132,11 @@ if [ $fail = 0 ] && [ $SUBSET = 0 ]; then
   check "Restmuell.md" "scheduled: $(date -u -d "$W1 -3 days" +%F)"
   check "Restmuell.md" "format_version: 2"
   # AK-12: Serienaktionen legen keine Dateien an – 8 Seed-Dateien + 4 Erfassungen + 1 Liste + „Auch weg“
-  # + Liste „Diktat“ und Eintrag „Sprachnotiz“ aus Flow 61.
+  # + Liste „Diktat“ und Eintrag „Sprachnotiz“ aus Flow 61 + Liste „Wocheneinkauf“ aus Flow 62.
   n=$(adb shell ls "$DIR" | grep -c '\.md' || true)
-  if [ "$n" = 16 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 16)"; fail=1; fi
+  if [ "$n" = 17 ]; then echo "OK   Dateien im Ordner: $n"; else echo "FEHL Dateien im Ordner: $n (erwartet 17)"; fail=1; fi
+  # Checkliste einfügen (4.11, Flow 62): Fehlschläge schreiben nichts.
+  if adb shell "cat '$DIR/Wocheneinkauf.md'" | tr -d '\r' | grep -q -- '- \['; then echo "FEHL Wocheneinkauf.md hat Einträge"; fail=1; else echo "OK   Wocheneinkauf.md ohne Einträge"; fi
   adb shell ls -a "$DIR" | grep -q 'todo-tmp' && { echo "FEHL Temp-Datei übrig"; fail=1; } || true
 fi
 exit $fail

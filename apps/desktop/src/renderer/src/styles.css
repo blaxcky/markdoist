@@ -2401,6 +2401,19 @@ button.strip-day:hover:not(:disabled) .strip-dot {
 .dictation-settings .hint.error {
   color: var(--danger);
 }
+.paste-checklist textarea {
+  resize: vertical;
+  min-height: 140px;
+  font: inherit;
+}
+.paste-checklist .hint {
+  color: var(--fg-muted);
+  font-size: 12px;
+  margin: 0;
+}
+.paste-checklist .hint.error {
+  color: var(--danger);
+}
 
 /* ---------- Programmieren als Board (4.10) ---------- */
 .page.page-wide {

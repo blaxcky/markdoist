@@ -3,6 +3,7 @@
 import { Temporal } from "temporal-polyfill";
 import {
   appendItem,
+  appendItems,
   findCheckboxes,
   moveItem,
   removeCheckedItems,
@@ -73,6 +74,8 @@ export type TaskAction =
   /** `expect`: angezeigter Eintragstext; weicht die Zeile inzwischen ab, wird nichts geschrieben (4.6). */
   | { type: "toggleCheckbox"; line: number; expect?: string }
   | { type: "addItem"; text: string }
+  /** Mehrere Einträge als ein Schreibvorgang (4.11) */
+  | { type: "addItems"; texts: string[] }
   | { type: "editItem"; line: number; text: string; expect?: string }
   | { type: "removeItem"; line: number; expect?: string }
   | { type: "moveItem"; line: number; before: number | null; expect?: string; expectBefore?: string }
@@ -201,6 +204,7 @@ export function actionDependencies(
     case "setBody":
     case "toggleCheckbox":
     case "addItem":
+    case "addItems":
     case "editItem":
     case "removeItem":
     case "moveItem":
@@ -405,6 +409,11 @@ function planInner(
     case "addItem": {
       const b = appendItem(task.body, action.text);
       if (b === null) return blocked("Eintrag darf nicht leer sein");
+      return { kind: "edit", set: {}, remove: [], body: b };
+    }
+    case "addItems": {
+      const b = appendItems(task.body, action.texts);
+      if (b === null) return blocked("Keine Einträge");
       return { kind: "edit", set: {}, remove: [], body: b };
     }
     case "editItem": {

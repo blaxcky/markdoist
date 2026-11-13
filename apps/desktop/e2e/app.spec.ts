@@ -838,7 +838,7 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
       if (req.url === "/v1/audio/transcriptions") return void res.end(JSON.stringify({ text: "äh also der Knopf soll äh rot sein" }));
       const out = (text: string) => res.end(JSON.stringify({ output: [{ type: "reasoning" }, { type: "message", content: [{ type: "output_text", text }] }] }));
       // Titelvorschlag (4.10): strukturierte Ausgabe
-      if (req.url === "/v1/responses" && body.includes('"json_schema"')) return void out(JSON.stringify({ title: "Knopf rot färben", type: "feature" }));
+      if (req.url === "/v1/responses" && body.includes('"name":"eintrag"')) return void out(JSON.stringify({ title: "Knopf rot färben", type: "feature" }));
       if (req.url === "/v1/responses") return void out("Der Knopf soll rot sein.");
       res.end(JSON.stringify({ data: [] }));
     });
@@ -919,7 +919,7 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
     await expect(page.getByTestId("field-title")).toHaveValue("Knopf rot färben");
     await expect.poll(() => file("Farbe des Knopfs.md")).toContain("dev_type: feature\n");
     expect(await file("Farbe des Knopfs.md")).not.toContain("title_pending");
-    expect(seen.filter((x) => x.body.includes('"json_schema"')).at(-1)!.body).toContain('"model":"gpt-6-luna"');
+    expect(seen.filter((x) => x.body.includes('"name":"eintrag"')).at(-1)!.body).toContain('"model":"gpt-6-luna"');
     await page.getByTestId("detail").getByRole("button", { name: "Schließen", exact: true }).click();
 
     // Diktieren im Eingabefeld des Boards legt den Eintrag direkt an; Titel und Art folgen (AK-54).
@@ -935,6 +935,105 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
     await expect.poll(() => file(created)).toContain("dev_type: feature\n");
     expect(await file(created)).toMatch(/title: Knopf rot färben\n/);
     expect(await file(created)).toMatch(/---\nDer Knopf soll rot sein\.\n$/);
+  } finally {
+    server.close();
+  }
+});
+
+test("Listen: Checkliste aus Text einfügen, ein Rückgängig, Fehler behält den Text (4.11, AK-55)", async () => {
+  // Lokaler Ersatz für die OpenAI-API.
+  const seen: { auth: string; body: string }[] = [];
+  let mode: "ok" | "401" = "ok";
+  const server = createServer((req, res) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      seen.push({ auth: req.headers.authorization ?? "", body });
+      res.setHeader("Content-Type", "application/json");
+      if (mode === "401") return void res.writeHead(401).end(JSON.stringify({ error: { message: "Incorrect API key" } }));
+      if (req.url === "/v1/responses" && body.includes('"name":"checkliste"')) {
+        const text = JSON.stringify({ items: ["2 Milch", "Brot (Vollkorn)", "Eier", "Spüli"] });
+        return void res.end(JSON.stringify({ output: [{ type: "message", content: [{ type: "output_text", text }] }] }));
+      }
+      res.end(JSON.stringify({ data: [] }));
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as AddressInfo).port;
+  try {
+    await app.close();
+    app = await electron.launch({
+      args: [join(appDir, "out/main/index.js")],
+      env: {
+        ...process.env,
+        ...hide,
+        MARKDOIST_FOLDER: folder,
+        MARKDOIST_DATA_DIR: join(base, "data"),
+        MARKDOIST_TEST_NOW: "2026-10-12T10:00",
+        MARKDOIST_TEST_TZ: "Europe/Berlin",
+        MARKDOIST_OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`,
+      },
+    });
+    page = await app.firstWindow();
+    await page.getByTestId("list").waitFor();
+    await page.getByTestId("nav-lists").click();
+    await page.locator('[data-testid="list-row"][data-title="Packliste Urlaub"]').click();
+    await expect(page.getByTestId("list-title")).toHaveText("Packliste Urlaub");
+    const original = await file("Packliste.md");
+    const message = "Hi 😘 kannst du noch 2 Milch, Brot (Vollkorn) und Eier mitbringen? Ach ja und Spüli. Danke!";
+
+    // Ohne Schlüssel: Hinweis, Einstellungen öffnen sich, der Text bleibt.
+    await page.getByTestId("list-menu").click();
+    await page.getByTestId("paste-checklist").click();
+    const text = page.getByTestId("paste-checklist-text");
+    await expect(text).toBeFocused();
+    await text.fill(message);
+    await text.press("Control+Enter");
+    await expect(page.getByTestId("dictation-settings")).toBeVisible();
+    await page.getByTestId("dictation-key").fill("sk-test-e2e-liste-5678");
+    await page.getByTestId("dictation-key-save").click();
+    await expect(page.getByTestId("dictation-key-masked")).toHaveText("sk-…5678");
+    // Escape schließt nur die Einstellungen; der Dialog darunter bleibt mit dem Text.
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("dictation-settings")).toHaveCount(0);
+    await expect(page.getByTestId("paste-checklist-dialog")).toBeVisible();
+    await expect(page.getByTestId("paste-checklist-status")).toHaveText("Für „Checkliste einfügen“ einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen");
+    await expect(text).toHaveValue(message);
+    expect(seen).toHaveLength(0);
+
+    // Schlüssel abgelehnt: Meldung mit Ursache, Text bleibt, nichts geschrieben.
+    mode = "401";
+    await page.getByTestId("paste-checklist-submit").click();
+    await expect(page.getByTestId("paste-checklist-status")).toHaveText("Checkliste nicht eingefügt: API-Schlüssel ungültig");
+    await expect(text).toHaveValue(message);
+    expect(await file("Packliste.md")).toBe(original);
+
+    // Erfolg: alle Einträge als ein Schreibvorgang hinter den letzten Eintrag, Dialog schließt.
+    mode = "ok";
+    await page.getByTestId("paste-checklist-submit").click();
+    await expect(page.getByTestId("toast")).toHaveText(/4 Einträge eingefügt/);
+    await expect(page.getByTestId("paste-checklist-dialog")).toHaveCount(0);
+    await expect(page.locator('[data-testid="item-row"][data-text="Brot (Vollkorn)"]')).toBeVisible();
+    await expect.poll(() => file("Packliste.md")).toMatch(/---\n- \[ \] Zahnbürste\n- \[x\] Pass\n- \[ \] Ladekabel\n- \[ \] 2 Milch\n- \[ \] Brot \(Vollkorn\)\n- \[ \] Eier\n- \[ \] Spüli\n$/);
+    const req = seen.at(-1)!;
+    expect(req.auth).toBe("Bearer sk-test-e2e-liste-5678");
+    expect(req.body).toContain('"model":"gpt-6-luna"');
+    expect(req.body).toContain("Liste: Packliste Urlaub");
+    expect(req.body).toContain("Spüli. Danke!");
+
+    // Ein Rückgängig nimmt alle Einträge zurück.
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => file("Packliste.md")).toBe(original);
+
+    // Abbrechen schließt ohne Anfrage.
+    const before = seen.length;
+    await page.getByTestId("list-menu").click();
+    await page.getByTestId("paste-checklist").click();
+    await page.getByTestId("paste-checklist-text").fill("Butter");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("paste-checklist-dialog")).toHaveCount(0);
+    expect(seen.length).toBe(before);
   } finally {
     server.close();
   }

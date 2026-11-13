@@ -2,6 +2,7 @@
 // von hier aus. Der Renderer sieht den Schlüssel nie, nur die Maske; die CSP des Renderers bleibt unverändert.
 import {
   checkKey,
+  checklistFromText,
   DictationError,
   maskKey,
   parseDictationSettings,
@@ -39,6 +40,7 @@ export interface DictationStatus {
 }
 
 export type TitleResult = { ok: true; suggestion: TitleSuggestion } | { ok: false; kind: DictationErrorKind | "off"; detail?: string; status?: number };
+export type ChecklistResult = { ok: true; items: string[] } | { ok: false; kind: DictationErrorKind; detail?: string; status?: number };
 
 export type DictationRunResult = { ok: true; result: DictationResult } | { ok: false; kind: DictationErrorKind };
 
@@ -145,6 +147,24 @@ export class DictationService {
         baseUrl: this.baseUrl,
       });
       return { ok: true, suggestion };
+    } catch (e) {
+      if (e instanceof DictationError) return { ok: false, kind: e.kind, detail: e.message, ...(e.status ? { status: e.status } : {}) };
+      return { ok: false, kind: "server", detail: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /** „Checkliste einfügen“ (4.11): zerlegt Text in Einträge, mit dem Modell für Titel und Listen. */
+  async checklist(text: string, list: string): Promise<ChecklistResult> {
+    try {
+      const items = await checklistFromText({
+        fetch: this.fetch,
+        key: this.key() ?? "",
+        model: this.settings().titleModel,
+        text: typeof text === "string" ? text : "",
+        list: typeof list === "string" ? list : "",
+        baseUrl: this.baseUrl,
+      });
+      return { ok: true, items };
     } catch (e) {
       if (e instanceof DictationError) return { ok: false, kind: e.kind, detail: e.message, ...(e.status ? { status: e.status } : {}) };
       return { ok: false, kind: "server", detail: e instanceof Error ? e.message : String(e) };

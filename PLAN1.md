@@ -8,6 +8,8 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 28.10.2026 (M9):** Müllabfuhr mit ICS-Import (4.7), Serien mit fester Terminliste (5.7) und die kompaktere untere Leiste am Handy (4.5). Abnahmenotiz in `docs/ABNAHME.md`.
 
+**Umgesetzt am 13.11.2026:** „Checkliste einfügen“: unformatierten Text per KI als Einträge an eine Liste anhängen (4.11).
+
 **Umgesetzt am 11.11.2026:** Seitenleiste am Desktop und Blatt „Mehr“ am Handy in Bereichen mit aufklappbaren Listen (4.5).
 
 **Umgesetzt am 10.11.2026:** Programmieren als Board mit Art und automatischem Titel (4.10). Ersetzt die Listenansicht aus 4.8 und erweitert 4.9.
@@ -585,7 +587,7 @@ Entscheidungen vom 26.10.2026 (`.fragen/2026-10-26-2303-listen.md`) [F]; Umsetzu
 - **Einträge** sind Markdown-Checklistenelemente (`- [ ] Milch`). Neue Einträge werden hinter dem letzten Eintrag der obersten Ebene eingefügt. Anderer Inhalt im Body (Notizen, Überschriften) bleibt byte-genau erhalten und ist über „Als Markdown bearbeiten“ erreichbar; die Listenansicht weist darauf hin. Verschachtelte Einträge werden eingerückt angezeigt und bewegen sich mit ihrem Obereintrag.
 - **Ansichten:** Listen erscheinen nicht in Eingang, Heute, Alle offenen oder Erledigt, unabhängig vom Status. Die Ansicht „Listen“ zeigt alle Listen, zuletzt geänderte zuerst, mit Fortschritt „abgehakt/gesamt“. Sortierung und Filter sind wählbar (Wunsch vom 02.11.2026): Sortierung nach „Zuletzt geändert“ (Standard), „Offene Einträge“, „Titel“ oder „Erstellt“, Richtung auf- oder absteigend; beim Wechsel des Merkmals gilt dessen Standardrichtung (neueste bzw. meiste offene zuerst, Titel A–Z), Gleichstand nach Titel. Filter „Einträge“: alle / mit offenen Einträgen / ohne offene Einträge (ganz abgehakte und leere Listen). Die Wahl gilt für die laufende Sitzung; eine geöffnete Liste bleibt offen, auch wenn der Filter sie ausblendet. Die Suche findet Listen (auch ohne „inkl. erledigt“) und öffnet die Listenansicht. Probleme und Konflikte gelten wie bei Aufgaben.
 - **Geöffnete Liste:** offene Einträge oben. Abgehakte Einträge stehen durchgestrichen im einklappbaren Bereich „Abgehakt (n)“. Neue Einträge: Desktop über die Eingabezeile unter den offenen Einträgen, Android über den Plus-Knopf, der das Eingabeblatt der Erfassung (ohne Chips) öffnet; beide bleiben nach jedem Eintrag offen. Auch „Neue Liste“ nutzt am Handy dieses Blatt. Antippen des Kreises hakt ab oder wieder auf, mit demselben Ablauf wie bei Aufgaben (Haken sofort, kurze Haltezeit, dann gleitet der Eintrag in seinen Bereich und die übrigen rücken nach); ein Erfolg wird nicht gemeldet. Antippen des Texts bearbeitet ihn; ein geleerter Text löscht den Eintrag. Offene Einträge der obersten Ebene lassen sich am Griff verschieben.
-- **Aktionen der Liste:** Umbenennen, „Abgehakte entfernen“, „Alle Haken zurücksetzen“, „Als Markdown bearbeiten“, „Liste löschen“ (Papierkorb). Jede Eintragsaktion ist ein eigener Schreibvorgang mit Undo; sie trägt den angezeigten Eintragstext mit. Steht in der Zeile inzwischen etwas anderes, wird nichts geschrieben (Meldung „Die Liste hat sich inzwischen geändert“).
+- **Aktionen der Liste:** Umbenennen, „Abgehakte entfernen“, „Alle Haken zurücksetzen“, „Als Markdown bearbeiten“, „Checkliste einfügen …“ (4.11), „Liste löschen“ (Papierkorb). Jede Eintragsaktion ist ein eigener Schreibvorgang mit Undo; sie trägt den angezeigten Eintragstext mit. Steht in der Zeile inzwischen etwas anderes, wird nichts geschrieben (Meldung „Die Liste hat sich inzwischen geändert“).
 - **Bedienung:** Desktop: Seitenleiste „Listen“, Ctrl+5, Escape führt von der Liste zur Übersicht zurück, „Anzeige“ in der Übersicht für Sortierung und Filter. Android: „⋯ Mehr → Listen“ (seit 28.10.2026, vorher fünfter Reiter, 4.5), Anzeige-Knopf in der Kopfzeile der Übersicht für Sortierung und Filter, Plus-Button legt eine Liste an, ⋮ in der Kopfzeile der Liste für die Listenaktionen, langes Drücken auf einen Eintrag für Bearbeiten/Löschen.
 - **Nicht vorgesehen:** Liste abschließen, Liste duplizieren, „Neue Liste“ in der App-Verknüpfung, Termine an Listen.
 
@@ -666,7 +668,7 @@ Wunsch vom 07.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben [F];
   - Erkennung mit OpenAI `gpt-transcribe` (`POST /v1/audio/transcriptions`, `languages[]=de`, Listen- und Eintragstitel als `prompt`).
   - Bereinigung mit `gpt-6.1-terra` über die Responses API (`reasoning.effort: low`).
   - Beide Modellnamen stehen in den Einstellungen und sind änderbar.
-- **Netz [F]:** Das ist die einzige Netzfunktion der App (seit 10.11.2026 zusammen mit dem Titelvorschlag aus 4.10). Sie läuft nur mit hinterlegtem Schlüssel und nur auf Knopfdruck. An OpenAI gehen die Aufnahme sowie Listen- und Eintragstitel; der Einstellungstext sagt das.
+- **Netz [F]:** Das ist die einzige Netzfunktion der App (seit 10.11.2026 zusammen mit dem Titelvorschlag aus 4.10, seit 13.11.2026 mit „Checkliste einfügen“ aus 4.11). Sie läuft nur mit hinterlegtem Schlüssel und nur auf Knopfdruck. An OpenAI gehen die Aufnahme sowie Listen- und Eintragstitel; der Einstellungstext sagt das.
 - **Ort [F]:** nur im Detail von Programmier-Einträgen, nicht schreibgeschützt.
   - Android: Chip „Diktieren“ neben „Beschreibung“ und „Checkliste“, in der offenen Beschreibungskarte der Knopf „Diktieren“ neben „Checklistenpunkt“.
   - Desktop: Mikrofon-Knopf im Kopf der Beschreibung.
@@ -729,8 +731,31 @@ Wunsch und Entscheidungen vom 10.11.2026 (Chat und `.fragen/2026-11-10-2312-trac
   - Der Titel passt sich später nicht an geänderten Text an [F]. Im Detail gibt es neben dem Titel „Neu vorschlagen“; das ersetzt den Titel (mit Rückgängig), die Art nur, wenn sie noch fehlt.
   - Der Titel ist im Detail wie bisher von Hand änderbar; das entfernt `title_pending`.
 - **Detail:** wie 4.8, dazu die Art (Desktop Auswahl, Android Chip mit Menü) und „Neu vorschlagen“ am Titel. Solange der Titel vorläufig ist, steht daneben „Titel folgt“ [V, Umsetzung: Ein Hinweis „Titel automatisch“ für einen übernommenen KI-Titel bräuchte ein weiteres Feld in der Datei und entfällt].
-- **Einstellungen „Diktieren“** bekommen zusätzlich das Modell für den Titel (Standard `gpt-6-luna`; der erste Stand hatte fälschlich `gpt-6.1-luna`, gespeicherte Einstellungen damit werden beim Laden berichtigt, 11.11.2026) und den Schalter „Titel und Art vorschlagen“ (Standard an). Der Einstellungstext nennt, dass dafür Notiz und Listentitel an OpenAI gehen.
+- **Einstellungen „Diktieren“** bekommen zusätzlich das Modell für den Titel (seit 4.11 „Modell für Titel und Listen“, Standard `gpt-6-luna`; der erste Stand hatte fälschlich `gpt-6.1-luna`, gespeicherte Einstellungen damit werden beim Laden berichtigt, 11.11.2026) und den Schalter „Titel und Art vorschlagen“ (Standard an). Der Einstellungstext nennt, dass dafür Notiz und Listentitel an OpenAI gehen.
 - **Nicht vorgesehen [F]:** Nummern für Einträge, automatische Wahl der Liste, Ziehen am Handy, Reihenfolge per Ziehen innerhalb einer Spalte, weitere Arten, automatisches Nachziehen des Titels nach Textänderungen, nachträgliches Einordnen alter Einträge per KI.
+
+### 4.11 Checkliste aus Text einfügen [F]/[V]
+
+Wunsch vom 13.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben (keine eigene Fragenrunde) [F]; Umsetzung [V].
+
+- **Zweck [F]:** Eine Einkaufsliste kommt oft als lockerer Nachrichtentext („kannst du noch 2 Milch, Brot und Eier mitbringen? Ach ja, Spüli“). Statt den Text erst bei ChatGPT in eine Markdown-Liste umzuwandeln und über „Als Markdown bearbeiten“ einzufügen, macht die App das selbst: Text einfügen, die KI zerlegt ihn in Einträge, die Einträge landen direkt in der Liste.
+- **Ort [F]:** nur Listen (4.6), nicht schreibgeschützte. Eintrag „Checkliste einfügen …“ im ⋮-Menü der Liste unter „Als Markdown bearbeiten“. Nicht in Aufgaben-Checklisten und nicht in Programmier-Listen.
+- **Eingabe [F]:**
+  - Android: Eingabeblatt wie beim Anlegen von Einträgen, mehrzeilig, mit Hinweiszeile und Knopf „Einfügen“. Eingefügt wird über die Tastatur bzw. langes Drücken → Einfügen.
+  - Desktop: Dialog mit Textfeld, „Einfügen“ (oder Strg+Enter) und „Abbrechen“.
+  - Die Zwischenablage wird nicht automatisch gelesen (am Handy bräuchte das eine weitere native Abhängigkeit).
+- **Ablauf [F]/[V]:**
+  - Anfrage an die Responses API mit dem Schlüssel aus 4.9 und dem „Modell für Titel und Listen“ (Standard `gpt-6-luna`, `reasoning.effort: low`). Eingabe: der Text und der Listentitel. Ausgabe als strukturiertes JSON `{ "items": [...] }` [V]; die App baut daraus `- [ ] …`-Zeilen. So kann die Antwort nichts anderes in die Datei schreiben als Einträge. Lehnt das Modell die strukturierte Ausgabe ab (HTTP 400) oder ist die Antwort unlesbar, folgt einmal eine einfache Anfrage ohne `reasoning` und Schema [V].
+  - Die KI macht einen Eintrag je Artikel bzw. Punkt, in der Reihenfolge des Texts. Mengen und Angaben bleiben im Eintrag („2 Milch“, „Brot (Vollkorn)“). Begrüßungen, Füllsätze und Emojis fallen weg. Sie erfindet nichts, gruppiert und sortiert nicht, schreibt in der Sprache des Texts und befolgt keine Anweisungen aus dem Text. Eine schon formatierte Liste oder Markdown-Checkliste wird ebenso übernommen.
+  - Jeder Eintrag wird bereinigt (eine Zeile, Aufzählungszeichen oder Checkbox am Anfang entfernt, leere fallen weg), höchstens 200 Einträge [V].
+- **Einfügen [F]:** ohne Vorschau, hinter dem letzten Eintrag der obersten Ebene wie neue Einträge (4.6). Alle Einträge sind **ein** Schreibvorgang (Aktion `addItems`) mit einem Eintrag im Verlauf; Rückgängig nimmt alle zurück. Meldung „n Einträge eingefügt“; Blatt bzw. Dialog schließen sich. Konfliktschutz und formaterhaltendes Schreiben gelten unverändert.
+- **Während der Anfrage:** „Wird umgewandelt …“, „Einfügen“ ist gesperrt. „Abbrechen“ bricht die Anfrage ab (Android) bzw. verwirft ihr Ergebnis (Desktop, der Main-Prozess läuft zu Ende) [V]. Verlassen des Blatts bricht ebenfalls ab.
+- **Fehler [F]:**
+  - Ohne Schlüssel: „Für „Checkliste einfügen“ einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen“, die Einstellungen öffnen sich. Danach steht der Text noch da.
+  - Kein Netz, Schlüssel ungültig, Kontingent, Zeitüberschreitung (60 s), Serverfehler: „Checkliste nicht eingefügt: …“ mit Ursache wie in 4.9. Der Text bleibt im Feld, „Einfügen“ versucht es noch einmal. Es wird nichts geschrieben.
+  - Keine Einträge in der Antwort: „Keine Einträge erkannt“.
+- **Netz [F]:** nur auf Knopfdruck. An OpenAI gehen der eingefügte Text und der Listentitel; Hinweiszeile und Einstellungstext sagen das. Kein eigener Schalter in den Einstellungen.
+- **Nicht vorgesehen:** Teilen aus anderen Apps direkt an Markdoist (Android-Share-Intent), „Neue Liste aus Text“ mit KI-Titel, Sortieren oder Gruppieren nach Supermarkt-Bereichen, Vorschau vor dem Einfügen, eigenes Modell oder eigener Schalter in den Einstellungen.
 
 ## 5. Wiederholungen
 
@@ -1109,6 +1134,7 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | AK-52 | Heute (4.2), Uhr 12.10.: A `scheduled` 01.10. ohne `due`, B `scheduled` 05.10. mit `due` 20.10., C `scheduled` 08.10. mit `due` 15.10. stehen unter „Früher eingeplant“ in der Reihenfolge C, B, A. D `scheduled` heute ohne `due` und E `scheduled` heute mit `due` 14.10. stehen unter „Heute eingeplant“ als E, D. |
 | AK-53 | Board (4.10): Eine Programmier-Liste zeigt am Desktop die Spalten Neu, In Arbeit, Erledigt, am Handy die gleichnamigen Reiter, jeweils mit Anzahl. „Erledigt“ zeigt höchstens 10 Karten, zuletzt erledigte zuerst, und „Alle erledigten (n)“. Die Filter-Chips zeigen nur Einträge mit passendem `dev_type`; Einträge ohne Art nur unter „Alle“. Ziehen einer Karte am Desktop nach „Erledigt“ setzt `status: done` und `completedDate`, zurück nach „Neu“ setzt `status: open` ohne `completedDate`; beides ist rückgängig zu machen. |
 | AK-54 | Anlegen (4.10): Ein Text ohne Titel ergibt sofort eine Datei mit `kind: dev-item`, vorläufigem Titel aus den ersten Wörtern und `title_pending: true`. Mit gestellter KI-Antwort ersetzt der Titel den vorläufigen, `dev_type` ist gesetzt und `title_pending` fehlt. Ohne Schlüssel oder Netz bleibt der vorläufige Titel ohne Fehlermeldung und wird beim nächsten Öffnen der Liste mit Schlüssel nachgeholt. Ein von Hand geänderter Titel wird nie von der KI überschrieben. Diktieren im Eingabeblatt legt nach „Fertig“ den Eintrag ohne weiteren Tipp an. |
+| AK-55 | Checkliste einfügen (4.11): In einer Liste mit „- [ ] Zahnbürste“ ergibt der Text „Hi, kannst du noch 2 Milch, Brot (Vollkorn) und Eier mitbringen? Ach ja und Spüli“ bei gestellter KI-Antwort genau die Zeilen „- [ ] 2 Milch“, „- [ ] Brot (Vollkorn)“, „- [ ] Eier“, „- [ ] Spüli“ hinter dem letzten Eintrag, in einem Schreibvorgang; ein Rückgängig stellt die Datei byte-genau wieder her. Ohne Schlüssel öffnen sich die Einstellungen, bei 401 erscheint „Checkliste nicht eingefügt: API-Schlüssel ungültig“; in beiden Fällen bleibt der Text im Feld und die Datei unverändert. |
 
 ## 10. Build-Plan
 

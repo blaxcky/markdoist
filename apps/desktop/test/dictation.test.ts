@@ -96,3 +96,29 @@ describe("Diktieren am Desktop (4.9)", () => {
     expect(await svc.check()).toEqual({ ok: false, kind: "auth" });
   });
 });
+
+describe("Checkliste einfügen am Desktop (4.11)", () => {
+  it("nutzt Schlüssel und Titelmodell und liefert die Einträge", async () => {
+    const calls: { url: string; body: Record<string, unknown>; auth: string | undefined }[] = [];
+    const fetch: FetchLike = async (url, init) => {
+      calls.push({ url, body: JSON.parse(String(init.body)) as Record<string, unknown>, auth: init.headers.Authorization });
+      return { ok: true, status: 200, json: async () => ({ output: [{ type: "message", content: [{ type: "output_text", text: '{"items": ["2 Milch", "Eier"]}' }] }] }) };
+    };
+    const { svc } = setup(box(), fetch);
+    await svc.setKey(KEY);
+    await svc.setSettings({ titleModel: "listen-modell" });
+    expect(await svc.checklist("2 Milch und Eier bitte", "Einkauf")).toEqual({ ok: true, items: ["2 Milch", "Eier"] });
+    expect(calls[0]!.url).toBe("http://127.0.0.1:1/v1/responses");
+    expect(calls[0]!.auth).toBe(`Bearer ${KEY}`);
+    expect(calls[0]!.body.model).toBe("listen-modell");
+    expect(String(calls[0]!.body.instructions)).toContain("Liste: Einkauf");
+  });
+
+  it("ohne Schlüssel nokey, Fehler von OpenAI mit Status", async () => {
+    const fetch: FetchLike = async () => ({ ok: false, status: 401, json: async () => ({ error: { message: "Incorrect API key" } }) });
+    const { svc } = setup(box(), fetch);
+    expect(await svc.checklist("Milch", "")).toEqual({ ok: false, kind: "nokey", detail: "nokey" });
+    await svc.setKey(KEY);
+    expect(await svc.checklist("Milch", "")).toEqual({ ok: false, kind: "auth", detail: "HTTP 401: Incorrect API key", status: 401 });
+  });
+});

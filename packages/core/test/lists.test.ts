@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   allOpenView,
   appendItem,
+  appendItems,
   buildIndex,
   clockAtLocal,
   DEFAULT_LIST_OPTIONS,
@@ -123,6 +124,17 @@ describe("Listen: Einträge bearbeiten (4.6)", () => {
     expect(appendItem("- [ ] a\n", "  ")).toBeNull();
   });
 
+  it("Mehrere anfügen (4.11): Reihenfolge, Leere fallen weg, Notiz und Zeilenenden bleiben", () => {
+    expect(appendItems("", ["Milch", " 2 Brot \n", "", "Eier"])).toBe("- [ ] Milch\n- [ ] 2 Brot\n- [ ] Eier\n");
+    expect(appendItems("- [ ] Milch\n\nNotiz\n", ["Eier", "Mehl"])).toBe("- [ ] Milch\n- [ ] Eier\n- [ ] Mehl\n\nNotiz\n");
+    expect(appendItems("- [ ] a\r\n  - [ ] b\r\n", ["c", "d"])).toBe("- [ ] a\r\n  - [ ] b\r\n- [ ] c\r\n- [ ] d\r\n");
+    expect(appendItems("1. [ ] a\n", ["b"])).toBe("1. [ ] a\n- [ ] b\n");
+    expect(appendItems("* [x] a", ["b", "c"])).toBe("* [x] a\n* [ ] b\n* [ ] c");
+    expect(appendItems("Text", ["a", "b"])).toBe("Text\n\n- [ ] a\n- [ ] b\n");
+    expect(appendItems("- [ ] a\n", ["  ", "\n"])).toBeNull();
+    expect(appendItems("- [ ] a\n", [])).toBeNull();
+  });
+
   it("Text ändern, entfernen, Abgehakte entfernen", () => {
     const body = "- [ ] Milch\r\n- [x] Brot\r\n  - [ ] Vollkorn\r\n- [X] Eier\r\n```\r\n- [x] code\r\n```\r\n";
     expect(setItemText(body, 0, "Hafermilch")).toBe(body.replace("Milch", "Hafermilch"));
@@ -149,6 +161,8 @@ describe("Listen: Einträge bearbeiten (4.6)", () => {
     expect(run(text, { type: "resetItems" }, ctx).text).toContain("- [ ] Milch\n");
     expect(run(text, { type: "removeCheckedItems" }, ctx).text.endsWith("---\n")).toBe(true);
     expect(run(text, { type: "addItem", text: " " }, ctx).plan.kind).toBe("blocked");
+    expect(run(text, { type: "addItems", texts: ["Eier", "Mehl"] }, ctx).text).toContain("- [x] Milch\n- [ ] Eier\n- [ ] Mehl\n");
+    expect(run(text, { type: "addItems", texts: [" "] }, ctx).plan.kind).toBe("blocked");
     expect(run(text.replace("[x]", "[ ]"), { type: "resetItems" }, ctx).plan.kind).toBe("noop");
   });
 });

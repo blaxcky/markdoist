@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld("markdoist", {
     setSettings: call("dictation:setSettings"),
     run: call("dictation:run"),
     title: call("dictation:title"),
+    checklist: call("dictation:checklist"),
     onPhase(fn: (p: string) => void) {
       const h = (_e: unknown, p: string) => fn(p);
       ipcRenderer.on("dictation:phase", h);

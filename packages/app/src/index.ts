@@ -11,6 +11,7 @@ export * from "./dateEdit";
 export * from "./listActions";
 export * from "./devActions";
 export * from "./devTitle";
+export * from "./checklistFromText";
 export * from "./completionFlow";
 export * from "./seriesStrip";
 export * from "./ics";

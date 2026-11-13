@@ -129,6 +129,22 @@ export function appendItem(body: string, text: string): string | null {
   });
 }
 
+/**
+ * Hängt mehrere offene Einträge in dieser Reihenfolge an (4.11), wie `appendItem` je Text. Leere Texte
+ * fallen weg; `null`, wenn keiner übrig bleibt.
+ */
+export function appendItems(body: string, texts: readonly string[]): string | null {
+  let out = body;
+  let n = 0;
+  for (const text of texts) {
+    const b = appendItem(out, text);
+    if (b === null) continue;
+    out = b;
+    n++;
+  }
+  return n ? out : null;
+}
+
 /** Ersetzt den Text eines Eintrags. `null`, wenn dort kein Eintrag steht oder der Text leer ist. */
 export function setItemText(body: string, line: number, text: string): string | null {
   const t = cleanItemText(text);

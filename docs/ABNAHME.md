@@ -250,3 +250,56 @@ PLAN1 4.9; Wunsch und Festlegungen vom 07.11.2026, als Plan freigegeben (keine e
   - Kein Aufruf der echten OpenAI-API (kein echter Schlüssel im Test). Insbesondere ist nicht geprüft, dass die echte API die m4a-Aufnahme von Android und die WebM-Aufnahme des Desktops annimmt, und nicht, wie gut die Bereinigung tatsächlich ist.
   - Keine Aufnahme mit echtem Ton am Handy und keine erfolgreiche Erkennung mit gültigem Schlüssel; Flow 61 prüft den Upload bis zur 401-Antwort.
   - Keine Sichtprüfung der neuen Bedienelemente.
+
+## Checkliste einfügen (13.11.2026)
+
+PLAN1 4.11 und AK-55. Wunsch vom 13.11.2026; die Festlegungen wurden mit dem Plan freigegeben, eine eigene Fragenrunde gab es nicht.
+
+- **Kern:**
+  - `packages/core/test/lists.test.ts` prüft `appendItems`:
+    - Reihenfolge
+    - leere Texte fallen weg
+    - Notiz und CRLF bleiben
+    - nach nummerierter Liste und verschachteltem letzten Eintrag
+    - kein Eintrag übrig ergibt `null`
+  - Dort auch die Aktion `addItems` über `planAction`.
+  - `packages/app/test/lists.test.ts` prüft: ein Schreibvorgang, ein Rückgängig für alle Einträge.
+- **Anfrage:** `packages/app/test/checklistFromText.test.ts` prüft mit gefälschtem `fetch`:
+  - Body mit Modell, `reasoning.effort: low`, Listentitel, Schema `checkliste`, Bearer-Schlüssel
+  - Ersatzanfrage ohne `reasoning` und Schema bei HTTP 400 (Antwort im Codeblock)
+  - Bereinigung der Einträge
+  - Fehlertexte für fehlenden Schlüssel, leere Antwort, 401, Netz und 404
+  - Abbruch über `AbortSignal` ohne Ersatzanfrage
+  - Meldung „n Einträge eingefügt“ als Verlaufseintrag
+- **Desktop-Dienst:** `apps/desktop/test/dictation.test.ts` prüft, dass `checklist` den gespeicherten Schlüssel und das Titelmodell nutzt und dass Fehler mit Art und Status zurückkommen.
+- **Prüfstand:**
+  - `pnpm typecheck` und `pnpm lint` grün.
+  - `pnpm test` grün: 47 Dateien, 5641 Tests.
+- **Desktop-E2E:** `pnpm e2e:desktop` mit 40 Playwright-Tests grün.
+  - Neu ist „Listen: Checkliste aus Text einfügen …“ gegen einen lokalen Ersatzserver:
+    - Ohne Schlüssel öffnen sich die Einstellungen, der Text bleibt.
+    - Bei 401 kommt die Meldung mit Ursache, die Datei bleibt unverändert.
+    - Bei Erfolg stehen vier Einträge hinter dem letzten Eintrag, mit Meldung, Bearer-Schlüssel, Modell und Listentitel in der Anfrage.
+    - Strg+Z stellt die Datei byte-genau wieder her.
+    - Escape schließt ohne Anfrage.
+  - Der Ersatzserver im Diktier-Test unterscheidet Anfragen jetzt am Schema-Namen (`eintrag`), weil auch die neue Anfrage `json_schema` enthält.
+- **Android-E2E (Emulator `Markdoist_API_36`, Release-Build x86_64):**
+  - `62-checkliste.yaml` ist grün. Er prüft:
+    - Menüeintrag und Hinweiszeile
+    - ohne Schlüssel: Hinweis und Einstellungen, zurück im Blatt steht der Text noch da
+    - mit ungültigem Testschlüssel eine echte Anfrage an OpenAI: „Checkliste nicht eingefügt: API-Schlüssel ungültig“, der Text bleibt, die Liste bleibt leer
+  - Grün sind außerdem alle übrigen Flows bis auf 10 und 55. Flow 50 lief dabei auf frisch angelegten Daten.
+  - **Nicht grün, unabhängig von dieser Änderung:**
+    - Flow 10 scheitert zweimal hintereinander: Die Emulator-Tastatur korrigiert „einem“ zu „Eminem“.
+    - Flow 55 braucht die Aufgabe aus Flow 10 und lief deshalb nicht.
+    - Flow 50 scheitert im Gesamtlauf nach Flow 45. Flow 45 macht den Zahnarzttermin zu einer Serie mit Frist (`due`). Seit Commit 9cad3b2 vom 09.11.2026 verlassen Aufgaben mit Termin den Eingang, und Flow 50 sucht die Aufgabe dort. Wahrscheinliche Ursache: Die Flows wurden nach dieser Änderung nicht angepasst. Einen vollen Android-Lauf seit dem 09.11. vermerkt diese Datei nicht.
+  - Der volle Lauf mit den Dateiprüfungen (neu: 17 Dateien, „Wocheneinkauf.md“ ohne Einträge) steht deshalb noch aus.
+- **[V]-Abweichungen:**
+  - Die KI antwortet mit strukturiertem JSON statt mit Markdown; die App baut die Zeilen selbst.
+  - Am Desktop verwirft „Abbrechen“ nur das Ergebnis, die Anfrage im Main-Prozess läuft zu Ende.
+  - Die Meldung „n Einträge eingefügt“ erscheint auch am Desktop, obwohl die Aktion im Verlauf steht. Wie überall in der App hat sie keinen eigenen Knopf „Rückgängig“; zurückgenommen wird über den Verlauf bzw. mit Strg+Z.
+- **Nicht geprüft:**
+  - Kein Aufruf der echten OpenAI-API mit gültigem Schlüssel. Damit ist offen, ob `gpt-6-luna` die strukturierte Ausgabe annimmt und wie gut die Zerlegung echter Nachrichten ist.
+  - Keine Sichtprüfung von Dialog und Blatt.
+- **Nebenbei behoben:** Liegen am Desktop zwei Dialoge übereinander, schließt Escape nur noch den obersten. Bisher schloss Escape in den Einstellungen auch „Checkliste einfügen“ darunter, und der eingefügte Text ging verloren. `useDialog` führt dafür einen Stapel offener Dialoge.
+- **Gefunden bei der Prüfung:** Die Bereinigung der Einträge machte aus „1.5 l Milch“ „5 l Milch“, weil „1.“ als Aufzählung galt. Eine Zahl zählt jetzt nur mit folgendem Leerraum als Aufzählung; ein Test deckt das ab.

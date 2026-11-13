@@ -1,0 +1,84 @@
+# Checkliste einfügen (4.11, AK-55): Eintrag im Listenmenü, Text einfügen; ohne Schlüssel Hinweis und
+# Einstellungen, der Text bleibt. Mit ungültigem Testschlüssel geht die Anfrage echt zu OpenAI und kommt
+# mit 401 zurück (braucht Internet im Gerät, kostet nichts); der Text bleibt, nichts wird geschrieben.
+# Den Erfolgsfall prüft Maestro nicht (kein echter Schlüssel im Test), siehe docs/ABNAHME.md.
+appId: de.markdoist.aufgaben
+---
+- runFlow: ../launch.yaml
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: more-lists
+- tapOn:
+    id: fab-new-list
+- inputText: "Wocheneinkauf"
+- tapOn:
+    id: new-list-create
+- tapOn:
+    id: list-menu
+- tapOn:
+    id: paste-checklist
+- inputText: "Milch Brot Eier"
+- assertVisible:
+    id: paste-checklist-status
+    text: ".*gehen Text und Listentitel an OpenAI.*"
+- tapOn:
+    id: paste-checklist-submit
+# Ohne Schlüssel: Hinweis, dann die Einstellungen
+- extendedWaitUntil:
+    visible: ".*API-Schlüssel in den Einstellungen.*"
+    timeout: 4000
+- scrollUntilVisible:
+    element:
+      id: dictation-key
+    direction: DOWN
+    timeout: 8000
+- tapOn:
+    id: dictation-key
+- inputText: "sk-test-maestro-5678"
+- hideKeyboard
+- tapOn:
+    id: dictation-key-save
+- extendedWaitUntil:
+    visible:
+      id: dictation-key-masked
+      text: "sk-…5678"
+    timeout: 4000
+- back
+# Zurück im Blatt: Der Text steht noch da.
+- extendedWaitUntil:
+    visible:
+      id: paste-checklist-text
+      text: "Milch Brot Eier"
+    timeout: 4000
+- tapOn:
+    id: paste-checklist-submit
+- extendedWaitUntil:
+    visible:
+      id: paste-checklist-status
+      text: "Checkliste nicht eingefügt: API-Schlüssel ungültig"
+    timeout: 30000
+- assertVisible:
+    id: paste-checklist-text
+    text: "Milch Brot Eier"
+- tapOn:
+    id: sheet-close
+- assertVisible: "Noch keine Einträge."
+# Schlüssel wieder entfernen
+- back
+- tapOn:
+    id: nav-menu
+- tapOn:
+    id: nav-settings
+- scrollUntilVisible:
+    element:
+      id: dictation-key-remove
+    direction: DOWN
+    timeout: 8000
+- tapOn:
+    id: dictation-key-remove
+- extendedWaitUntil:
+    visible:
+      id: dictation-key
+    timeout: 4000
+- back

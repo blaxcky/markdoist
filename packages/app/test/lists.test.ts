@@ -39,6 +39,17 @@ describe("Listen im Repository (4.6)", () => {
     expect(adapter.tasks.get("Packliste.md")!.text.endsWith("- [ ] Zahnbürste\n- [ ] Ladekabel\n")).toBe(true);
   });
 
+  it("mehrere Einträge als ein Schreibvorgang mit einem Rückgängig (4.11)", async () => {
+    const { repo, adapter } = setup();
+    await repo.open();
+    const r = await repo.create({ title: "Einkauf", kind: "list", note: "- [ ] Milch\n" });
+    const ref = r.status === "ok" ? r.ref! : "";
+    expect((await repo.perform(ref, { type: "addItems", texts: ["2 Brot", "Eier", "Spüli"] }, "3 Einträge eingefügt")).status).toBe("ok");
+    expect(adapter.tasks.get("Einkauf.md")!.text.endsWith("---\n- [ ] Milch\n- [ ] 2 Brot\n- [ ] Eier\n- [ ] Spüli\n")).toBe(true);
+    expect((await repo.undo()).status).toBe("ok");
+    expect(adapter.tasks.get("Einkauf.md")!.text.endsWith("---\n- [ ] Milch\n")).toBe(true);
+  });
+
   it("externe Änderung am Body → Konflikt statt falscher Zeile", async () => {
     const { repo, adapter } = setup();
     await repo.open();

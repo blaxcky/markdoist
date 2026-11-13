@@ -41,6 +41,8 @@ interface Bridge {
     onPhase(fn: (p: "transcribing" | "cleaning") => void): () => void;
     /** Titel und Art eines Programmier-Eintrags (4.10); `force` = „Neu vorschlagen“ */
     title(note: string, list: string, force: boolean): Promise<{ ok: true; suggestion: TitleSuggestion } | { ok: false; kind: DictationErrorKind | "off"; detail?: string; status?: number }>;
+    /** „Checkliste einfügen“ (4.11): Einträge aus unformatiertem Text */
+    checklist(text: string, list: string): Promise<{ ok: true; items: string[] } | { ok: false; kind: DictationErrorKind; detail?: string; status?: number }>;
   };
   onStorageChanged(fn: (overflow: boolean) => void): () => void;
   onFocus(fn: () => void): () => void;
@@ -83,3 +85,10 @@ export const suggestTitleAuto: TitleSuggester = (note, list) => suggestVia(note,
 
 /** „Neu vorschlagen“: fragt auch bei abgeschaltetem Automatismus. */
 export const suggestTitleForced: TitleSuggester = (note, list) => suggestVia(note, list, true);
+
+/** „Checkliste einfügen“ über den Main-Prozess (4.11). Fehler kommen als `DictationError`. */
+export async function checklistVia(text: string, list: string): Promise<string[]> {
+  const r = await bridge().dictation.checklist(text, list);
+  if (r.ok) return r.items;
+  throw new DictationError(r.kind, r.detail, r.status);
+}

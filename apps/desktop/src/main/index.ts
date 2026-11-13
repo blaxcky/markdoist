@@ -195,6 +195,7 @@ function registerIpc() {
   ipcMain.handle("dictation:check", () => dictation.check());
   ipcMain.handle("dictation:setSettings", (_e, s: Partial<DictationSettings>) => dictation.setSettings(s));
   ipcMain.handle("dictation:title", (_e, note: string, list: string, force: boolean) => dictation.suggestTitle(note, list, force === true));
+  ipcMain.handle("dictation:checklist", (_e, text: string, list: string) => dictation.checklist(text, list));
   ipcMain.handle("dictation:run", (e, audio: ArrayBuffer | Uint8Array, mime: string, ctx: DictationContext) =>
     dictation.run(audio, mime, ctx, (p) => {
       if (!e.sender.isDestroyed()) e.sender.send("dictation:phase", p);

@@ -19,6 +19,7 @@ import { DevListScreen } from "./screens/dev-list-screen";
 import { DetailScreen } from "./screens/detail-screen";
 import { CaptureScreen } from "./screens/capture-screen";
 import { AddItemScreen } from "./screens/add-item-screen";
+import { PasteChecklistScreen } from "./screens/paste-checklist-screen";
 import { NewListScreen } from "./screens/new-list-screen";
 import { SearchScreen } from "./screens/search-screen";
 import { ProblemsScreen } from "./screens/problems-screen";
@@ -52,6 +53,8 @@ export type RootStack = {
   Capture: { title?: string; note?: string } | undefined;
   /** `dev`: Eintrag einer Programmier-Liste (4.8) statt Listeneintrag */
   AddItem: { ref: string; dev?: boolean };
+  /** „Checkliste einfügen“ in eine Liste (4.11) */
+  PasteChecklist: { ref: string };
   NewList: { title?: string; dev?: boolean } | undefined;
   Search: undefined;
   Problems: undefined;
@@ -289,6 +292,7 @@ function RootStackNavigator() {
       <Stack.Screen name="Capture" component={CaptureScreen} options={sheet} />
       {/* Listen nutzen dasselbe Eingabeblatt */}
       <Stack.Screen name="AddItem" component={AddItemScreen} options={sheet} />
+      <Stack.Screen name="PasteChecklist" component={PasteChecklistScreen} options={sheet} />
       <Stack.Screen name="NewList" component={NewListScreen} options={sheet} />
       <Stack.Screen name="Checklist" component={ChecklistScreen} options={{ title: T.views.lists }} />
       <Stack.Screen name="DevList" component={DevListScreen} options={{ title: T.views.dev }} />

@@ -1,10 +1,13 @@
 // Listen (4.6): einfache Abhaklisten ohne Termine. Übersicht und geöffnete Liste.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { COMPLETE_COLLAPSE_MS, T, type CompletionPhase, type Outcome, type Repository } from "@markdoist/app";
+import { checklistErrorText, COMPLETE_COLLAPSE_MS, DictationError, insertChecklistItems, T, T_CHECKLIST, type CompletionPhase, type Outcome, type Repository } from "@markdoist/app";
 import { findCheckboxes, listProgress, listsView, type Checkbox, type Index, type ListOptions, type TaskAction, type TaskView } from "@markdoist/core";
 import { Menu, MenuItem } from "./Menu";
+import { OPEN_DICTATION_SETTINGS } from "./DictateButton";
+import { checklistVia } from "../bridge";
+import { useDialog } from "../dialog";
 import { reducedMotion, useCompletionFlow } from "../completion";
-import { IconChevronDown, IconClose, IconDots, IconGrip, IconList, IconPencil, IconPlus, IconTrash, IconUndo } from "./Icons";
+import { IconChevronDown, IconClose, IconDots, IconGrip, IconList, IconPencil, IconPlus, IconPlusCircle, IconTrash, IconUndo } from "./Icons";
 
 interface Props {
   repo: Repository;
@@ -149,6 +152,7 @@ function ListDetail({ repo, view, onBack, onOutcome, onEditMarkdown }: { repo: R
   useFlip(listRef, completion.frozen);
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [pasting, setPasting] = useState(false);
   const [title, setTitle] = useState(f.title);
   const [text, setText] = useState("");
   const [collapsed, setCollapsed] = useState(false);
@@ -255,6 +259,9 @@ function ListDetail({ repo, view, onBack, onOutcome, onEditMarkdown }: { repo: R
               <MenuItem icon={<IconList size={20} />} onClick={() => (setMenu(false), onEditMarkdown(ref))}>
                 {T.lists.editMarkdown}
               </MenuItem>
+              <MenuItem icon={<IconPlusCircle size={20} />} disabled={ro} testId="paste-checklist" onClick={() => (setMenu(false), setPasting(true))}>
+                {T_CHECKLIST.menu}
+              </MenuItem>
               <div className="menu-sep" />
               <MenuItem
                 icon={<IconTrash size={20} />}
@@ -322,7 +329,81 @@ function ListDetail({ repo, view, onBack, onOutcome, onEditMarkdown }: { repo: R
         )}
         {otherContent && <div className="list-note">{T.lists.otherContent}</div>}
       </div>
+      {pasting && <PasteChecklist repo={repo} listRef={ref} listTitle={f.title} onClose={() => setPasting(false)} onOutcome={onOutcome} />}
     </>
+  );
+}
+
+/**
+ * „Checkliste einfügen“ (4.11): Text einfügen, die KI zerlegt ihn in Einträge, die als ein Schreibvorgang
+ * angehängt werden. Bei einem Fehler bleibt der Text im Feld; „Abbrechen“ verwirft eine laufende Anfrage.
+ */
+function PasteChecklist({ repo, listRef, listTitle, onClose, onOutcome }: { repo: Repository; listRef: string; listTitle: string; onClose(): void; onOutcome(o: Outcome, label?: string): void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Laufende Anfrage; nach „Abbrechen“ oder Schließen wird ihr Ergebnis verworfen.
+  const run = useRef(0);
+  const cancel = () => {
+    run.current++;
+    onClose();
+  };
+  const dialog = useDialog<HTMLDivElement>(cancel);
+  const submit = async () => {
+    if (busy || !text.trim()) return;
+    const id = ++run.current;
+    setBusy(true);
+    setError(null);
+    try {
+      const items = await checklistVia(text, listTitle);
+      if (run.current !== id) return;
+      const o = await insertChecklistItems(repo, listRef, items);
+      if (o.status === "ok") {
+        onOutcome({ ...o, message: T_CHECKLIST.inserted(items.length) });
+        onClose();
+      } else if (o.status !== "noop" && run.current === id) {
+        setBusy(false);
+        setError(o.message);
+      }
+    } catch (e) {
+      if (run.current !== id) return;
+      setBusy(false);
+      setError(checklistErrorText(e));
+      if (e instanceof DictationError && e.kind === "nokey") window.dispatchEvent(new CustomEvent(OPEN_DICTATION_SETTINGS));
+    }
+  };
+  return (
+    <div className="modal-back" onClick={cancel}>
+      <div ref={dialog} className="modal paste-checklist" role="dialog" aria-modal="true" aria-label={T_CHECKLIST.title} onClick={(e) => e.stopPropagation()} data-testid="paste-checklist-dialog">
+        <h2>{T_CHECKLIST.title}</h2>
+        <textarea
+          rows={8}
+          value={text}
+          readOnly={busy}
+          placeholder={T_CHECKLIST.placeholder}
+          aria-label={T_CHECKLIST.placeholder}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              void submit();
+            }
+          }}
+          data-testid="paste-checklist-text"
+        />
+        <p className={`hint${error ? " error" : ""}`} role={error ? "alert" : undefined} data-testid="paste-checklist-status">
+          {busy ? T_CHECKLIST.busy : (error ?? T_CHECKLIST.hint)}
+        </p>
+        <div className="buttons">
+          <button className="btn" onClick={cancel} data-testid="paste-checklist-cancel">
+            {T_CHECKLIST.cancel}
+          </button>
+          <button className="btn primary" disabled={busy || !text.trim()} onClick={() => void submit()} data-testid="paste-checklist-submit">
+            {T_CHECKLIST.submit}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
