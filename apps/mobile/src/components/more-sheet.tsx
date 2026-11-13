@@ -112,23 +112,28 @@ export function MoreSheet({ open, onClose, groups, archive }: Props) {
                           </Pressable>
                         )}
                       </View>
-                      {isOpen &&
-                        g.data.kids.map((k) => (
-                          <Pressable
-                            key={k.ref}
-                            testID={`${g.testID}-item`}
-                            onPress={() => go(() => g.onOpenChild(k.ref))}
-                            android_ripple={ripple}
-                            accessibilityRole="button"
-                            style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48, paddingLeft: 50, paddingRight: 16 }}
-                          >
-                            {k.dot && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: k.dot }} />}
-                            <Text numberOfLines={1} style={{ flex: 1, color: c.fg, fontSize: 15 }}>
-                              {k.title}
-                            </Text>
-                            {meta(k.meta)}
-                          </Pressable>
-                        ))}
+                      {isOpen && (
+                        // Unterpunkte: weiter eingerückt als der Name des Bereichs, kleiner und gedämpft, mit Linie unter dem Symbol
+                        <View style={{ paddingBottom: 6 }}>
+                          <View style={{ position: "absolute", left: 25, top: 0, bottom: 6, width: 1, backgroundColor: c.outline }} />
+                          {g.data.kids.map((k) => (
+                            <Pressable
+                              key={k.ref}
+                              testID={`${g.testID}-item`}
+                              onPress={() => go(() => g.onOpenChild(k.ref))}
+                              android_ripple={ripple}
+                              accessibilityRole="button"
+                              style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48, paddingLeft: 64, paddingRight: 16 }}
+                            >
+                              {k.dot && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: k.dot }} />}
+                              <Text numberOfLines={1} style={{ flex: 1, color: c.muted, fontSize: 14 }}>
+                                {k.title}
+                              </Text>
+                              {meta(k.meta)}
+                            </Pressable>
+                          ))}
+                        </View>
+                      )}
                     </View>
                   );
                 })}
