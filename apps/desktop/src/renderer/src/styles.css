@@ -466,12 +466,20 @@ button:disabled {
   flex-direction: column;
   margin: 0 0 4px 17px;
   padding-left: 8px;
-  border-left: 1px solid var(--border-strong);
+  border-left: 1px solid color-mix(in srgb, var(--fg-faint) 40%, transparent);
 }
+/* Unterpunkte: deutlich weiter eingerückt als der Name des Bereichs, kleiner und gedämpft */
 .nav.sub {
-  min-height: 30px;
-  padding-left: 10px;
-  font-size: 13.5px;
+  min-height: 28px;
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.nav.sub:hover {
+  color: var(--fg);
+}
+.nav.sub.active {
+  color: var(--fg-active);
 }
 .nav.sub .count {
   white-space: nowrap;
