@@ -54,7 +54,6 @@ export function sideCollections(idx: Index, limit = SIDE_LIMIT): SideCollections
   const lists = listsView(idx);
   const dev = devListsView(idx);
   const waste = wasteView(idx);
-  const firstNext = waste.find((e) => e.next)?.next;
   return {
     lists: {
       total: lists.length,
@@ -66,10 +65,10 @@ export function sideCollections(idx: Index, limit = SIDE_LIMIT): SideCollections
       summary: count(dev.length),
       kids: dev.slice(0, limit).map((v) => ({ ref: v.task.ref, title: v.task.fields.title, meta: count(devListProgress(idx, v).open) })),
     },
-    // Abfuhrarten sind wenige; alle stehen da.
+    // Abfuhrarten sind wenige; alle stehen da. Zugeklappt kein Abholtag am Bereich, das wäre zu viel.
     waste: {
       total: waste.length,
-      summary: firstNext ? shortDay(firstNext) : null,
+      summary: null,
       kids: waste.map((e) => ({ ref: e.view.task.ref, title: e.view.task.fields.title, meta: e.next ? shortDay(e.next) : T.side.noDates, dot: wasteColor(e.wasteType) })),
     },
   };
