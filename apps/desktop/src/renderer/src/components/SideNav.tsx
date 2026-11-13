@@ -100,11 +100,6 @@ export function SideGroup({ label, icon, active, onOpen, data, activeRef, onOpen
               {k.meta && <span className="count">{k.meta}</span>}
             </button>
           ))}
-          {data.total > data.kids.length && (
-            <button className="nav sub side-more" onClick={onOpen} data-testid={`${testid}-all`}>
-              <span className="nav-label">{T.side.allLists(data.total)}</span>
-            </button>
-          )}
         </div>
       )}
     </>

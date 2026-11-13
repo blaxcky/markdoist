@@ -171,7 +171,6 @@ export const T = {
   side: {
     collections: "Sammlungen",
     archive: "Archiv",
-    allLists: (n: number) => `Alle ${n} Listen`,
     noDates: "keine Termine",
     toggle: (label: string) => `${label} auf- oder zuklappen`,
   },

@@ -476,10 +476,6 @@ button:disabled {
 .nav.sub .count {
   white-space: nowrap;
 }
-.side-more {
-  color: var(--fg-muted);
-  font-size: 13px;
-}
 .side-dot {
   flex: none;
   width: 8px;

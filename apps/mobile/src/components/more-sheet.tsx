@@ -129,17 +129,6 @@ export function MoreSheet({ open, onClose, groups, archive }: Props) {
                             {meta(k.meta)}
                           </Pressable>
                         ))}
-                      {isOpen && g.data.total > g.data.kids.length && (
-                        <Pressable
-                          testID={`${g.testID}-all`}
-                          onPress={() => go(g.onOpen)}
-                          android_ripple={ripple}
-                          accessibilityRole="button"
-                          style={{ justifyContent: "center", minHeight: 48, paddingLeft: 50, paddingRight: 16 }}
-                        >
-                          <Text style={{ color: c.primary, fontSize: 15, fontWeight: "500" }}>{T.side.allLists(g.data.total)}</Text>
-                        </Pressable>
-                      )}
                     </View>
                   );
                 })}

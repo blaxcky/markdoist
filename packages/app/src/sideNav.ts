@@ -3,7 +3,7 @@
 import { devListProgress, devListsView, listProgress, listsView, wasteView, type Index, type Temporal } from "@markdoist/core";
 import { T } from "./texts";
 
-/** Höchstens so viele Listen je Bereich, danach „Alle n Listen“ */
+/** Höchstens so viele Listen je Bereich; alle zeigt ein Klick auf den Bereich selbst */
 export const SIDE_LIMIT = 3;
 
 export interface SideChild {
@@ -17,7 +17,7 @@ export interface SideChild {
 
 export interface SideGroupData {
   kids: SideChild[];
-  /** Zahl aller Unterpunkte; mehr als `kids` → „Alle n Listen“ */
+  /** Zahl aller Unterpunkte */
   total: number;
   /** Zusammenfassung am zugeklappten Bereich */
   summary: string | null;
