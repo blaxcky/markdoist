@@ -288,12 +288,11 @@ PLAN1 4.11 und AK-55. Wunsch vom 13.11.2026; die Festlegungen wurden mit dem Pla
     - Menüeintrag und Hinweiszeile
     - ohne Schlüssel: Hinweis und Einstellungen, zurück im Blatt steht der Text noch da
     - mit ungültigem Testschlüssel eine echte Anfrage an OpenAI: „Checkliste nicht eingefügt: API-Schlüssel ungültig“, der Text bleibt, die Liste bleibt leer
-  - Grün sind außerdem alle übrigen Flows bis auf 10 und 55. Flow 50 lief dabei auf frisch angelegten Daten.
-  - **Nicht grün, unabhängig von dieser Änderung:**
-    - Flow 10 scheitert zweimal hintereinander: Die Emulator-Tastatur korrigiert „einem“ zu „Eminem“.
-    - Flow 55 braucht die Aufgabe aus Flow 10 und lief deshalb nicht.
-    - Flow 50 scheitert im Gesamtlauf nach Flow 45. Flow 45 macht den Zahnarzttermin zu einer Serie mit Frist (`due`). Seit Commit 9cad3b2 vom 09.11.2026 verlassen Aufgaben mit Termin den Eingang, und Flow 50 sucht die Aufgabe dort. Wahrscheinliche Ursache: Die Flows wurden nach dieser Änderung nicht angepasst. Einen vollen Android-Lauf seit dem 09.11. vermerkt diese Datei nicht.
-  - Der volle Lauf mit den Dateiprüfungen (neu: 17 Dateien, „Wocheneinkauf.md“ ohne Einträge) steht deshalb noch aus.
+  - Im ersten Gesamtlauf scheiterten drei ältere Flows. Mit „Checkliste einfügen“ hatte das nichts zu tun:
+    - Flow 10: Die englische Emulator-Tastatur korrigierte „einem“ zu „Eminem“. Der lange Titel ist jetzt englisch.
+    - Flow 50 lief nach Flow 45 ins Leere. Flow 45 gibt dem Zahnarzttermin eine Frist, und seit Commit 9cad3b2 vom 09.11.2026 verlassen Aufgaben mit Termin den Eingang. Flow 50 öffnet die Aufgabe jetzt über „Alle“.
+    - Flow 55 brauchte die Aufgabe aus Flow 10.
+  - Danach war `run.sh` voll grün: alle 23 Flows und 33 Dateiprüfungen, darunter neu 17 Dateien im Ordner und „Wocheneinkauf.md“ ohne Einträge.
 - **[V]-Abweichungen:**
   - Die KI antwortet mit strukturiertem JSON statt mit Markdown; die App baut die Zeilen selbst.
   - Am Desktop verwirft „Abbrechen“ nur das Ergebnis, die Anfrage im Main-Prozess läuft zu Ende.

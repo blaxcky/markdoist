@@ -3,9 +3,11 @@
 appId: de.markdoist.aufgaben
 ---
 - runFlow: ../launch.yaml
+# Über „Alle“: Nach Flow 45 hat die Aufgabe eine Frist und steht nicht mehr im Eingang (4.2a, seit 09.11.2026).
 - tapOn:
-    id: tab-inbox
-- tapOn: "Zahnarzttermin vereinbaren"
+    id: tab-all
+- tapOn:
+    id: "row-Zahnarzttermin vereinbaren"
 # Priorität liegt hinter dem Chip „Priorität“ (Auswahlblatt).
 - tapOn:
     id: field-priority
