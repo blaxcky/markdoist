@@ -119,7 +119,7 @@ Technische Annahmen werden in den Meilensteinen überprüft; eine fertige Planun
 ## 1. Feststehende Anforderungen (Kurzfassung) [F]
 
 - **Name:** Markdoist, Android-applicationId `de.markdoist.aufgaben` (F001).
-- **Plattformen:** Electron auf Fedora, React Native mit **Expo** auf Android (F011/F014). Die App arbeitet vollständig lokal und offline; einzige Ausnahme ist das Diktieren (4.9), das nur mit hinterlegtem OpenAI-Schlüssel und nur auf Knopfdruck ins Netz geht. Es gibt keinen eigenen Sync-Server. Dein bestehendes Sync-Programm gleicht den Ordner ab; die App muss es weder kennen noch einrichten (F012).
+- **Plattformen:** Electron auf Fedora, React Native mit **Expo** auf Android (F011/F014). Die App arbeitet vollständig lokal und offline; einzige Ausnahme ist das Diktieren (4.9, 4.12), das nur mit hinterlegtem Schlüssel eines Anbieters und nur auf Knopfdruck ins Netz geht; dazu kommt der Download des lokalen Spracherkennungsmodells auf Knopfdruck. Mit lokaler Erkennung und ohne Bereinigung bleibt auch das Diktieren offline. Es gibt keinen eigenen Sync-Server. Dein bestehendes Sync-Programm gleicht den Ordner ab; die App muss es weder kennen noch einrichten (F012).
 - **Auslieferung:**
   - Android: GitHub baut die APK und stellt sie als Release bereit; du installierst sie über Obtainium (F011).
   - Fedora: RPM, Installation mit `dnf` (F010).
@@ -222,7 +222,7 @@ Dies ist eine Vertragsskizze, kein Anwendungscode. Schreiboperationen liefern di
 | CI/Auslieferung | GitHub Actions: Prüfungen bei jedem Push; jeder Push auf `main` startet den Release-Workflow (F016). Er baut die signierte APK und das RPM (F017) und hängt beide an ein GitHub-Release; Obtainium verfolgt diese Releases. Repository und Secrets werden mit der GitHub CLI eingerichtet (F015). | F011. Der Signierschlüssel liegt nur als verschlüsseltes GitHub-Secret vor, nie im Repository. |
 | Android-Speicher | eigenes Kotlin-Modul `saf-storage` (Expo-Modul) | Kontrolliert Baumauswahl mit `takePersistableUriPermission`, Metadatenabfragen, `"wt"`-Schreiben, Journal, MIME-Typ, Verschieben und Umbenennen. Der Umfang ergibt sich aus den Fehler- und Wiederherstellungsfällen in M1; eine feste Zeilenzahl wird nicht zugesichert. |
 | Android-UI | React Navigation, FlashList, react-native-webview, `@react-native-community/datetimepicker`, react-native-gesture-handler, Maestro (E2E auf dem Emulator) | Etablierte Bausteine. Maestro kann auch den SAF-Ordnerdialog automatisieren. |
-| Diktieren (4.9) | Android: `expo-audio` (Aufnahme), `expo-secure-store` (API-Schlüssel im Keystore), `expo-file-system` (Aufnahme löschen). Desktop: `MediaRecorder` im Renderer, Electron `safeStorage` und `fetch` im Main-Prozess | Expo-Standardmodule für SDK 58; am Desktop keine neue Abhängigkeit. |
+| Diktieren (4.9) | Android: `expo-audio` (Aufnahme), `expo-secure-store` (API-Schlüssel im Keystore), `expo-file-system` (Aufnahme löschen). Desktop: `MediaRecorder` im Renderer, Electron `safeStorage` und `fetch` im Main-Prozess. Seit 4.12: `@anthropic-ai/sdk` für Claude (geteilt), sherpa-onnx für die lokale Erkennung (Android: offizielles AAR in einem eigenen Expo-Modul, Desktop: `sherpa-onnx-node`) | Expo-Standardmodule für SDK 58. Claude über das offizielle SDK; sherpa-onnx ist die einzige Engine mit offiziellen Anbindungen für beide Plattformen. |
 | Zustand | zustand | Klein, läuft identisch unter React DOM und React Native. |
 | Konfliktansicht | `diff` (jsdiff) | Zeilendiff für die Gegenüberstellung von Varianten. |
 | IDs | ULID (eigene kleine Funktion; Zufall über `crypto.getRandomValues`, auf Android über `expo-crypto`) | Stabil, sortierbar, ohne zentrale Vergabe. |
@@ -695,7 +695,7 @@ Wunsch vom 07.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben [F];
 - **Upload am Handy [V, 08.11.2026]:** Die Aufnahme geht nativ über `File.upload` von `expo-file-system` (multipart) hinaus, nicht über React Natives `fetch` mit `FormData`: Dieser Weg scheiterte am Gerät reproduzierbar mit „Network request failed“. Die Bereinigung bleibt bei `fetch` (nur JSON). Netz-, Zeit- und Serverfehler zeigen die technische Ursache in Klammern.
 - **Aufnahmeformat [V]:** Android m4a/AAC mono mit 64 kbit/s (10 min ≈ 5 MB). Desktop WebM/Opus mit 48 kbit/s. Grenze der API: 25 MB. Die Android-Aufnahme liegt im Cache und wird nach Erfolg oder Abbruch gelöscht.
 - **Mikrofon am Desktop [V]:** Electron erlaubt `media` nur für das eigene Fenster und nur Audio; andere Berechtigungsanfragen werden abgelehnt.
-- **Nicht vorgesehen:** Diktieren bei normalen Aufgaben, in Listen oder bei der Erfassung normaler Aufgaben, Einfügen an der Cursorposition, Live-Mitschrift während des Sprechens, andere Anbieter. (Diktieren beim Anlegen eines Programmier-Eintrags kommt mit 4.10.)
+- **Nicht vorgesehen:** Diktieren bei normalen Aufgaben, in Listen oder bei der Erfassung normaler Aufgaben, Einfügen an der Cursorposition, Live-Mitschrift während des Sprechens. (Diktieren beim Anlegen eines Programmier-Eintrags kommt mit 4.10, andere Anbieter und lokale Erkennung mit 4.12.)
 
 ### 4.10 Programmieren als Board [F]/[V]
 
@@ -724,7 +724,7 @@ Wunsch und Entscheidungen vom 10.11.2026 (Chat und `.fragen/2026-11-10-2312-trac
   - Getippter Text kommt unverändert in die Notiz; diktierter Text bereinigt wie in 4.9.
   - Der Eintrag wird immer sofort gespeichert, mit vorläufigem Titel und `title_pending: true`, damit nichts verloren geht. Danach läuft der Titelvorschlag.
 - **Titel und Art [F]/[V]:**
-  - Modell `gpt-6-luna` über die Responses API (`reasoning.effort: low`), mit demselben Schlüssel wie 4.9. Eingabe: die Notiz und der Listentitel. Ausgabe als JSON: ein deutscher Titel (höchstens 80 Zeichen, kein Schlusspunkt) und die Art (`bug`, `feature` oder `idea`) [V].
+  - Modell `gpt-6-luna` über die Responses API (`reasoning.effort: low`), mit demselben Schlüssel wie 4.9. Seit 4.12 läuft der Titel über den gewählten Text-Anbieter, mit Claude also über `claude-haiku-5-5`. Eingabe: die Notiz und der Listentitel. Ausgabe als JSON: ein deutscher Titel (höchstens 80 Zeichen, kein Schlusspunkt) und die Art (`bug`, `feature` oder `idea`) [V].
   - Vorläufiger Titel: die ersten Wörter der Notiz, an einer Wortgrenze auf höchstens 60 Zeichen gekürzt, mit „…“, wenn gekürzt [V].
   - Kommt die Antwort, ersetzt sie den vorläufigen Titel und setzt die Art, beides über den normalen Speicherpfad (Konfliktschutz). Hat man inzwischen Titel oder Art von Hand geändert, bleibt die Handänderung.
   - Ohne Netz, ohne Schlüssel oder bei einem Fehler bleibt der vorläufige Titel, ohne Fehlermeldung. Beim nächsten Öffnen einer Programmier-Liste mit Schlüssel holt die App den Vorschlag für alle Einträge mit `title_pending: true` nach, einen nach dem anderen.
@@ -756,6 +756,29 @@ Wunsch vom 13.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben (kei
   - Keine Einträge in der Antwort: „Keine Einträge erkannt“.
 - **Netz [F]:** nur auf Knopfdruck. An OpenAI gehen der eingefügte Text und der Listentitel; Hinweiszeile und Einstellungstext sagen das. Kein eigener Schalter in den Einstellungen.
 - **Nicht vorgesehen:** Teilen aus anderen Apps direkt an Markdoist (Android-Share-Intent), „Neue Liste aus Text“ mit KI-Titel, Sortieren oder Gruppieren nach Supermarkt-Bereichen, Vorschau vor dem Einfügen, eigenes Modell oder eigener Schalter in den Einstellungen.
+
+### 4.12 Andere Anbieter und lokale Erkennung [F]/[V]
+
+Wunsch vom 15.11.2026: Der OpenAI-Zugang fällt vielleicht weg. Entscheidungen mit dem Plan vom selben Tag und `.fragen/2026-11-15-2157-diktat-anbieter.md` [F]; Umsetzung [V].
+
+- **Zwei getrennte Wahlen [F]:**
+  - **Spracherkennung:** OpenAI (wie 4.9), Groq, Gemini (Google AI API) oder „Auf dem Gerät“.
+  - **Textmodell** für Bereinigung (4.9), Titelvorschlag (4.10) und „Checkliste einfügen“ (4.11): OpenAI (wie bisher) oder Claude.
+  - Ohne Änderung bleibt alles wie bisher: Ältere Einstellungen gelten als OpenAI für beides.
+- **Anbieter [V]:**
+  - Groq: `https://api.groq.com/openai/v1/audio/transcriptions`, Modell `whisper-large-v3-turbo`, Felder `language=de` und `prompt` (Titel als Kontext).
+  - Gemini: `generateContent` mit der Aufnahme als Audio-Teil und der Anweisung, wörtlich auf Deutsch zu transkribieren; Listen- und Eintragstitel als Kontext. Standardmodell `gemini-flash-latest`. Grenze für eingebettetes Audio: 20 MB.
+  - Claude: Messages API über das offizielle SDK `@anthropic-ai/sdk`, Modell `claude-haiku-5-5` für Bereinigung, Titel und Checkliste, Aufwand `low`, ohne Denken. Titel und Checkliste kommen als JSON nach demselben Schema wie bei OpenAI; scheitert das Schema, greift die einfache Ersatzanfrage. Eine Ablehnung oder ein abgeschnittener Text zählt als gescheiterte Bereinigung (Rohtext, wie 4.9).
+  - Alle Modellnamen bleiben in den Einstellungen änderbar; der Standard folgt dem gewählten Anbieter.
+- **Lokale Erkennung [F]:** NVIDIA Parakeet TDT 0.6B v3 (int8, ≈ 640 MB, CC BY 4.0) über sherpa-onnx, auf Android und Desktop. Kann Deutsch, setzt Satzzeichen und Großschreibung selbst. Der Kontext aus den Titeln entfällt.
+  - Das Modell steckt nicht in der App. „Modell herunterladen“ in den Einstellungen lädt die Einzeldateien (Encoder, Decoder, Joiner, Tokens) mit Fortschritt und Prüfsumme; danach Status und „Löschen“. Ablage: Desktop `userData/models/`, Android im App-Dokumentenverzeichnis, nie im Aufgabenordner.
+  - Fehlt das Modell, erscheint „Für das Diktieren auf dem Gerät zuerst das Modell in den Einstellungen herunterladen“, und die Einstellungen öffnen sich.
+  - Desktop: Der Renderer dekodiert die Aufnahme zu 16 kHz mono; die Erkennung läuft im Main-Prozess.
+  - Android: Aufnahme bei lokaler Erkennung mit 16 kHz; ein eigenes Expo-Modul dekodiert die m4a und ruft sherpa-onnx in einem Hintergrund-Thread auf. Die APK wächst um die Laufzeitbibliotheken.
+- **Schlüssel [F]:** je Anbieter ein eigener, gerätelokal wie in 4.9 (Android `expo-secure-store`, Desktop `safeStorage`), jeder maskiert, mit „Prüfen“ und „Entfernen“. Angezeigt wird nur der Schlüssel der gewählten Anbieter.
+- **Netz [F]:** An den gewählten Erkennungs-Anbieter geht die Aufnahme (nicht bei „Auf dem Gerät“), an den Text-Anbieter Rohtext, Notiz, Titel und der Text für die Checkliste. Der Einstellungstext nennt die gewählten Anbieter.
+- **Reihenfolge der Umsetzung [F]:** erst Claude, dann Groq und Gemini, dann die lokale Erkennung am Desktop, zuletzt auf Android. Jeder Schritt wird einzeln ausgeliefert.
+- **Nicht vorgesehen [F]:** Mistral, ElevenLabs, eigener Server, ein zweites lokales Modell (Whisper), Live-Mitschrift.
 
 ## 5. Wiederholungen
 
@@ -1135,6 +1158,7 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | AK-53 | Board (4.10): Eine Programmier-Liste zeigt am Desktop die Spalten Neu, In Arbeit, Erledigt, am Handy die gleichnamigen Reiter, jeweils mit Anzahl. „Erledigt“ zeigt höchstens 10 Karten, zuletzt erledigte zuerst, und „Alle erledigten (n)“. Die Filter-Chips zeigen nur Einträge mit passendem `dev_type`; Einträge ohne Art nur unter „Alle“. Ziehen einer Karte am Desktop nach „Erledigt“ setzt `status: done` und `completedDate`, zurück nach „Neu“ setzt `status: open` ohne `completedDate`; beides ist rückgängig zu machen. |
 | AK-54 | Anlegen (4.10): Ein Text ohne Titel ergibt sofort eine Datei mit `kind: dev-item`, vorläufigem Titel aus den ersten Wörtern und `title_pending: true`. Mit gestellter KI-Antwort ersetzt der Titel den vorläufigen, `dev_type` ist gesetzt und `title_pending` fehlt. Ohne Schlüssel oder Netz bleibt der vorläufige Titel ohne Fehlermeldung und wird beim nächsten Öffnen der Liste mit Schlüssel nachgeholt. Ein von Hand geänderter Titel wird nie von der KI überschrieben. Diktieren im Eingabeblatt legt nach „Fertig“ den Eintrag ohne weiteren Tipp an. |
 | AK-55 | Checkliste einfügen (4.11): In einer Liste mit „- [ ] Zahnbürste“ ergibt der Text „Hi, kannst du noch 2 Milch, Brot (Vollkorn) und Eier mitbringen? Ach ja und Spüli“ bei gestellter KI-Antwort genau die Zeilen „- [ ] 2 Milch“, „- [ ] Brot (Vollkorn)“, „- [ ] Eier“, „- [ ] Spüli“ hinter dem letzten Eintrag, in einem Schreibvorgang; ein Rückgängig stellt die Datei byte-genau wieder her. Ohne Schlüssel öffnen sich die Einstellungen, bei 401 erscheint „Checkliste nicht eingefügt: API-Schlüssel ungültig“; in beiden Fällen bleibt der Text im Feld und die Datei unverändert. |
+| AK-56 | Anbieter (4.12): Mit Claude als Text-Anbieter geht der Rohtext an `/v1/messages` mit `claude-haiku-5-5`; der bereinigte Text wird angehängt, der Titelvorschlag setzt Titel und Art, „Checkliste einfügen“ fügt die Einträge ein. Eine Ablehnung ergibt den Rohtext. Mit Groq bzw. Gemini geht die Aufnahme an den jeweiligen Endpunkt. Mit „Auf dem Gerät“ und heruntergeladenem Modell erkennt die App einen deutschen Satz ohne Netz; ohne Modell erscheint der Hinweis und die Einstellungen öffnen sich. Alte Einstellungen ergeben OpenAI für beides. Jeder Schlüssel ist nur maskiert sichtbar. |
 
 ## 10. Build-Plan
 
