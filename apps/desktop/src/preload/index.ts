@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld("markdoist", {
       status: call("dictation:model:status"),
       download: call("dictation:model:download"),
       cancel: call("dictation:model:cancel"),
+      warm: call("dictation:model:warm"),
       remove: call("dictation:model:remove"),
       onProgress(fn: (s: unknown) => void) {
         const h = (_e: unknown, s: unknown) => fn(s);

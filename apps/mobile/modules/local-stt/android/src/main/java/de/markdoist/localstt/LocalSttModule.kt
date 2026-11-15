@@ -5,6 +5,7 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import android.util.Log
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
@@ -84,6 +85,22 @@ class LocalSttModule : Module() {
       }
     }
 
+    // Beim Start der Aufnahme: Bis „Fertig“ ist das Modell meist schon geladen. Ein Fehler zeigt sich beim Erkennen.
+    AsyncFunction("warm") Coroutine { id: String ->
+      withContext(Dispatchers.Default) {
+        val dir = modelDir(id)
+        synchronized(lock) {
+          try {
+            recognizerFor(dir)
+          } catch (e: Throwable) {
+            Log.w("LocalStt", "Vorladen fehlgeschlagen: ${e.message}")
+          }
+          lastUse = System.currentTimeMillis()
+          scheduleRelease()
+        }
+      }
+    }
+
     AsyncFunction("transcribe") Coroutine { id: String, fileUri: String ->
       withContext(Dispatchers.Default) { transcribe(modelDir(id), fileUri) }
     }
@@ -155,8 +172,10 @@ class LocalSttModule : Module() {
       val rec = recognizerFor(dir)
       val stream = rec.createStream()
       try {
+        val t0 = System.currentTimeMillis()
         stream.acceptWaveform(samples, 16_000)
         rec.decode(stream)
+        Log.i("LocalStt", "Erkannt in ${System.currentTimeMillis() - t0} ms (${samples.size / 16} ms Audio)")
         return rec.getResult(stream).text
       } finally {
         stream.release()
@@ -170,6 +189,7 @@ class LocalSttModule : Module() {
     val path = dir.absolutePath
     recognizer?.let { if (loadedDir == path) return it }
     recognizer?.release()
+    val started = System.currentTimeMillis()
     val threads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
     val config = OfflineRecognizerConfig(
       featConfig = FeatureConfig(sampleRate = 16_000, featureDim = 80),
@@ -190,6 +210,7 @@ class LocalSttModule : Module() {
     return OfflineRecognizer(null, config).also {
       recognizer = it
       loadedDir = path
+      Log.i("LocalStt", "Modell geladen in ${System.currentTimeMillis() - started} ms")
     }
   }
 

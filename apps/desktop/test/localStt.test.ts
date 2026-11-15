@@ -145,3 +145,27 @@ describe("Diktieren auf dem Gerät am Desktop (4.12)", () => {
     expect(ready.got).toEqual([]);
   });
 });
+
+describe("Vorladen beim Start der Aufnahme (4.12)", () => {
+  async function setup(ready: boolean, provider: "local" | "openai" = "local") {
+    const store = new LocalModelStore(await tmp(), serve(), model);
+    if (ready) await store.download();
+    const warmed: string[] = [];
+    const engine: SttEngine = { transcribe: async () => "", warm: async (dir) => void warmed.push(dir) };
+    let stored: StoredDictation | undefined = { transcribeProvider: provider };
+    const svc = new DictationService(box(), () => stored, async (d) => void (stored = d), async () => ({ ok: true, status: 200, json: async () => ({}) }), {}, undefined, { store, engine });
+    return { svc, warmed, store };
+  }
+
+  it("lädt das Modell nur bei „Auf dem Gerät“ und vorhandenem Modell", async () => {
+    const ok = await setup(true);
+    expect(await ok.svc.warmModel()).toBe(true);
+    expect(ok.warmed).toEqual([ok.store.dir()]);
+    const missing = await setup(false);
+    expect(await missing.svc.warmModel()).toBe(false);
+    expect(missing.warmed).toEqual([]);
+    const cloud = await setup(true, "openai");
+    expect(await cloud.svc.warmModel()).toBe(false);
+    expect(cloud.warmed).toEqual([]);
+  });
+});

@@ -94,6 +94,18 @@ export class DictationService {
     return this.local ? this.local.store.download(onProgress) : this.modelState();
   }
 
+  /**
+   * Beim Start einer Aufnahme (4.12): Ist „Auf dem Gerät“ gewählt und das Modell da, wird es schon geladen.
+   * Liefert true, wenn vorgeladen wird.
+   */
+  async warmModel(): Promise<boolean> {
+    const local = this.local;
+    if (!local?.engine.warm || transcribeTarget(this.settings()).provider !== "local") return false;
+    if ((await local.store.state()).state !== "ready") return false;
+    void local.engine.warm(local.store.dir());
+    return true;
+  }
+
   cancelModel(): void {
     this.local?.store.cancel();
   }

@@ -10,6 +10,8 @@ export interface LocalSttNative {
   download(id: string, baseUrl: string, files: ModelFile[]): Promise<void>;
   cancel(): void;
   remove(id: string): Promise<void>;
+  /** Lädt das Modell vorab (beim Start der Aufnahme). */
+  warm(id: string): Promise<void>;
   /** Erkennt eine Aufnahme (file://…m4a); das Modell muss vollständig sein. */
   transcribe(id: string, fileUri: string): Promise<string>;
   addListener(event: "onProgress", fn: (p: { received: number; total: number }) => void): EventSubscription;

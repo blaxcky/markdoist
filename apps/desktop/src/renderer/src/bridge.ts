@@ -49,6 +49,8 @@ interface Bridge {
       status(): Promise<LocalModelState>;
       download(): Promise<LocalModelState>;
       cancel(): Promise<void>;
+      /** Beim Start der Aufnahme vorladen; true, wenn das Modell geladen wird */
+      warm(): Promise<boolean>;
       remove(): Promise<LocalModelState>;
       onProgress(fn: (s: LocalModelState) => void): () => void;
     };

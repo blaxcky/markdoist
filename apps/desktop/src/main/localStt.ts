@@ -10,6 +10,8 @@ import { LOCAL_MODEL, LOCAL_SAMPLE_RATE, modelBytes, sherpaConfig, type LocalMod
 /** Teil der Erkennung, den der Dienst braucht (für Tests ersetzbar). */
 export interface SttEngine {
   transcribe(dir: string, samples: Float32Array): Promise<string>;
+  /** Modell schon laden, während die Aufnahme läuft; Fehler zeigen sich erst beim Erkennen. */
+  warm?(dir: string): Promise<void>;
 }
 
 type Progress = (s: LocalModelState) => void;
@@ -144,40 +146,66 @@ export class SherpaEngine implements SttEngine {
   private loadedDir: string | null = null;
   private idle: ReturnType<typeof setTimeout> | null = null;
 
+  /** Lädt das Modell, falls nötig; ein schon laufendes Laden wird mitbenutzt. */
+  private load(dir: string): Promise<SherpaRecognizer> {
+    if (this.rec && this.loadedDir === dir) return this.rec;
+    this.loadedDir = dir;
+    const rec = (async () => {
+      // Erst beim ersten Diktat laden: Fehlt die Bibliothek, startet die App trotzdem.
+      const mod = (await import("sherpa-onnx-node")) as unknown as SherpaModule & { default?: SherpaModule };
+      const sherpa = mod.default ?? mod;
+      const threads = Math.max(1, Math.min(4, availableParallelism() - 1));
+      return sherpa.OfflineRecognizer.createAsync(sherpaConfig(dir, threads, join));
+    })();
+    this.rec = rec;
+    rec.catch(() => {
+      if (this.rec === rec) this.rec = null;
+    });
+    return rec;
+  }
+
+  private scheduleRelease() {
+    if (this.idle) clearTimeout(this.idle);
+    this.idle = setTimeout(() => {
+      this.rec = null;
+      this.loadedDir = null;
+    }, 5 * 60_000);
+    this.idle.unref?.();
+  }
+
+  /** Beim Start der Aufnahme: Bis „Fertig“ ist das Modell meist schon geladen. */
+  async warm(dir: string): Promise<void> {
+    try {
+      await this.load(dir);
+    } catch {
+      // Der Fehler kommt beim Erkennen noch einmal und wird dann gemeldet.
+    } finally {
+      this.scheduleRelease();
+    }
+  }
+
   async transcribe(dir: string, samples: Float32Array): Promise<string> {
     if (this.idle) clearTimeout(this.idle);
-    if (!this.rec || this.loadedDir !== dir) {
-      this.loadedDir = dir;
-      this.rec = (async () => {
-        // Erst beim ersten Diktat laden: Fehlt die Bibliothek, startet die App trotzdem.
-        const mod = (await import("sherpa-onnx-node")) as unknown as SherpaModule & { default?: SherpaModule };
-        const sherpa = mod.default ?? mod;
-        const threads = Math.max(1, Math.min(4, availableParallelism() - 1));
-        return sherpa.OfflineRecognizer.createAsync(sherpaConfig(dir, threads, join));
-      })();
-      this.rec.catch(() => {
-        this.rec = null;
-      });
-    }
     try {
-      const rec = await this.rec;
+      const rec = await this.load(dir);
       const stream = rec.createStream();
       stream.acceptWaveform({ samples, sampleRate: LOCAL_SAMPLE_RATE });
       const r = await rec.decodeAsync(stream);
       return typeof r?.text === "string" ? r.text : "";
     } finally {
-      this.idle = setTimeout(() => {
-        this.rec = null;
-        this.loadedDir = null;
-      }, 5 * 60_000);
-      this.idle.unref?.();
+      this.scheduleRelease();
     }
   }
 }
 
 /** Nur für E2E-Tests: liefert festen Text statt einer echten Erkennung. */
 export class FakeEngine implements SttEngine {
+  /** Anzahl der Vorladungen (für Tests) */
+  warmed = 0;
   constructor(private readonly text: string) {}
+  async warm(): Promise<void> {
+    this.warmed++;
+  }
   async transcribe(_dir: string, samples: Float32Array): Promise<string> {
     return samples.length ? this.text : "";
   }

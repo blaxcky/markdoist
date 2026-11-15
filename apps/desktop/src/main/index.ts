@@ -219,6 +219,7 @@ function registerIpc() {
     }),
   );
   ipcMain.handle("dictation:model:cancel", () => dictation.cancelModel());
+  ipcMain.handle("dictation:model:warm", () => dictation.warmModel());
   ipcMain.handle("dictation:model:remove", () => dictation.removeModel());
   ipcMain.handle("dictation:run", (e, audio: ArrayBuffer | Uint8Array, mime: string, ctx: DictationContext) =>
     dictation.run(audio, mime, ctx, (p) => {

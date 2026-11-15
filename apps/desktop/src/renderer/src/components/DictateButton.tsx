@@ -127,6 +127,8 @@ export function DictateButton({ ctx, onResult, onError, testId = "dictate", labe
     };
     rec.current = r;
     r.start(1000);
+    // Auf dem Gerät (4.12): Modell schon während der Aufnahme laden.
+    if (localStt.current) void bridge().dictation.model.warm();
     const t0 = Date.now();
     setMs(0);
     setPhase("recording");

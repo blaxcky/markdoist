@@ -69,6 +69,14 @@ export async function transcribeLocal(uri: string): Promise<string> {
   return LocalStt.transcribe(LOCAL_MODEL.id, uri);
 }
 
+/** Beim Start der Aufnahme: Modell schon laden, wenn es vollständig ist. Fehler zeigen sich beim Erkennen. */
+export function warmLocal(): void {
+  if (!LocalStt) return;
+  void modelReady()
+    .then((ok) => (ok ? LocalStt!.warm(LOCAL_MODEL.id) : undefined))
+    .catch(() => undefined);
+}
+
 /** Meldet Änderungen am Modell (fertig geladen, gelöscht); Rückgabe meldet ab. */
 export function onModelChange(l: (s: LocalModelState) => void): () => void {
   listeners.add(l);

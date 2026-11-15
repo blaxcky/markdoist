@@ -6,7 +6,7 @@ import { File, UploadType } from "expo-file-system";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { DictationError, MAX_RECORDING_MS, runDictation, transcribeTarget, type DictationContext, type DictationErrorKind, type DictationResult, type FetchLike, type UploadLike } from "@markdoist/app";
 import { dictationMissing, getTranscribeKey, loadDictationSettings, loadTextTarget, onDictationConfigChange } from "./store";
-import { onModelChange, transcribeLocal } from "./local";
+import { onModelChange, transcribeLocal, warmLocal } from "./local";
 
 // Sprache braucht kein Stereo und keine 128 kbit/s: Mono mit 64 kbit/s hält den Upload klein (10 min ≈ 5 MB).
 const OPTIONS: RecordingOptions = { ...RecordingPresets.HIGH_QUALITY, numberOfChannels: 1, bitRate: 64000 };
@@ -233,6 +233,8 @@ export function useDictation(opts: { enabled: boolean; ctx: () => DictationConte
     phase.current = "recording";
     setState({ phase: "recording", ms: 0, canRetry: false });
     void activateKeepAwakeAsync(AWAKE).catch(() => {});
+    // Auf dem Gerät (4.12): Modell schon während der Aufnahme laden; der Start der Aufnahme wartet nicht darauf.
+    void loadDictationSettings().then((s) => transcribeTarget(s).provider === "local" && warmLocal());
     tick.current = setInterval(() => {
       const ms = Date.now() - started.current;
       setState((s) => (s.phase === "recording" ? { ...s, ms } : s));

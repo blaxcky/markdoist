@@ -398,3 +398,12 @@ PLAN1 4.12. Expo-Modul `apps/mobile/modules/local-stt` (Kotlin) mit dem sherpa-o
   - **Erkennung echter Sprache auf Android.** Der Emulator liefert keinen Ton, und das Audio-Routing des Rechners habe ich nicht umgebaut. Offen ist damit, ob Dekodierung und Umrechnung echter AAC-Aufnahmen stimmen. Am Desktop ist dasselbe Modell mit echter Sprache geprüft.
   - Keine Messung auf einem echten Handy (Ladezeit des Modells, Dauer, Speicher).
   - Release-APK für arm64 nicht lokal gebaut; das macht die CI.
+
+## Nachtrag: Modell beim Start der Aufnahme vorladen (15.11.2026)
+
+Wunsch vom 15.11.2026: Parakeet wurde bisher erst nach „Fertig“ geladen, das erste Diktat wartete also die Ladezeit ab. Jetzt lädt die App das Modell beim Start der Aufnahme, wenn „Auf dem Gerät“ gewählt und das Modell vorhanden ist.
+
+- **Desktop:** `apps/desktop/test/localStt.test.ts` prüft, dass nur bei „Auf dem Gerät“ und vorhandenem Modell vorgeladen wird. Ein laufendes Laden wird beim Erkennen mitbenutzt, nicht doppelt gestartet.
+- **Echte Messung in Electron** (Parakeet, deutsche Test-WAV als Mikrofon, 4,5 s Aufnahme, erstes Diktat nach dem Start): Der Eintrag erschien in zwei Läufen 2,2 s nach „Fertig“, vorher 5,8 s. Der Text war unverändert richtig.
+- **Android auf Genymotion** (Release-Build x86_64, 7,2 s Aufnahme): Das Log zeigt „Modell geladen in 5026 ms“ während der Aufnahme und danach nur „Erkannt in 3253 ms“, ohne erneutes Laden. Echte Sprache wurde auch hier nicht geprüft, siehe Schritt 4.
+- **Prüfstand:** `pnpm lint`, `pnpm typecheck` und `pnpm test` grün.
