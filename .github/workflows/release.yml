@@ -66,6 +66,9 @@ jobs:
       CCACHE_DIR: /home/runner/.ccache
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      # VORÜBERGEHEND: Fehlersuche, warum ccache zwischen Läufen nicht trifft
+      CCACHE_DEBUG: "1"
+      CCACHE_DEBUGDIR: /home/runner/ccache-debug
     steps:
       - uses: actions/checkout@v7
         with:
@@ -83,16 +86,16 @@ jobs:
         with:
           # Auch Testläufe auf Nebenzweigen (workflow_dispatch) füllen den Cache ihres Zweigs.
           cache-read-only: false
-      - name: ccache
-        run: |
-          sudo apt-get update && sudo apt-get install -y ccache
-          ccache --max-size=500M
-          ccache --zero-stats
       - uses: actions/cache@v6
         with:
           path: /home/runner/.ccache
           key: ccache-android-${{ github.sha }}-${{ github.run_attempt }}
           restore-keys: ccache-android-
+      - name: ccache
+        run: |
+          sudo apt-get update && sudo apt-get install -y ccache
+          ccache --max-size=500M
+          ccache --zero-stats
       - run: pnpm install --frozen-lockfile
       - name: Prebuild
         run: pnpm --filter mobile exec expo prebuild --platform android --clean --no-install
@@ -115,6 +118,12 @@ jobs:
       - name: ccache-Statistik
         if: always()
         run: ccache --show-stats
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ccache-debug
+          path: /home/runner/ccache-debug/**/*.ccache-input-text
+          retention-days: 2
       - name: APK prüfen und benennen
         env:
           CERT: ${{ vars.MARKDOIST_CERT_SHA256 }}
