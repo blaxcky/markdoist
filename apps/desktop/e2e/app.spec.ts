@@ -823,8 +823,8 @@ test("Müllabfuhr: ICS importieren, Abfuhrart öffnen, Termin überspringen, ern
   await expect(page.getByTestId("waste-import-apply")).toBeDisabled();
 });
 
-test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, erneuter Versuch und Titelvorschlag (4.9, 4.10)", async () => {
-  // Lokaler Ersatz für die OpenAI-API; das Mikrofon liefert Chromiums Testton.
+test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, erneuter Versuch und Titelvorschlag (4.9, 4.10, 4.12)", async () => {
+  // Lokaler Ersatz für die OpenAI- und die Claude-API; das Mikrofon liefert Chromiums Testton.
   const seen: { path: string; auth: string; body: string }[] = [];
   let mode: "ok" | "401" = "ok";
   const server = createServer((req, res) => {
@@ -835,6 +835,13 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
       seen.push({ path: req.url ?? "", auth: req.headers.authorization ?? "", body });
       res.setHeader("Content-Type", "application/json");
       if (mode === "401") return void res.writeHead(401).end("{}");
+      // Claude (4.12): Messages API
+      if (req.url === "/v1/messages") {
+        const text = body.includes('"json_schema"') ? JSON.stringify({ title: "Knopf rot (Claude)", type: "bug" }) : "Der Knopf ist rot (Claude).";
+        return void res.end(
+          JSON.stringify({ id: "msg_e2e", type: "message", role: "assistant", model: "claude-haiku-5-5", content: [{ type: "text", text }], stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } }),
+        );
+      }
       if (req.url === "/v1/audio/transcriptions") return void res.end(JSON.stringify({ text: "äh also der Knopf soll äh rot sein" }));
       const out = (text: string) => res.end(JSON.stringify({ output: [{ type: "reasoning" }, { type: "message", content: [{ type: "output_text", text }] }] }));
       // Titelvorschlag (4.10): strukturierte Ausgabe
@@ -857,6 +864,7 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
         MARKDOIST_TEST_NOW: "2026-10-12T10:00",
         MARKDOIST_TEST_TZ: "Europe/Berlin",
         MARKDOIST_OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`,
+        MARKDOIST_ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}`,
       },
     });
     page = await app.firstWindow();
@@ -935,6 +943,31 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
     await expect.poll(() => file(created)).toContain("dev_type: feature\n");
     expect(await file(created)).toMatch(/title: Knopf rot färben\n/);
     expect(await file(created)).toMatch(/---\nDer Knopf soll rot sein\.\n$/);
+
+    // Claude als Text-Anbieter (4.12): eigener Schlüssel, Bereinigung und Titel über /v1/messages.
+    await page.getByTestId("user-menu").click();
+    await page.getByTestId("menu-dictation").click();
+    await page.getByTestId("dictation-text-provider").selectOption("anthropic");
+    await expect(page.getByTestId("dictation-model-title")).toHaveValue("claude-haiku-5-5");
+    await page.getByTestId("dictation-anthropic-key").fill("sk-ant-e2e-geheim-5678");
+    await page.getByTestId("dictation-anthropic-key-save").click();
+    await expect(page.getByTestId("dictation-anthropic-key-masked")).toHaveText("sk-…5678");
+    await expect(page.getByTestId("dictation-key-masked")).toHaveText("sk-…1234");
+    expect(await readFile(join(base, "data", "settings.json"), "utf8")).not.toContain("geheim");
+    await page.getByTestId("dictation-settings-close").click();
+    const mark = seen.length;
+    await page.getByTestId("dev-dictate").click();
+    await expect(page.getByTestId("dictate-state")).toContainText("Aufnahme");
+    await page.waitForTimeout(800);
+    await page.getByTestId("dictate-stop").click();
+    await expect(page.locator('[data-testid="dev-item-row"][data-text="Knopf rot (Claude)"]')).toHaveCount(1);
+    expect(seen.slice(mark).map((x) => x.path)).toEqual(["/v1/audio/transcriptions", "/v1/messages", "/v1/messages"]);
+    const claudeCalls = seen.slice(mark).filter((x) => x.path === "/v1/messages");
+    expect(claudeCalls[0]!.auth).toBe("Bearer sk-ant-e2e-geheim-5678");
+    expect(claudeCalls[0]!.body).toContain('"model":"claude-haiku-5-5"');
+    const byClaude = (await readdir(folder)).find((n) => n.startsWith("Der Knopf ist rot (Claude)"))!;
+    await expect.poll(() => file(byClaude)).toContain("dev_type: bug\n");
+    expect(await file(byClaude)).toMatch(/---\nDer Knopf ist rot \(Claude\)\.\n$/);
   } finally {
     server.close();
   }

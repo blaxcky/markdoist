@@ -12,7 +12,7 @@ function box(available = true, backend = "gnome_libsecret"): SecretBox {
   };
 }
 
-function setup(b = box(), fetch: FetchLike = async () => ({ ok: true, status: 200, json: async () => ({}) })) {
+function setup(b = box(), fetch: FetchLike = async () => ({ ok: true, status: 200, json: async () => ({}) }), claudeFetch?: typeof globalThis.fetch) {
   let stored: StoredDictation | undefined;
   const svc = new DictationService(
     b,
@@ -21,7 +21,8 @@ function setup(b = box(), fetch: FetchLike = async () => ({ ok: true, status: 20
       stored = d;
     },
     fetch,
-    "http://127.0.0.1:1/v1",
+    { openai: "http://127.0.0.1:1/v1" },
+    claudeFetch,
   );
   return { svc, stored: () => stored };
 }
@@ -55,7 +56,16 @@ describe("Diktieren am Desktop (4.9)", () => {
     await svc.setSettings({ transcribeModel: "x-transcribe", cleanup: false });
     const st = await svc.clearKey();
     expect(st.hasKey).toBe(false);
-    expect(stored()).toEqual({ transcribeModel: "x-transcribe", cleanupModel: "gpt-6.1-terra", cleanup: false, titleModel: "gpt-6-luna", autoTitle: true });
+    expect(stored()).toEqual({
+      transcribeModel: "x-transcribe",
+      cleanupModel: "gpt-6.1-terra",
+      cleanup: false,
+      titleModel: "gpt-6-luna",
+      autoTitle: true,
+      textProvider: "openai",
+      claudeCleanupModel: "claude-haiku-5-5",
+      claudeTitleModel: "claude-haiku-5-5",
+    });
     expect(svc.settings().transcribeModel).toBe("x-transcribe");
   });
 
@@ -117,8 +127,59 @@ describe("Checkliste einfügen am Desktop (4.11)", () => {
   it("ohne Schlüssel nokey, Fehler von OpenAI mit Status", async () => {
     const fetch: FetchLike = async () => ({ ok: false, status: 401, json: async () => ({ error: { message: "Incorrect API key" } }) });
     const { svc } = setup(box(), fetch);
-    expect(await svc.checklist("Milch", "")).toEqual({ ok: false, kind: "nokey", detail: "nokey" });
+    expect(await svc.checklist("Milch", "")).toEqual({ ok: false, kind: "nokey", detail: "nokey", provider: "openai" });
     await svc.setKey(KEY);
     expect(await svc.checklist("Milch", "")).toEqual({ ok: false, kind: "auth", detail: "HTTP 401: Incorrect API key", status: 401 });
+  });
+});
+
+describe("Anbieter am Desktop (4.12)", () => {
+  const ANT = "sk-ant-api03-geheim-9876";
+  const claudeReply = (text: string) =>
+    new Response(
+      JSON.stringify({ id: "m", type: "message", role: "assistant", model: "claude-haiku-5-5", content: [{ type: "text", text }], stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+
+  it("Schlüssel je Anbieter getrennt, verschlüsselt und maskiert", async () => {
+    const { svc, stored } = setup();
+    await svc.setKey(KEY);
+    const st = await svc.setKey(ANT, "anthropic");
+    expect(st.keys).toEqual({ openai: { hasKey: true, masked: "sk-…abcd" }, anthropic: { hasKey: true, masked: "sk-…9876" } });
+    expect(JSON.stringify(stored())).not.toContain("geheim");
+    expect(svc.key("anthropic")).toBe(ANT);
+    const after = await svc.clearKey("anthropic");
+    expect(after.keys.anthropic.hasKey).toBe(false);
+    expect(after.hasKey).toBe(true);
+    expect(stored()!.keys).toBeUndefined();
+    // Unbekannter Anbieter aus dem Renderer gilt als OpenAI.
+    expect((await svc.clearKey("x" as never)).hasKey).toBe(false);
+  });
+
+  it("Titel und Checkliste über Claude mit dem Claude-Schlüssel", async () => {
+    const calls: { url: string; auth: string | null; body: Record<string, unknown> }[] = [];
+    const claudeFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(input), auth: new Headers(init?.headers).get("authorization"), body: JSON.parse(String(init?.body)) as Record<string, unknown> });
+      return calls.length === 1 ? claudeReply('{"title": "Knopf rot", "type": "feature"}') : claudeReply('{"items": ["Milch"]}');
+    }) as typeof globalThis.fetch;
+    const openai: FetchLike = async () => {
+      throw new Error("OpenAI darf nicht gerufen werden");
+    };
+    const { svc } = setup(box(), openai, claudeFetch);
+    await svc.setKey(ANT, "anthropic");
+    await svc.setSettings({ textProvider: "anthropic", claudeTitleModel: "claude-sonnet-5-5" });
+    expect(await svc.suggestTitle("Der Knopf soll rot sein", "Markdoist")).toEqual({ ok: true, suggestion: { title: "Knopf rot", devType: "feature" } });
+    expect(await svc.checklist("Milch bitte", "Einkauf")).toEqual({ ok: true, items: ["Milch"] });
+    expect(calls[0]!.url).toBe("https://api.anthropic.com/v1/messages");
+    expect(calls[0]!.auth).toBe(`Bearer ${ANT}`);
+    expect(calls[0]!.body.model).toBe("claude-sonnet-5-5");
+    expect(calls[1]!.body.model).toBe("claude-sonnet-5-5");
+  });
+
+  it("ohne Claude-Schlüssel nokey mit Anbieter", async () => {
+    const { svc } = setup();
+    await svc.setKey(KEY);
+    await svc.setSettings({ textProvider: "anthropic" });
+    expect(await svc.suggestTitle("n", "", true)).toEqual({ ok: false, kind: "nokey", detail: "nokey", provider: "anthropic" });
   });
 });

@@ -2,7 +2,8 @@
 // (`gpt-6-luna` über die Responses API); bis dahin gilt ein vorläufiger Titel aus den ersten Wörtern.
 import { DEV_TYPES, devItemsOf, type DevType, type Index, type TaskView } from "@markdoist/core";
 import { createDevItem } from "./devActions";
-import { DictationError, dictationErrorText, extractOutputText, OPENAI_BASE_URL, request, T_DICTATION, type FetchLike } from "./dictation";
+import { claudeTextWithFallback } from "./claude";
+import { DEFAULT_DICTATION, DictationError, dictationErrorText, extractOutputText, OPENAI_BASE_URL, PROVIDER_LABEL, request, T_DICTATION, type FetchLike, type TextProvider } from "./dictation";
 import type { Outcome, Repository } from "./repository";
 import { T } from "./texts";
 
@@ -89,7 +90,11 @@ export function cleanSuggestedTitle(raw: string): string {
 
 /** Liest die Antwort der Responses API; ohne brauchbaren Titel ein Fehler. */
 export function parseTitleSuggestion(json: unknown): TitleSuggestion {
-  const text = extractOutputText(json);
+  return parseTitleText(extractOutputText(json));
+}
+
+/** Liest Titel und Art aus dem Antworttext (JSON, auch in einem Codeblock oder Text). */
+export function parseTitleText(text: string): TitleSuggestion {
   // Ohne strukturierte Ausgabe (Ersatzanfrage) kann das JSON in einem Codeblock oder Text stehen.
   const raw = /\{[\s\S]*\}/.exec(text)?.[0] ?? text;
   let data: unknown;
@@ -113,6 +118,10 @@ export interface TitleRun {
   list: string;
   baseUrl?: string;
   timeoutMs?: number;
+  /** Text-Anbieter (4.12); fehlt er, OpenAI */
+  provider?: TextProvider;
+  /** Claude: eigenes fetch (Tests) */
+  claudeFetch?: typeof globalThis.fetch;
 }
 
 /**
@@ -130,8 +139,24 @@ export function titleRequestPlain(note: string, list: string, model: string): Re
 
 /** Fragt Titel und Art ab. Wirft `DictationError` (ohne Schlüssel `nokey`). */
 export async function suggestTitle(run: TitleRun): Promise<TitleSuggestion> {
-  if (!run.key.trim()) throw new DictationError("nokey");
+  const provider = run.provider ?? "openai";
+  if (!run.key.trim()) throw new DictationError("nokey", undefined, undefined, provider);
   if (!run.note.trim()) throw new DictationError("empty");
+  if (provider === "anthropic") {
+    const strict = titleRequest(run.note, run.list, run.model);
+    const schema = (strict.text as { format: { schema: Record<string, unknown> } }).format.schema;
+    const text = await claudeTextWithFallback(
+      { key: run.key, model: run.model, baseUrl: run.baseUrl, fetch: run.claudeFetch, timeoutMs: run.timeoutMs ?? 60_000 },
+      {
+        system: String(strict.instructions),
+        input: run.note,
+        schema,
+        plainSystem: String(titleRequestPlain(run.note, run.list, run.model).instructions),
+        maxTokens: 1000,
+      },
+    );
+    return parseTitleText(text);
+  }
   const send = (body: Record<string, unknown>) =>
     request(
       {
@@ -139,7 +164,7 @@ export async function suggestTitle(run: TitleRun): Promise<TitleSuggestion> {
         key: run.key,
         baseUrl: run.baseUrl ?? OPENAI_BASE_URL,
         timeoutMs: run.timeoutMs ?? 60_000,
-        settings: { transcribeModel: "", cleanupModel: "", cleanup: false, titleModel: run.model, autoTitle: true },
+        settings: DEFAULT_DICTATION,
         ctx: {},
       },
       "/responses",
@@ -225,9 +250,9 @@ export async function suggestDevTitle(
 /** Meldung für einen gescheiterten Titelvorschlag, mit Ursache. */
 export function titleErrorText(e: unknown): string {
   if (e instanceof DictationError) {
-    if (e.kind === "nokey") return T_DICTATION.titleNoKey;
+    if (e.kind === "nokey") return e.provider && e.provider !== "openai" ? T_DICTATION.titleNoKeyFor(PROVIDER_LABEL[e.provider]) : T_DICTATION.titleNoKey;
     const detail = e.message !== e.kind ? e.message : undefined;
-    // Bei 400/404 zählt die Meldung von OpenAI (falsches Modell, abgelehnter Parameter).
+    // Bei 400/404 zählt die Meldung des Anbieters (falsches Modell, abgelehnter Parameter).
     if (e.status === 400 || e.status === 404) return `${T.dev.suggestFailed}: ${detail ?? `HTTP ${e.status}`}`;
     return `${T.dev.suggestFailed}: ${dictationErrorText(e.kind, detail)}`;
   }

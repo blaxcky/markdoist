@@ -1,15 +1,18 @@
 // Brücke zum Main-Prozess: StorageAdapter und Schlüssel-Wert-Speicher über IPC.
-import { DictationError, type DictationContext, type DictationErrorKind, type DictationResult, type DictationSettings, type KeyValueStore, type StorageAdapter, type TitleSuggester, type TitleSuggestion } from "@markdoist/app";
+import { DictationError, type ApiProvider, type DictationContext, type DictationErrorKind, type DictationResult, type DictationSettings, type KeyValueStore, type StorageAdapter, type TitleSuggester, type TitleSuggestion } from "@markdoist/app";
 
 export interface Settings {
   folder: string | null;
   theme: "system" | "light" | "dark";
 }
 
-/** Diktieren (4.9); der Schlüssel selbst bleibt im Main-Prozess */
+/** Diktieren (4.9, 4.12); die Schlüssel selbst bleiben im Main-Prozess */
 export interface DictationStatus {
+  /** OpenAI-Schlüssel */
   hasKey: boolean;
   masked: string | null;
+  /** Schlüssel je Anbieter (4.12) */
+  keys: Record<ApiProvider, { hasKey: boolean; masked: string | null }>;
   insecure: boolean;
   settings: DictationSettings;
 }
@@ -33,16 +36,16 @@ interface Bridge {
   kv: KeyValueStore;
   dictation: {
     status(): Promise<DictationStatus>;
-    setKey(key: string): Promise<DictationStatus>;
-    clearKey(): Promise<DictationStatus>;
-    check(): Promise<{ ok: true } | { ok: false; kind: DictationErrorKind }>;
+    setKey(key: string, provider?: ApiProvider): Promise<DictationStatus>;
+    clearKey(provider?: ApiProvider): Promise<DictationStatus>;
+    check(provider?: ApiProvider): Promise<{ ok: true } | { ok: false; kind: DictationErrorKind }>;
     setSettings(s: Partial<DictationSettings>): Promise<DictationStatus>;
     run(audio: ArrayBuffer, mime: string, ctx: DictationContext): Promise<{ ok: true; result: DictationResult } | { ok: false; kind: DictationErrorKind }>;
     onPhase(fn: (p: "transcribing" | "cleaning") => void): () => void;
     /** Titel und Art eines Programmier-Eintrags (4.10); `force` = „Neu vorschlagen“ */
-    title(note: string, list: string, force: boolean): Promise<{ ok: true; suggestion: TitleSuggestion } | { ok: false; kind: DictationErrorKind | "off"; detail?: string; status?: number }>;
+    title(note: string, list: string, force: boolean): Promise<{ ok: true; suggestion: TitleSuggestion } | { ok: false; kind: DictationErrorKind | "off"; detail?: string; status?: number; provider?: ApiProvider }>;
     /** „Checkliste einfügen“ (4.11): Einträge aus unformatiertem Text */
-    checklist(text: string, list: string): Promise<{ ok: true; items: string[] } | { ok: false; kind: DictationErrorKind; detail?: string; status?: number }>;
+    checklist(text: string, list: string): Promise<{ ok: true; items: string[] } | { ok: false; kind: DictationErrorKind; detail?: string; status?: number; provider?: ApiProvider }>;
   };
   onStorageChanged(fn: (overflow: boolean) => void): () => void;
   onFocus(fn: () => void): () => void;
@@ -78,7 +81,7 @@ async function suggestVia(note: string, list: string, force: boolean): Promise<T
   const r = await bridge().dictation.title(note, list, force);
   if (r.ok) return r.suggestion;
   if (r.kind === "off") return null;
-  throw new DictationError(r.kind, r.detail, r.status);
+  throw new DictationError(r.kind, r.detail, r.status, r.provider);
 }
 
 export const suggestTitleAuto: TitleSuggester = (note, list) => suggestVia(note, list, false);
@@ -90,5 +93,5 @@ export const suggestTitleForced: TitleSuggester = (note, list) => suggestVia(not
 export async function checklistVia(text: string, list: string): Promise<string[]> {
   const r = await bridge().dictation.checklist(text, list);
   if (r.ok) return r.items;
-  throw new DictationError(r.kind, r.detail, r.status);
+  throw new DictationError(r.kind, r.detail, r.status, r.provider);
 }

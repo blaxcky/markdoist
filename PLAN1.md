@@ -10,6 +10,8 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 13.11.2026:** „Checkliste einfügen“: unformatierten Text per KI als Einträge an eine Liste anhängen (4.11).
 
+**Umgesetzt am 15.11.2026:** Claude als Text-Anbieter für Bereinigung, Titelvorschlag und „Checkliste einfügen“ (4.12, Schritt 1). Groq, Gemini und die lokale Erkennung folgen.
+
 **Umgesetzt am 11.11.2026:** Seitenleiste am Desktop und Blatt „Mehr“ am Handy in Bereichen mit aufklappbaren Listen (4.5).
 
 **Umgesetzt am 10.11.2026:** Programmieren als Board mit Art und automatischem Titel (4.10). Ersetzt die Listenansicht aus 4.8 und erweitert 4.9.
@@ -768,7 +770,7 @@ Wunsch vom 15.11.2026: Der OpenAI-Zugang fällt vielleicht weg. Entscheidungen m
 - **Anbieter [V]:**
   - Groq: `https://api.groq.com/openai/v1/audio/transcriptions`, Modell `whisper-large-v3-turbo`, Felder `language=de` und `prompt` (Titel als Kontext).
   - Gemini: `generateContent` mit der Aufnahme als Audio-Teil und der Anweisung, wörtlich auf Deutsch zu transkribieren; Listen- und Eintragstitel als Kontext. Standardmodell `gemini-flash-latest`. Grenze für eingebettetes Audio: 20 MB.
-  - Claude: Messages API über das offizielle SDK `@anthropic-ai/sdk`, Modell `claude-haiku-5-5` für Bereinigung, Titel und Checkliste, Aufwand `low`, ohne Denken. Titel und Checkliste kommen als JSON nach demselben Schema wie bei OpenAI; scheitert das Schema, greift die einfache Ersatzanfrage. Eine Ablehnung oder ein abgeschnittener Text zählt als gescheiterte Bereinigung (Rohtext, wie 4.9).
+  - Claude: Messages API über das offizielle SDK `@anthropic-ai/sdk`, Modell `claude-haiku-5-5` für Bereinigung, Titel und Checkliste, Aufwand `low` (`output_config.effort`; das Denken wird nicht abgeschaltet, weil andere eintragbare Claude-Modelle das ablehnen). Titel und Checkliste kommen als JSON nach demselben Schema wie bei OpenAI (`output_config.format`). Lehnt das Modell diese Angaben ab (HTTP 400), folgt einmal die einfache Anfrage ohne sie; das gilt auch für die Bereinigung [V]. Das SDK wiederholt nichts selbst (`maxRetries: 0`). Eine Ablehnung oder ein abgeschnittener Text zählt als gescheiterte Bereinigung (Rohtext, wie 4.9).
   - Alle Modellnamen bleiben in den Einstellungen änderbar; der Standard folgt dem gewählten Anbieter.
 - **Lokale Erkennung [F]:** NVIDIA Parakeet TDT 0.6B v3 (int8, ≈ 640 MB, CC BY 4.0) über sherpa-onnx, auf Android und Desktop. Kann Deutsch, setzt Satzzeichen und Großschreibung selbst. Der Kontext aus den Titeln entfällt.
   - Das Modell steckt nicht in der App. „Modell herunterladen“ in den Einstellungen lädt die Einzeldateien (Encoder, Decoder, Joiner, Tokens) mit Fortschritt und Prüfsumme; danach Status und „Löschen“. Ablage: Desktop `userData/models/`, Android im App-Dokumentenverzeichnis, nie im Aufgabenordner.
@@ -777,6 +779,7 @@ Wunsch vom 15.11.2026: Der OpenAI-Zugang fällt vielleicht weg. Entscheidungen m
   - Android: Aufnahme bei lokaler Erkennung mit 16 kHz; ein eigenes Expo-Modul dekodiert die m4a und ruft sherpa-onnx in einem Hintergrund-Thread auf. Die APK wächst um die Laufzeitbibliotheken.
 - **Schlüssel [F]:** je Anbieter ein eigener, gerätelokal wie in 4.9 (Android `expo-secure-store`, Desktop `safeStorage`), jeder maskiert, mit „Prüfen“ und „Entfernen“. Angezeigt wird nur der Schlüssel der gewählten Anbieter.
 - **Netz [F]:** An den gewählten Erkennungs-Anbieter geht die Aufnahme (nicht bei „Auf dem Gerät“), an den Text-Anbieter Rohtext, Notiz, Titel und der Text für die Checkliste. Der Einstellungstext nennt die gewählten Anbieter.
+- **Einstellungen [V, Schritt 1]:** Abschnitte „Spracherkennung“ (OpenAI-Schlüssel, Erkennungsmodell) und „Textmodell“ mit der Wahl OpenAI oder „Claude (Anthropic)“ (Desktop Auswahlliste, Android zwei Chips). Bei Claude erscheinen der Claude-Schlüssel und die Claude-Modelle; die OpenAI-Modelle bleiben gespeichert. Ohne Claude-Schlüssel wird das Diktat nicht bereinigt eingefügt; Titel und Checkliste melden „… einen Claude-API-Schlüssel in den Einstellungen hinterlegen“. Die Fehlertexte für Zeitüberschreitung und Serverfehler nennen keinen Anbieter mehr.
 - **Reihenfolge der Umsetzung [F]:** erst Claude, dann Groq und Gemini, dann die lokale Erkennung am Desktop, zuletzt auf Android. Jeder Schritt wird einzeln ausgeliefert.
 - **Nicht vorgesehen [F]:** Mistral, ElevenLabs, eigener Server, ein zweites lokales Modell (Whisper), Live-Mitschrift.
 

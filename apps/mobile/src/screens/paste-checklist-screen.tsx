@@ -5,9 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { checklistErrorText, DictationError, insertChecklistItems, T_CHECKLIST } from "@markdoist/app";
+import { checklistErrorText, DictationError, insertChecklistItems, PROVIDER_LABEL, T_CHECKLIST, textModels } from "@markdoist/app";
 import { CaptureSheet } from "../components/capture-sheet";
 import { checklistItems } from "../dictation/checklist";
+import { useDictationConfig } from "../dictation/store";
 import { useRepo, useRepoState } from "../repo";
 import { useNotify } from "../notify";
 import { useTheme } from "../theme";
@@ -25,6 +26,9 @@ export function PasteChecklistScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ctrl = useRef<AbortController | null>(null);
+  // Hinweis nennt den gewählten Text-Anbieter (4.12).
+  const provider = textModels(useDictationConfig().settings).provider;
+  const hint = provider === "openai" ? T_CHECKLIST.hint : T_CHECKLIST.hintFor(PROVIDER_LABEL[provider]);
   // Verlassen des Blatts bricht eine laufende Anfrage ab.
   useEffect(() => () => ctrl.current?.abort(), []);
 
@@ -55,7 +59,7 @@ export function PasteChecklistScreen() {
       if (mine.signal.aborted) return;
       setError(checklistErrorText(e));
       if (e instanceof DictationError && e.kind === "nokey") {
-        notify({ status: "error", message: T_CHECKLIST.noKey });
+        notify({ status: "error", message: checklistErrorText(e) });
         nav.navigate("Settings");
       }
     } finally {
@@ -70,7 +74,7 @@ export function PasteChecklistScreen() {
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44, paddingHorizontal: 18, borderTopWidth: 1, borderTopColor: c.divider }}>
       {busy && <ActivityIndicator color={c.primary} size="small" />}
       <Text style={{ flex: 1, color: error ? c.danger : c.muted, fontSize: 13, paddingVertical: 8 }} testID="paste-checklist-status" accessibilityLiveRegion="polite">
-        {busy ? T_CHECKLIST.busy : (error ?? T_CHECKLIST.hint)}
+        {busy ? T_CHECKLIST.busy : (error ?? hint)}
       </Text>
       {busy && (
         <Pressable onPress={cancel} testID="paste-checklist-cancel" hitSlop={6} style={{ paddingHorizontal: 14, height: 34, borderRadius: 17, justifyContent: "center", borderWidth: 1, borderColor: c.outline }}>

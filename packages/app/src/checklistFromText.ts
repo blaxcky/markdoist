@@ -1,7 +1,8 @@
 // Checkliste einfügen (4.11): unformatierter Text (z. B. eine Einkaufsliste aus WhatsApp) wird über die
 // Responses API in einzelne Einträge zerlegt und als ein Schreibvorgang an die Liste angehängt.
 import { cleanItemText } from "@markdoist/core";
-import { DictationError, dictationErrorText, extractOutputText, OPENAI_BASE_URL, request, type FetchLike } from "./dictation";
+import { claudeTextWithFallback } from "./claude";
+import { DEFAULT_DICTATION, DictationError, dictationErrorText, extractOutputText, OPENAI_BASE_URL, PROVIDER_LABEL, request, type FetchLike, type TextProvider } from "./dictation";
 import type { Outcome, Repository } from "./repository";
 
 export const CHECKLIST_MAX_ITEMS = 200;
@@ -14,9 +15,11 @@ export const T_CHECKLIST = {
   cancel: "Abbrechen",
   busy: "Wird umgewandelt …",
   hint: "Die KI macht aus dem Text einzelne Einträge und hängt sie an die Liste an. Dafür gehen Text und Listentitel an OpenAI.",
+  hintFor: (label: string) => `Die KI macht aus dem Text einzelne Einträge und hängt sie an die Liste an. Dafür gehen Text und Listentitel an ${label}.`,
   inserted: (n: number) => (n === 1 ? "1 Eintrag eingefügt" : `${n} Einträge eingefügt`),
   failed: "Checkliste nicht eingefügt",
   noKey: "Für „Checkliste einfügen“ einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen",
+  noKeyFor: (label: string) => `Für „Checkliste einfügen“ einen ${label}-API-Schlüssel in den Einstellungen hinterlegen`,
   noItems: "Keine Einträge erkannt",
 };
 
@@ -72,7 +75,11 @@ export function cleanChecklistItem(raw: string): string {
 
 /** Liest die Antwort der Responses API; ohne Einträge ein Fehler (`empty`). */
 export function parseChecklist(json: unknown): string[] {
-  const text = extractOutputText(json);
+  return parseChecklistText(extractOutputText(json));
+}
+
+/** Liest die Einträge aus dem Antworttext (JSON, auch in einem Codeblock oder Text). */
+export function parseChecklistText(text: string): string[] {
   // Ohne strukturierte Ausgabe (Ersatzanfrage) kann das JSON in einem Codeblock oder Text stehen.
   const raw = /\{[\s\S]*\}/.exec(text)?.[0] ?? text;
   let data: unknown;
@@ -101,12 +108,32 @@ export interface ChecklistRun {
   baseUrl?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** Text-Anbieter (4.12); fehlt er, OpenAI */
+  provider?: TextProvider;
+  /** Claude: eigenes fetch (Tests) */
+  claudeFetch?: typeof globalThis.fetch;
 }
 
 /** Zerlegt den Text in Einträge. Wirft `DictationError` (ohne Schlüssel `nokey`, leerer Text `empty`). */
 export async function checklistFromText(run: ChecklistRun): Promise<string[]> {
-  if (!run.key.trim()) throw new DictationError("nokey");
+  const provider = run.provider ?? "openai";
+  if (!run.key.trim()) throw new DictationError("nokey", undefined, undefined, provider);
   if (!run.text.trim()) throw new DictationError("empty");
+  if (provider === "anthropic") {
+    const strict = checklistRequest(run.text, run.list, run.model);
+    const schema = (strict.text as { format: { schema: Record<string, unknown> } }).format.schema;
+    const text = await claudeTextWithFallback(
+      { key: run.key, model: run.model, baseUrl: run.baseUrl, fetch: run.claudeFetch, timeoutMs: run.timeoutMs ?? 60_000, signal: run.signal },
+      {
+        system: String(strict.instructions),
+        input: run.text,
+        schema,
+        plainSystem: String(checklistRequestPlain(run.text, run.list, run.model).instructions),
+        maxTokens: 8000,
+      },
+    );
+    return parseChecklistText(text);
+  }
   const send = (body: Record<string, unknown>) =>
     request(
       {
@@ -114,7 +141,7 @@ export async function checklistFromText(run: ChecklistRun): Promise<string[]> {
         key: run.key,
         baseUrl: run.baseUrl ?? OPENAI_BASE_URL,
         timeoutMs: run.timeoutMs ?? 60_000,
-        settings: { transcribeModel: "", cleanupModel: "", cleanup: false, titleModel: run.model, autoTitle: false },
+        settings: DEFAULT_DICTATION,
         ctx: {},
         ...(run.signal ? { signal: run.signal } : {}),
       },
@@ -134,10 +161,10 @@ export async function checklistFromText(run: ChecklistRun): Promise<string[]> {
 /** Meldung für ein gescheitertes „Checkliste einfügen“, mit Ursache. */
 export function checklistErrorText(e: unknown): string {
   if (e instanceof DictationError) {
-    if (e.kind === "nokey") return T_CHECKLIST.noKey;
+    if (e.kind === "nokey") return e.provider && e.provider !== "openai" ? T_CHECKLIST.noKeyFor(PROVIDER_LABEL[e.provider]) : T_CHECKLIST.noKey;
     if (e.kind === "empty") return T_CHECKLIST.noItems;
     const detail = e.message !== e.kind ? e.message : undefined;
-    // Bei 400/404 zählt die Meldung von OpenAI (falsches Modell, abgelehnter Parameter).
+    // Bei 400/404 zählt die Meldung des Anbieters (falsches Modell, abgelehnter Parameter).
     if (e.status === 400 || e.status === 404) return `${T_CHECKLIST.failed}: ${detail ?? `HTTP ${e.status}`}`;
     return `${T_CHECKLIST.failed}: ${dictationErrorText(e.kind, detail)}`;
   }

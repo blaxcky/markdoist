@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.8.0",
     "@markdoist/core": "workspace:*",
     "markdown-it": "15.0.3",
     "zustand": "5.0.15"

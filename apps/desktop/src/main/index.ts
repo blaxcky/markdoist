@@ -7,7 +7,7 @@ import { FsAdapter } from "./fsAdapter";
 import { LocalStore, loadSettings, saveSettings, type Settings } from "./settings";
 import { stepZoom, zoomCommand, type ZoomCommand } from "./zoom";
 import { DictationService } from "./dictation";
-import type { DictationContext, DictationSettings, FetchLike } from "@markdoist/app";
+import type { ApiProvider, DictationContext, DictationSettings, FetchLike } from "@markdoist/app";
 
 // Datenverzeichnis: ~/.config/markdoist (Plan 3.1). Für Tests überschreibbar.
 const dataDir = process.env.MARKDOIST_DATA_DIR ?? join(app.getPath("appData"), "markdoist");
@@ -24,7 +24,8 @@ let adapter: FsAdapter | null = null;
 let unwatch: (() => void) | null = null;
 const store = new LocalStore(dataDir);
 
-// Diktieren (4.9). MARKDOIST_OPENAI_BASE_URL nur für E2E-Tests (lokaler Ersatzserver).
+// Diktieren (4.9, 4.12). MARKDOIST_OPENAI_BASE_URL und MARKDOIST_ANTHROPIC_BASE_URL nur für E2E-Tests
+// (lokaler Ersatzserver).
 const dictation = new DictationService(
   safeStorage,
   () => settings.dictation,
@@ -34,7 +35,7 @@ const dictation = new DictationService(
     await saveSettings(dataDir, settings);
   },
   fetch as unknown as FetchLike,
-  process.env.MARKDOIST_OPENAI_BASE_URL,
+  { openai: process.env.MARKDOIST_OPENAI_BASE_URL, anthropic: process.env.MARKDOIST_ANTHROPIC_BASE_URL },
 );
 
 /** Einstellungen ohne Diktier-Geheimnisse für den Renderer */
@@ -190,9 +191,9 @@ function registerIpc() {
   s("resolveRecovery", (opId: string) => requireAdapter().resolveRecovery(opId));
 
   ipcMain.handle("dictation:status", () => dictation.status());
-  ipcMain.handle("dictation:setKey", (_e, key: string) => dictation.setKey(key));
-  ipcMain.handle("dictation:clearKey", () => dictation.clearKey());
-  ipcMain.handle("dictation:check", () => dictation.check());
+  ipcMain.handle("dictation:setKey", (_e, key: string, p?: ApiProvider) => dictation.setKey(key, p));
+  ipcMain.handle("dictation:clearKey", (_e, p?: ApiProvider) => dictation.clearKey(p));
+  ipcMain.handle("dictation:check", (_e, p?: ApiProvider) => dictation.check(p));
   ipcMain.handle("dictation:setSettings", (_e, s: Partial<DictationSettings>) => dictation.setSettings(s));
   ipcMain.handle("dictation:title", (_e, note: string, list: string, force: boolean) => dictation.suggestTitle(note, list, force === true));
   ipcMain.handle("dictation:checklist", (_e, text: string, list: string) => dictation.checklist(text, list));

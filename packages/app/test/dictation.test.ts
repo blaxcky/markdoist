@@ -152,7 +152,7 @@ describe("Diktieren (4.9)", () => {
 
   it("Meldungstext mit Ursache nur bei Netz-, Zeit- und Serverfehlern", () => {
     expect(dictationErrorText("auth", "HTTP 401")).toBe("API-Schlüssel ungültig");
-    expect(dictationErrorText("server", "HTTP 500")).toBe("OpenAI hat einen Fehler gemeldet (HTTP 500)");
+    expect(dictationErrorText("server", "HTTP 500")).toBe("Der Anbieter hat einen Fehler gemeldet (HTTP 500)");
     expect(dictationErrorText("network")).toBe("Kein Netz");
     expect(dictationErrorText("network", "network")).toBe("Kein Netz");
     expect(dictationErrorText("network", "x".repeat(200)).length).toBeLessThan(100);
@@ -192,6 +192,9 @@ describe("Diktieren (4.9)", () => {
       cleanup: false,
       titleModel: "gpt-6-luna",
       autoTitle: true,
+      textProvider: "openai",
+      claudeCleanupModel: "claude-haiku-5-5",
+      claudeTitleModel: "claude-haiku-5-5",
     });
     expect(maskKey("sk-proj-abcdefghijklmnop1234")).toBe("sk-…1234");
     expect(maskKey("kurz")).toBe("…rz");

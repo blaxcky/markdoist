@@ -1,10 +1,10 @@
 // Listen (4.6): einfache Abhaklisten ohne Termine. Übersicht und geöffnete Liste.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { checklistErrorText, COMPLETE_COLLAPSE_MS, DictationError, insertChecklistItems, T, T_CHECKLIST, type CompletionPhase, type Outcome, type Repository } from "@markdoist/app";
+import { checklistErrorText, COMPLETE_COLLAPSE_MS, DictationError, insertChecklistItems, PROVIDER_LABEL, T, T_CHECKLIST, textModels, type CompletionPhase, type Outcome, type Repository } from "@markdoist/app";
 import { findCheckboxes, listProgress, listsView, type Checkbox, type Index, type ListOptions, type TaskAction, type TaskView } from "@markdoist/core";
 import { Menu, MenuItem } from "./Menu";
 import { OPEN_DICTATION_SETTINGS } from "./DictateButton";
-import { checklistVia } from "../bridge";
+import { bridge, checklistVia } from "../bridge";
 import { useDialog } from "../dialog";
 import { reducedMotion, useCompletionFlow } from "../completion";
 import { IconChevronDown, IconClose, IconDots, IconGrip, IconList, IconPencil, IconPlus, IconPlusCircle, IconTrash, IconUndo } from "./Icons";
@@ -342,6 +342,21 @@ function PasteChecklist({ repo, listRef, listTitle, onClose, onOutcome }: { repo
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Hinweis nennt den gewählten Text-Anbieter (4.12).
+  const [hint, setHint] = useState(T_CHECKLIST.hint);
+  useEffect(() => {
+    let alive = true;
+    void bridge()
+      .dictation.status()
+      .then((st) => {
+        const p = textModels(st.settings).provider;
+        if (alive) setHint(p === "openai" ? T_CHECKLIST.hint : T_CHECKLIST.hintFor(PROVIDER_LABEL[p]));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
   // Laufende Anfrage; nach „Abbrechen“ oder Schließen wird ihr Ergebnis verworfen.
   const run = useRef(0);
   const cancel = () => {
@@ -392,7 +407,7 @@ function PasteChecklist({ repo, listRef, listTitle, onClose, onOutcome }: { repo
           data-testid="paste-checklist-text"
         />
         <p className={`hint${error ? " error" : ""}`} role={error ? "alert" : undefined} data-testid="paste-checklist-status">
-          {busy ? T_CHECKLIST.busy : (error ?? T_CHECKLIST.hint)}
+          {busy ? T_CHECKLIST.busy : (error ?? hint)}
         </p>
         <div className="buttons">
           <button className="btn" onClick={cancel} data-testid="paste-checklist-cancel">

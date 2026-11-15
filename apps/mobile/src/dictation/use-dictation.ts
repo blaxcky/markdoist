@@ -5,7 +5,7 @@ import { getRecordingPermissionsAsync, RecordingPresets, requestRecordingPermiss
 import { File, UploadType } from "expo-file-system";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { DictationError, MAX_RECORDING_MS, runDictation, type DictationContext, type DictationErrorKind, type DictationResult, type FetchLike, type UploadLike } from "@markdoist/app";
-import { getApiKey, loadDictationSettings, onDictationConfigChange } from "./store";
+import { getApiKey, loadDictationSettings, loadTextTarget, onDictationConfigChange } from "./store";
 
 // Sprache braucht kein Stereo und keine 128 kbit/s: Mono mit 64 kbit/s hält den Upload klein (10 min ≈ 5 MB).
 const OPTIONS: RecordingOptions = { ...RecordingPresets.HIGH_QUALITY, numberOfChannels: 1, bitRate: 64000 };
@@ -130,11 +130,13 @@ export function useDictation(opts: { enabled: boolean; ctx: () => DictationConte
     const my = gen.current;
     const key = await getApiKey();
     const settings = await loadDictationSettings();
+    const text = await loadTextTarget();
     try {
       const r = await runDictation({
         fetch: fetch as unknown as FetchLike,
         key: key ?? "",
         settings,
+        text: { provider: text.provider, key: text.key },
         ctx: cb.current.ctx(),
         upload: nativeUpload(uri),
         onPhase: (p) => gen.current === my && setState((s) => ({ ...s, phase: p })),

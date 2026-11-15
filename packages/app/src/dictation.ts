@@ -1,5 +1,11 @@
 // Diktieren (Plan 4.9): Aufnahme → OpenAI-Erkennung → Bereinigung → Text für die Notiz.
 // Plattformfrei: fetch und das Formular mit der Audiodatei kommen von der Plattform.
+// Seit 4.12 laufen Bereinigung, Titel und Checkliste wahlweise über OpenAI oder Claude.
+import { classifyStatus, DictationError, type ApiProvider, type DictationErrorKind, type TextProvider } from "./apiError";
+import { CLAUDE_DEFAULT_MODEL, claudeTextWithFallback } from "./claude";
+
+export { API_PROVIDERS, classifyStatus, DictationError, PROVIDER_LABEL } from "./apiError";
+export type { ApiProvider, DictationErrorKind, TextProvider } from "./apiError";
 
 export interface DictationSettings {
   transcribeModel: string;
@@ -9,6 +15,11 @@ export interface DictationSettings {
   titleModel: string;
   /** Titel und Art vorschlagen lassen (4.10) */
   autoTitle: boolean;
+  /** Anbieter für Bereinigung, Titel und Checkliste (4.12) */
+  textProvider: TextProvider;
+  /** Claude-Modelle (4.12); die Felder oben gelten für OpenAI */
+  claudeCleanupModel: string;
+  claudeTitleModel: string;
 }
 
 export const DEFAULT_DICTATION: DictationSettings = {
@@ -17,6 +28,9 @@ export const DEFAULT_DICTATION: DictationSettings = {
   cleanup: true,
   titleModel: "gpt-6-luna",
   autoTitle: true,
+  textProvider: "openai",
+  claudeCleanupModel: CLAUDE_DEFAULT_MODEL,
+  claudeTitleModel: CLAUDE_DEFAULT_MODEL,
 };
 
 export const OPENAI_BASE_URL = "https://api.openai.com/v1";
@@ -32,7 +46,18 @@ export function parseDictationSettings(raw: unknown): DictationSettings {
     // „gpt-6.1-luna“ war der erste, falsche Standard (10.11.2026); das Modell heißt „gpt-6-luna“.
     titleModel: o.titleModel === "gpt-6.1-luna" ? DEFAULT_DICTATION.titleModel : str(o.titleModel, DEFAULT_DICTATION.titleModel),
     autoTitle: typeof o.autoTitle === "boolean" ? o.autoTitle : DEFAULT_DICTATION.autoTitle,
+    // Ältere Einstellungen kennen nur OpenAI.
+    textProvider: o.textProvider === "anthropic" ? "anthropic" : "openai",
+    claudeCleanupModel: str(o.claudeCleanupModel, DEFAULT_DICTATION.claudeCleanupModel),
+    claudeTitleModel: str(o.claudeTitleModel, DEFAULT_DICTATION.claudeTitleModel),
   };
+}
+
+/** Anbieter und Modelle für Bereinigung sowie Titel und Listen nach der Wahl in den Einstellungen. */
+export function textModels(s: DictationSettings): { provider: TextProvider; cleanup: string; title: string } {
+  return s.textProvider === "anthropic"
+    ? { provider: "anthropic", cleanup: s.claudeCleanupModel, title: s.claudeTitleModel }
+    : { provider: "openai", cleanup: s.cleanupModel, title: s.titleModel };
 }
 
 /** Zeigt einen Schlüssel nur maskiert: `sk-…abcd`. */
@@ -111,27 +136,6 @@ export function extractOutputText(json: unknown): string {
   return text.trim();
 }
 
-export type DictationErrorKind = "nokey" | "auth" | "quota" | "network" | "timeout" | "server" | "empty" | "permission";
-
-export class DictationError extends Error {
-  constructor(
-    readonly kind: DictationErrorKind,
-    message?: string,
-    /** HTTP-Status der Antwort, falls OpenAI geantwortet hat */
-    readonly status?: number,
-  ) {
-    super(message ?? kind);
-    this.name = "DictationError";
-  }
-}
-
-export function classifyStatus(status: number): DictationErrorKind {
-  if (status === 401 || status === 403) return "auth";
-  if (status === 429) return "quota";
-  if (status === 408 || status === 504) return "timeout";
-  return "server";
-}
-
 export function dictationErrorMessage(kind: DictationErrorKind): string {
   return T_DICTATION.errors[kind];
 }
@@ -167,6 +171,16 @@ export type UploadLike = (
   init: { headers: Record<string, string>; fields: [string, string][]; signal?: AbortSignal },
 ) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 
+/** Ziel für Bereinigung, Titel und Checkliste (4.12). */
+export interface TextTarget {
+  provider: TextProvider;
+  key: string;
+  /** Basis-URL des Anbieters; nur für E2E-Tests (lokaler Ersatzserver) gesetzt */
+  baseUrl?: string;
+  /** Claude: eigenes fetch (Tests); sonst das globale der Plattform */
+  claudeFetch?: typeof globalThis.fetch;
+}
+
 export interface DictationRun {
   fetch: FetchLike;
   /** Ist es gesetzt, lädt die Erkennung darüber hoch; `form` wird dann nicht gebraucht. */
@@ -182,6 +196,8 @@ export interface DictationRun {
   timeoutMs?: number;
   /** Abbruch von außen (Knopf „Abbrechen“) */
   signal?: AbortSignal;
+  /** Anbieter für die Bereinigung; fehlt es, OpenAI mit `key` und `baseUrl` */
+  text?: TextTarget;
 }
 
 export interface DictationResult {
@@ -245,15 +261,30 @@ export async function runDictation(run: DictationRun): Promise<DictationResult> 
   if (!run.settings.cleanup) return { text: raw, raw, cleaned: false };
   run.onPhase?.("cleaning");
   try {
-    const json = await request(run, "/responses", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cleanupRequest(raw, run.settings, run.ctx)),
-    });
-    return { text: extractOutputText(json), raw, cleaned: true };
+    return { text: await cleanupText(run, raw), raw, cleaned: true };
   } catch (e) {
     return { text: raw, raw, cleaned: false, cleanupError: e instanceof DictationError ? e.kind : "server" };
   }
+}
+
+/** Bereinigt den Rohtext beim gewählten Anbieter. */
+async function cleanupText(run: DictationRun, raw: string): Promise<string> {
+  const t = run.text;
+  if (t?.provider === "anthropic") {
+    const body = cleanupRequest(raw, { ...run.settings, cleanupModel: run.settings.claudeCleanupModel }, run.ctx);
+    return claudeTextWithFallback(
+      { key: t.key, model: run.settings.claudeCleanupModel, baseUrl: t.baseUrl, fetch: t.claudeFetch, timeoutMs: run.timeoutMs, signal: run.signal },
+      { system: String(body.instructions), input: raw },
+    );
+  }
+  const openai = t ? { ...run, key: t.key, baseUrl: t.baseUrl } : run;
+  if (!openai.key.trim()) throw new DictationError("nokey", undefined, undefined, "openai");
+  const json = await request(openai, "/responses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(cleanupRequest(raw, run.settings, run.ctx)),
+  });
+  return extractOutputText(json);
 }
 
 /** Prüft den Schlüssel mit `GET /models`. */
@@ -289,6 +320,16 @@ export const T_DICTATION = {
   inserted: "Diktat eingefügt",
   notCleaned: "Nicht bereinigt eingefügt",
   keyLabel: "OpenAI-API-Schlüssel",
+  keyLabelFor: (label: string) => `${label}-API-Schlüssel`,
+  keyPlaceholderFor: { openai: "sk-…", anthropic: "sk-ant-…" } as Record<ApiProvider, string>,
+  transcribeSection: "Spracherkennung",
+  textSection: "Textmodell",
+  textSectionHint: "Für Bereinigung, Titelvorschläge und „Checkliste einfügen“.",
+  textProvider: "Anbieter",
+  providerNames: { openai: "OpenAI", anthropic: "Claude (Anthropic)" } as Record<ApiProvider, string>,
+  /** Hinweis, wenn Erkennung und Textmodell bei verschiedenen Anbietern liegen (4.12) */
+  keyHintFor: (stt: string, text: string) =>
+    `Die Schlüssel bleiben nur auf diesem Gerät und werden verschlüsselt gespeichert. Aufnahmen sowie Listen- und Eintragstitel gehen beim Diktieren an ${stt}. Der erkannte Text zur Bereinigung, für Titelvorschläge die Notiz und der Listentitel und für „Checkliste einfügen“ der eingefügte Text und der Listentitel gehen an ${text}.`,
   keyPlaceholder: "sk-…",
   keyHint: "Der Schlüssel bleibt nur auf diesem Gerät und wird verschlüsselt gespeichert. Aufnahmen sowie Listen- und Eintragstitel gehen beim Diktieren an OpenAI, für Titelvorschläge die Notiz und der Listentitel, für „Checkliste einfügen“ der eingefügte Text und der Listentitel.",
   keySave: "Speichern",
@@ -304,15 +345,17 @@ export const T_DICTATION = {
   cleanupHint: "Füllwörter entfernen, Selbstkorrekturen auflösen, Satzzeichen und Absätze setzen.",
   modelTitle: "Modell für Titel und Listen",
   titleNoKey: "Für Titelvorschläge einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen",
+  titleNoKeyFor: (label: string) => `Für Titelvorschläge einen ${label}-API-Schlüssel in den Einstellungen hinterlegen`,
   autoTitle: "Titel und Art vorschlagen",
   autoTitleHint: "Neue Programmier-Einträge bekommen Titel und Art aus der Notiz. Dafür gehen Notiz und Listentitel an OpenAI.",
+  autoTitleHintFor: (label: string) => `Neue Programmier-Einträge bekommen Titel und Art aus der Notiz. Dafür gehen Notiz und Listentitel an ${label}.`,
   errors: {
     nokey: "Für das Diktieren einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen",
     auth: "API-Schlüssel ungültig",
     quota: "Kontingent erschöpft oder zu viele Anfragen",
     network: "Kein Netz",
-    timeout: "Zeitüberschreitung bei OpenAI",
-    server: "OpenAI hat einen Fehler gemeldet",
+    timeout: "Zeitüberschreitung beim Anbieter",
+    server: "Der Anbieter hat einen Fehler gemeldet",
     empty: "Nichts erkannt",
     permission: "Kein Zugriff auf das Mikrofon",
   } satisfies Record<DictationErrorKind, string>,

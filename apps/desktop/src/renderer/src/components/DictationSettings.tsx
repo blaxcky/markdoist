@@ -1,79 +1,127 @@
-// Einstellungen „Diktieren“ (4.9, 4.10): Schlüssel nur maskiert, Modelle, Bereinigung und Titelvorschlag an/aus.
+// Einstellungen „Diktieren“ (4.9, 4.10, 4.12): Schlüssel nur maskiert, Modelle, Bereinigung und Titelvorschlag
+// an/aus, Text-Anbieter (OpenAI oder Claude).
 import { useEffect, useState } from "react";
-import { T } from "@markdoist/app";
+import { PROVIDER_LABEL, T, textModels, type ApiProvider, type TextProvider } from "@markdoist/app";
 import { bridge, type DictationStatus } from "../bridge";
 import { useDialog } from "../dialog";
 
-export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
-  const D = T.dictation;
-  const dialog = useDialog<HTMLDivElement>(onClose);
-  const [st, setSt] = useState<DictationStatus | null>(null);
+const D = T.dictation;
+
+/** Testkennungen: OpenAI behält die bisherigen (`dictation-key…`), andere Anbieter `dictation-<anbieter>-key…`. */
+const tid = (p: ApiProvider, suffix: string) => (p === "openai" ? `dictation-key${suffix}` : `dictation-${p}-key${suffix}`);
+
+function KeyRow({ provider, st, apply }: { provider: ApiProvider; st: DictationStatus; apply(s: DictationStatus): void }) {
   const [key, setKey] = useState("");
-  const [models, setModels] = useState({ transcribeModel: "", cleanupModel: "", titleModel: "" });
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const k = st.keys[provider];
+  const id = tid(provider, "");
+  return (
+    <>
+      <label htmlFor={id}>{D.keyLabelFor(PROVIDER_LABEL[provider])}</label>
+      {k.hasKey ? (
+        <div className="key-row">
+          <span className="masked" data-testid={tid(provider, "-masked")}>
+            {k.masked}
+          </span>
+          <button
+            className="btn"
+            disabled={busy}
+            data-testid={tid(provider, "-check")}
+            onClick={() => {
+              setBusy(true);
+              void bridge()
+                .dictation.check(provider)
+                .then((r) => setMsg(r.ok ? { text: D.keyOk } : { text: D.errors[r.kind], error: true }))
+                .finally(() => setBusy(false));
+            }}
+          >
+            {busy ? "…" : D.keyCheck}
+          </button>
+          <button className="btn" data-testid={tid(provider, "-remove")} onClick={() => void bridge().dictation.clearKey(provider).then((s) => (apply(s), setMsg({ text: D.keyRemoved })))}>
+            {D.keyRemove}
+          </button>
+        </div>
+      ) : (
+        <form
+          className="key-row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!key.trim()) return;
+            void bridge()
+              .dictation.setKey(key, provider)
+              .then((s) => (apply(s), setKey(""), setMsg({ text: D.keySaved })));
+          }}
+        >
+          <input id={id} type="password" autoComplete="off" spellCheck={false} placeholder={D.keyPlaceholderFor[provider]} value={key} onChange={(e) => setKey(e.target.value)} data-testid={id} />
+          <button className="btn primary" type="submit" disabled={!key.trim()} data-testid={tid(provider, "-save")}>
+            {D.keySave}
+          </button>
+        </form>
+      )}
+      {msg && (
+        <p className={`hint${msg.error ? " error" : ""}`} data-testid={provider === "openai" ? "dictation-status" : `dictation-${provider}-status`}>
+          {msg.text}
+        </p>
+      )}
+    </>
+  );
+}
+
+export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
+  const dialog = useDialog<HTMLDivElement>(onClose);
+  const [st, setSt] = useState<DictationStatus | null>(null);
+  const [models, setModels] = useState({ transcribeModel: "", cleanupModel: "", titleModel: "", claudeCleanupModel: "", claudeTitleModel: "" });
 
   const apply = (s: DictationStatus) => {
     setSt(s);
-    setModels({ transcribeModel: s.settings.transcribeModel, cleanupModel: s.settings.cleanupModel, titleModel: s.settings.titleModel });
+    const { transcribeModel, cleanupModel, titleModel, claudeCleanupModel, claudeTitleModel } = s.settings;
+    setModels({ transcribeModel, cleanupModel, titleModel, claudeCleanupModel, claudeTitleModel });
   };
   useEffect(() => void bridge().dictation.status().then(apply), []);
   if (!st) return null;
 
   const saveModels = () => void bridge().dictation.setSettings(models).then(apply);
+  const text = textModels(st.settings).provider;
+  const claude = text === "anthropic";
+  // Feldnamen der Modelle des gewählten Text-Anbieters
+  const cleanupField = claude ? "claudeCleanupModel" : "cleanupModel";
+  const titleField = claude ? "claudeTitleModel" : "titleModel";
+  const anyKey = st.keys.openai.hasKey || st.keys.anthropic.hasKey;
 
   return (
     <div className="modal-back" onClick={onClose}>
       <div ref={dialog} className="modal dictation-settings" role="dialog" aria-modal="true" aria-label={D.section} onClick={(e) => e.stopPropagation()} data-testid="dictation-settings">
         <h2>{D.section}</h2>
-        <label htmlFor="dictation-key">{D.keyLabel}</label>
-        {st.hasKey ? (
-          <div className="key-row">
-            <span className="masked" data-testid="dictation-key-masked">
-              {st.masked}
-            </span>
-            <button
-              className="btn"
-              disabled={busy}
-              data-testid="dictation-key-check"
-              onClick={() => {
-                setBusy(true);
-                void bridge()
-                  .dictation.check()
-                  .then((r) => setMsg(r.ok ? { text: D.keyOk } : { text: D.errors[r.kind], error: true }))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              {busy ? "…" : D.keyCheck}
-            </button>
-            <button className="btn" data-testid="dictation-key-remove" onClick={() => void bridge().dictation.clearKey().then((s) => (apply(s), setMsg({ text: D.keyRemoved })))}>
-              {D.keyRemove}
-            </button>
-          </div>
-        ) : (
-          <form
-            className="key-row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!key.trim()) return;
-              void bridge()
-                .dictation.setKey(key)
-                .then((s) => (apply(s), setKey(""), setMsg({ text: D.keySaved })));
-            }}
+        <h3>{D.transcribeSection}</h3>
+        <KeyRow provider="openai" st={st} apply={apply} />
+        <div className="fields" style={{ gridTemplateColumns: "180px 1fr" }}>
+          <label htmlFor="dictation-model-transcribe">{D.modelTranscribe}</label>
+          <input
+            id="dictation-model-transcribe"
+            value={models.transcribeModel}
+            onChange={(e) => setModels((m) => ({ ...m, transcribeModel: e.target.value }))}
+            onBlur={saveModels}
+            spellCheck={false}
+            data-testid="dictation-model-transcribe"
+          />
+        </div>
+
+        <h3>{D.textSection}</h3>
+        <p className="hint">{D.textSectionHint}</p>
+        <div className="fields" style={{ gridTemplateColumns: "180px 1fr" }}>
+          <label htmlFor="dictation-text-provider">{D.textProvider}</label>
+          <select
+            id="dictation-text-provider"
+            value={text}
+            onChange={(e) => void bridge().dictation.setSettings({ ...models, textProvider: e.target.value as TextProvider }).then(apply)}
+            data-testid="dictation-text-provider"
           >
-            <input id="dictation-key" type="password" autoComplete="off" spellCheck={false} placeholder={D.keyPlaceholder} value={key} onChange={(e) => setKey(e.target.value)} data-testid="dictation-key" />
-            <button className="btn primary" type="submit" disabled={!key.trim()} data-testid="dictation-key-save">
-              {D.keySave}
-            </button>
-          </form>
-        )}
-        {msg && (
-          <p className={`hint${msg.error ? " error" : ""}`} data-testid="dictation-status">
-            {msg.text}
-          </p>
-        )}
-        {st.insecure && st.hasKey && <p className="hint error">{D.keyInsecure}</p>}
-        <p className="hint">{D.keyHint}</p>
+            <option value="openai">{D.providerNames.openai}</option>
+            <option value="anthropic">{D.providerNames.anthropic}</option>
+          </select>
+        </div>
+        {claude && <KeyRow provider="anthropic" st={st} apply={apply} />}
 
         <label className="menu-row" style={{ padding: 0 }}>
           <input
@@ -89,21 +137,12 @@ export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
           </span>
         </label>
         <div className="fields" style={{ gridTemplateColumns: "180px 1fr" }}>
-          <label htmlFor="dictation-model-transcribe">{D.modelTranscribe}</label>
-          <input
-            id="dictation-model-transcribe"
-            value={models.transcribeModel}
-            onChange={(e) => setModels((m) => ({ ...m, transcribeModel: e.target.value }))}
-            onBlur={saveModels}
-            spellCheck={false}
-            data-testid="dictation-model-transcribe"
-          />
           <label htmlFor="dictation-model-cleanup">{D.modelCleanup}</label>
           <input
             id="dictation-model-cleanup"
-            value={models.cleanupModel}
+            value={models[cleanupField]}
             disabled={!st.settings.cleanup}
-            onChange={(e) => setModels((m) => ({ ...m, cleanupModel: e.target.value }))}
+            onChange={(e) => setModels((m) => ({ ...m, [cleanupField]: e.target.value }))}
             onBlur={saveModels}
             spellCheck={false}
             data-testid="dictation-model-cleanup"
@@ -119,20 +158,23 @@ export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
           <span>
             {D.autoTitle}
             <br />
-            <span className="hint">{D.autoTitleHint}</span>
+            <span className="hint">{claude ? D.autoTitleHintFor(PROVIDER_LABEL.anthropic) : D.autoTitleHint}</span>
           </span>
         </label>
         <div className="fields" style={{ gridTemplateColumns: "180px 1fr" }}>
           <label htmlFor="dictation-model-title">{D.modelTitle}</label>
           <input
             id="dictation-model-title"
-            value={models.titleModel}
-            onChange={(e) => setModels((m) => ({ ...m, titleModel: e.target.value }))}
+            value={models[titleField]}
+            onChange={(e) => setModels((m) => ({ ...m, [titleField]: e.target.value }))}
             onBlur={saveModels}
             spellCheck={false}
             data-testid="dictation-model-title"
           />
         </div>
+
+        {st.insecure && anyKey && <p className="hint error">{D.keyInsecure}</p>}
+        <p className="hint">{claude ? D.keyHintFor(PROVIDER_LABEL.openai, PROVIDER_LABEL.anthropic) : D.keyHint}</p>
         <div className="buttons">
           <button className="btn" onClick={onClose} data-testid="dictation-settings-close">
             Schließen

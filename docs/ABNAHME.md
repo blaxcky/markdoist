@@ -302,3 +302,32 @@ PLAN1 4.11 und AK-55. Wunsch vom 13.11.2026; die Festlegungen wurden mit dem Pla
   - Keine Sichtprüfung von Dialog und Blatt.
 - **Nebenbei behoben:** Liegen am Desktop zwei Dialoge übereinander, schließt Escape nur noch den obersten. Bisher schloss Escape in den Einstellungen auch „Checkliste einfügen“ darunter, und der eingefügte Text ging verloren. `useDialog` führt dafür einen Stapel offener Dialoge.
 - **Gefunden bei der Prüfung:** Die Bereinigung der Einträge machte aus „1.5 l Milch“ „5 l Milch“, weil „1.“ als Aufzählung galt. Eine Zahl zählt jetzt nur mit folgendem Leerraum als Aufzählung; ein Test deckt das ab.
+
+## Anbieter, Schritt 1: Claude als Text-Anbieter (15.11.2026)
+
+PLAN1 4.12; Wunsch und Entscheidungen vom 15.11.2026 (Plan und `.fragen/2026-11-15-2157-diktat-anbieter.md`). Bereinigung, Titelvorschlag und „Checkliste einfügen“ laufen wahlweise über OpenAI oder Claude (`claude-haiku-5-5`, offizielles SDK `@anthropic-ai/sdk` 1.8.0). Die Spracherkennung bleibt in diesem Schritt bei OpenAI.
+
+- **Kern (AK-56, Teil Claude):** `packages/app/test/claude.test.ts` prüft mit einem gefälschten `fetch` für das SDK:
+  - Bereinigung über `/v1/messages`: Modell, System mit Anweisung und Kontext, Rohtext als Nutzernachricht, `output_config.effort: low`, kein `thinking`, Schlüssel als `Authorization: Bearer` (so sendet ihn SDK 1.x)
+  - eigenes Claude-Modell und eigene Basis-URL
+  - Ablehnung (`refusal`), abgeschnittene Antwort und fehlender Claude-Schlüssel ergeben den Rohtext
+  - HTTP 400 führt einmal zur einfachen Anfrage ohne `output_config`, bei Bereinigung und Titel
+  - Titel und Checkliste mit JSON-Schema in `output_config.format`
+  - Fehlerarten 401, 429, 529 und Netz; „… einen Claude-API-Schlüssel in den Einstellungen hinterlegen“ für Titel und Checkliste, bei OpenAI weiter der alte Text
+  - Schlüsselprüfung über `GET /v1/models?limit=1`; alte Einstellungen ergeben OpenAI
+- **Desktop-Dienst:** `apps/desktop/test/dictation.test.ts` prüft Schlüssel je Anbieter (getrennt, verschlüsselt, maskiert, einzeln entfernbar) sowie Titel und Checkliste über Claude mit dem Claude-Schlüssel und dem Claude-Modell; ohne Claude-Schlüssel `nokey` mit Anbieter.
+- **Prüfstand:** `pnpm lint`, `pnpm typecheck` und `pnpm test` (5654 Tests) grün.
+- **Desktop-E2E:** Die beiden betroffenen Playwright-Tests sind grün: „Programmieren: Diktieren …“ und „Listen: Checkliste aus Text einfügen …“. Der Diktier-Test hat einen neuen Abschnitt:
+  - Text-Anbieter auf Claude stellen; das Titelmodell zeigt `claude-haiku-5-5`
+  - Claude-Schlüssel speichern, nur maskiert sichtbar, nicht im Klartext in `settings.json`; der OpenAI-Schlüssel bleibt
+  - Diktieren im Board: Erkennung über OpenAI, Bereinigung und Titel über `/v1/messages` des Ersatzservers (`MARKDOIST_ANTHROPIC_BASE_URL`), mit Claude-Schlüssel und Modell; die Datei bekommt Titel, `dev_type` und den bereinigten Text
+- **Android-E2E:** Release-Build x86_64 auf Genymotion „Google Pixel 7“. Metro bündelt das SDK über das `browser`-Feld des Pakets, also ohne Node-Module. Flow `61-diktieren.yaml` ist grün. Neu darin:
+  - Claude-Chip wählen, Claude-Schlüssel speichern, nur maskiert sichtbar
+  - „Prüfen“ geht **echt zu api.anthropic.com** und meldet mit dem ungültigen Testschlüssel „API-Schlüssel ungültig“ (401, kostenlos). Das belegt, dass das SDK unter Hermes läuft.
+  - Schlüssel entfernen, zurück auf OpenAI
+
+  Im ersten Lauf lag die Meldung unterhalb des sichtbaren Bereichs, die App zeigte sie richtig an. Der Flow scrollt jetzt zu ihr. Die Schritte ab „Prüfen“ liefen danach einzeln grün; der Rest des Flows war im ersten Lauf grün.
+- **[V]-Abweichungen:** Das Denken wird nicht abgeschaltet, nur `effort: low` gesetzt, weil andere eintragbare Claude-Modelle `thinking: disabled` ablehnen. Die Fehlertexte für Zeitüberschreitung und Serverfehler nennen keinen Anbieter mehr („Zeitüberschreitung beim Anbieter“, „Der Anbieter hat einen Fehler gemeldet“).
+- **Nicht geprüft:**
+  - Keine erfolgreiche Anfrage an die echte Claude-API, denn im Test gibt es keinen gültigen Schlüssel. Also nicht geprüft, wie gut Haiku bereinigt und betitelt, und nicht, dass die echte API das JSON-Schema für Titel und Checkliste annimmt.
+  - Keine Sichtprüfung der neuen Einstellungsabschnitte.

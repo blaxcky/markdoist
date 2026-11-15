@@ -1,5 +1,5 @@
-# Diktieren (4.9, 4.10): Knopf nur bei Programmier-Einträgen und im Eingabeblatt eines Boards; ohne Schlüssel Hinweis und Einstellungen;
-# Schlüssel speichern (nur maskiert sichtbar) und entfernen; Aufnahme starten und abbrechen.
+# Diktieren (4.9, 4.10, 4.12): Knopf nur bei Programmier-Einträgen und im Eingabeblatt eines Boards; ohne Schlüssel Hinweis und Einstellungen;
+# Schlüssel speichern (nur maskiert sichtbar) und entfernen; Aufnahme starten und abbrechen; Claude als Text-Anbieter.
 # Netz und OpenAI prüft Maestro nicht (kein echter Schlüssel im Test).
 appId: de.markdoist.aufgaben
 ---
@@ -145,4 +145,54 @@ appId: de.markdoist.aufgaben
     visible:
       id: dictation-key
     timeout: 4000
+# Claude als Text-Anbieter (4.12): eigener Schlüssel, nur maskiert. „Prüfen“ geht echt zu api.anthropic.com
+# (Claude-SDK unter Hermes); der Testschlüssel ist ungültig, also 401. Kostet nichts.
+- scrollUntilVisible:
+    element:
+      id: dictation-text-anthropic
+    direction: DOWN
+    timeout: 8000
+- tapOn:
+    id: dictation-text-anthropic
+- scrollUntilVisible:
+    element:
+      id: dictation-anthropic-key
+    direction: DOWN
+    timeout: 8000
+- tapOn:
+    id: dictation-anthropic-key
+- inputText: "sk-ant-maestro-5678"
+- hideKeyboard
+- tapOn:
+    id: dictation-anthropic-key-save
+- extendedWaitUntil:
+    visible:
+      id: dictation-anthropic-key-masked
+      text: "sk-…5678"
+    timeout: 4000
+- assertNotVisible: ".*maestro.*"
+- tapOn:
+    id: dictation-anthropic-key-check
+# Die Meldung steht unter dem Schlüssel und kann unterhalb des sichtbaren Bereichs liegen.
+- scrollUntilVisible:
+    element:
+      id: dictation-anthropic-status
+      text: "API-Schlüssel ungültig"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: dictation-anthropic-key-remove
+- extendedWaitUntil:
+    visible:
+      id: dictation-anthropic-key
+    timeout: 4000
+- scrollUntilVisible:
+    element:
+      id: dictation-text-openai
+    direction: UP
+    timeout: 8000
+- tapOn:
+    id: dictation-text-openai
+- assertNotVisible:
+    id: dictation-anthropic-key
 - back

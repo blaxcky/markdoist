@@ -17,4 +17,5 @@ export * from "./seriesStrip";
 export * from "./ics";
 export * from "./wasteImport";
 export * from "./dictation";
+export * from "./claude";
 export * from "./sideNav";
