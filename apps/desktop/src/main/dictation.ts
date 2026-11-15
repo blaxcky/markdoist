@@ -4,6 +4,7 @@
 import {
   API_PROVIDERS,
   checkApiKey,
+  LOCAL_PCM_MIME,
   checklistFromText,
   DictationError,
   maskKey,
@@ -18,8 +19,10 @@ import {
   type DictationResult,
   type DictationSettings,
   type FetchLike,
+  type LocalModelState,
   type TitleSuggestion,
 } from "@markdoist/app";
+import type { LocalModelStore, SttEngine } from "./localStt";
 
 /** Teil von Electrons safeStorage, den der Dienst braucht (für Tests ersetzbar). */
 export interface SecretBox {
@@ -79,7 +82,25 @@ export class DictationService {
     private readonly baseUrls: BaseUrls = {},
     /** Claude: eigenes fetch (Tests); sonst das globale */
     private readonly claudeFetch?: typeof globalThis.fetch,
+    /** Lokale Erkennung (4.12) */
+    private readonly local?: { store: LocalModelStore; engine: SttEngine },
   ) {}
+
+  modelState(): Promise<LocalModelState> {
+    return this.local ? this.local.store.state() : Promise.resolve({ state: "missing" });
+  }
+
+  downloadModel(onProgress?: (s: LocalModelState) => void): Promise<LocalModelState> {
+    return this.local ? this.local.store.download(onProgress) : this.modelState();
+  }
+
+  cancelModel(): void {
+    this.local?.store.cancel();
+  }
+
+  removeModel(): Promise<LocalModelState> {
+    return this.local ? this.local.store.remove() : this.modelState();
+  }
 
   private insecure(): boolean {
     if (!this.box.isEncryptionAvailable()) return true;
@@ -170,16 +191,23 @@ export class DictationService {
     const type = typeof mime === "string" && /^audio\/[\w.+-]+(;[\w=.,+-]*)?$/.test(mime) ? mime.split(";")[0]! : "audio/webm";
     const ext = type.includes("mp4") || type.includes("m4a") ? "m4a" : type.includes("ogg") ? "ogg" : type.includes("wav") ? "wav" : "webm";
     const bytes = new Uint8Array(audio instanceof Uint8Array ? audio : new Uint8Array(audio)); // Kopie mit eigenem ArrayBuffer
-    if (bytes.byteLength > 25 * 1024 * 1024) return { ok: false, kind: "server" };
     const settings = this.settings();
     const stt = transcribeTarget(settings).provider;
+    const pcm = mime === LOCAL_PCM_MIME;
+    // Grenze der APIs 25 MB; dekodiertes PCM (64 KB/s) für die lokale Erkennung bis gut 10 Minuten.
+    if (bytes.byteLength > (pcm ? 48 : 25) * 1024 * 1024) return { ok: false, kind: "server" };
+    const local = this.local;
     try {
       const result = await runDictation({
         fetch: this.fetch,
-        key: this.key(stt) ?? "",
+        key: stt === "local" ? "" : (this.key(stt) ?? ""),
         settings,
         ctx: { list: typeof ctx?.list === "string" ? ctx.list : undefined, title: typeof ctx?.title === "string" ? ctx.title : undefined },
-        baseUrl: this.baseUrls[stt],
+        baseUrl: stt === "local" ? undefined : this.baseUrls[stt],
+        localTranscribe: async () => {
+          if (!local || !pcm || (await local.store.state()).state !== "ready") throw new DictationError("nomodel");
+          return local.engine.transcribe(local.store.dir(), new Float32Array(bytes.buffer, 0, Math.floor(bytes.byteLength / 4)));
+        },
         // Gemini erwartet die Aufnahme im JSON (4.12).
         audio: { mime: type, base64: async () => Buffer.from(bytes).toString("base64") },
         text: (({ provider, key, baseUrl, claudeFetch }) => ({ provider, key, baseUrl, claudeFetch }))(this.textTarget()),

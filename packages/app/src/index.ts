@@ -18,4 +18,5 @@ export * from "./ics";
 export * from "./wasteImport";
 export * from "./dictation";
 export * from "./claude";
+export * from "./localModel";
 export * from "./sideNav";

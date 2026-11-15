@@ -99,7 +99,9 @@ export function DictationSettings() {
   const claude = text === "anthropic";
   const cleanupField = claude ? "claudeCleanupModel" : "cleanupModel";
   const titleField = claude ? "claudeTitleModel" : "titleModel";
-  const stt = transcribeTarget(settings).provider;
+  // „Auf dem Gerät“ kommt am Handy erst mit der Android-Umsetzung (4.12, Schritt 4).
+  const picked = transcribeTarget(settings).provider;
+  const stt = picked === "local" ? "openai" : picked;
   const sttField = stt === "groq" ? "groqModel" : stt === "gemini" ? "geminiModel" : "transcribeModel";
   const heading = (label: string) => <Text style={{ color: c.fg, fontSize: 15, fontWeight: "600", marginTop: 12 }}>{label}</Text>;
   /** Auswahl-Chip; `group` „text“ oder „stt“ ergibt die Testkennung `dictation-<group>-<anbieter>`. */
@@ -124,7 +126,7 @@ export function DictationSettings() {
       <Text style={{ color: c.muted, fontSize: 13, marginTop: 16 }}>{D.section}</Text>
       {heading(D.transcribeSection)}
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }} accessibilityRole="radiogroup" accessibilityLabel={D.transcribeSection}>
-        {TRANSCRIBE_PROVIDERS.map((p) => chip("stt", p, stt === p, { transcribeProvider: p }))}
+        {TRANSCRIBE_PROVIDERS.filter((p) => p !== "local").map((p) => chip("stt", p as ApiProvider, stt === p, { transcribeProvider: p }))}
       </View>
       <KeyRow key={stt} provider={stt} value={keys[stt]} />
       <Text style={{ color: c.fg, fontSize: 15, marginTop: 8 }}>{D.modelTranscribe}</Text>

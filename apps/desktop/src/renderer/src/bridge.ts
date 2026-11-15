@@ -1,5 +1,5 @@
 // Brücke zum Main-Prozess: StorageAdapter und Schlüssel-Wert-Speicher über IPC.
-import { DictationError, type ApiProvider, type DictationContext, type DictationErrorKind, type DictationResult, type DictationSettings, type KeyValueStore, type StorageAdapter, type TitleSuggester, type TitleSuggestion } from "@markdoist/app";
+import { DictationError, type ApiProvider, type LocalModelState, type DictationContext, type DictationErrorKind, type DictationResult, type DictationSettings, type KeyValueStore, type StorageAdapter, type TitleSuggester, type TitleSuggestion } from "@markdoist/app";
 
 export interface Settings {
   folder: string | null;
@@ -44,6 +44,14 @@ interface Bridge {
     onPhase(fn: (p: "transcribing" | "cleaning") => void): () => void;
     /** Titel und Art eines Programmier-Eintrags (4.10); `force` = „Neu vorschlagen“ */
     title(note: string, list: string, force: boolean): Promise<{ ok: true; suggestion: TitleSuggestion } | { ok: false; kind: DictationErrorKind | "off"; detail?: string; status?: number; provider?: ApiProvider }>;
+    /** Lokales Erkennungsmodell (4.12) */
+    model: {
+      status(): Promise<LocalModelState>;
+      download(): Promise<LocalModelState>;
+      cancel(): Promise<void>;
+      remove(): Promise<LocalModelState>;
+      onProgress(fn: (s: LocalModelState) => void): () => void;
+    };
     /** „Checkliste einfügen“ (4.11): Einträge aus unformatiertem Text */
     checklist(text: string, list: string): Promise<{ ok: true; items: string[] } | { ok: false; kind: DictationErrorKind; detail?: string; status?: number; provider?: ApiProvider }>;
   };

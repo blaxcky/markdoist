@@ -3,6 +3,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -823,7 +824,12 @@ test("Müllabfuhr: ICS importieren, Abfuhrart öffnen, Termin überspringen, ern
   await expect(page.getByTestId("waste-import-apply")).toBeDisabled();
 });
 
+// Ersatz für die Dateien des lokalen Modells (4.12)
+const FAKE_MODEL: Record<string, string> = { "encoder.int8.onnx": "E".repeat(20_000), "tokens.txt": "a 0\nb 1\n" };
+
 test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, erneuter Versuch und Titelvorschlag (4.9, 4.10, 4.12)", async () => {
+  // Lang: OpenAI, Claude, Gemini und die lokale Erkennung nacheinander.
+  test.setTimeout(150_000);
   // Lokaler Ersatz für die OpenAI- und die Claude-API; das Mikrofon liefert Chromiums Testton.
   const seen: { path: string; auth: string; goog: string; body: string }[] = [];
   let mode: "ok" | "401" = "ok";
@@ -835,6 +841,11 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
       seen.push({ path: req.url ?? "", auth: req.headers.authorization ?? "", goog: String(req.headers["x-goog-api-key"] ?? ""), body });
       res.setHeader("Content-Type", "application/json");
       if (mode === "401") return void res.writeHead(401).end("{}");
+      // Lokales Modell (4.12): kleine Ersatzdateien statt Parakeet
+      if (req.url?.startsWith("/model/")) {
+        res.setHeader("Content-Type", "application/octet-stream");
+        return void res.end(FAKE_MODEL[req.url.slice(7)] ?? "");
+      }
       // Gemini (4.12): Transkription über generateContent
       if (req.url === "/v1beta/models/gemini-3.5-transcribe:generateContent") return void res.end(JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text: "äh Gemini hat das erkannt" }] } }] }));
       // Claude (4.12): Messages API
@@ -868,6 +879,12 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
         MARKDOIST_OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`,
         MARKDOIST_ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}`,
         MARKDOIST_GEMINI_BASE_URL: `http://127.0.0.1:${port}/v1beta`,
+        MARKDOIST_TEST_LOCAL_MODEL: JSON.stringify({
+          id: "test-model",
+          baseUrl: `http://127.0.0.1:${port}/model`,
+          files: Object.entries(FAKE_MODEL).map(([name, text]) => ({ name, size: Buffer.byteLength(text), sha256: createHash("sha256").update(text).digest("hex") })),
+        }),
+        MARKDOIST_TEST_LOCAL_STT_TEXT: "Lokal erkannt",
       },
     });
     page = await app.firstWindow();
@@ -994,6 +1011,25 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
     expect(geminiCall.body).toContain('"mimeType":"audio/webm"');
     expect(geminiCall.body).toContain('"languageCodes":["de-DE"]');
     expect(seen[mark2 + 1]!.body).toContain("Gemini hat das erkannt");
+
+    // Auf dem Gerät (4.12): Modell laden (Ersatzdateien mit Prüfsumme), dann Diktat ohne Erkennung im Netz.
+    await page.getByTestId("user-menu").click();
+    await page.getByTestId("menu-dictation").click();
+    await page.getByTestId("dictation-transcribe-provider").selectOption("local");
+    await expect(page.getByTestId("dictation-gemini-key-masked")).toHaveCount(0);
+    await page.getByTestId("local-model-download").click();
+    await expect(page.getByTestId("local-model-state")).toHaveText(/ist bereit$/);
+    expect((await readdir(join(base, "data", "models", "test-model"))).sort()).toEqual(Object.keys(FAKE_MODEL).sort());
+    await page.getByTestId("dictation-settings-close").click();
+    const mark3 = seen.length;
+    await page.getByTestId("dev-dictate").click();
+    await expect(page.getByTestId("dictate-state")).toContainText("Aufnahme");
+    await page.waitForTimeout(800);
+    await page.getByTestId("dictate-stop").click();
+    await expect(page.locator('[data-testid="dev-item-row"][data-text="Knopf rot (Claude)"]')).toHaveCount(3);
+    // Nur Bereinigung und Titel gehen ins Netz; der erkannte Text kommt vom Gerät.
+    expect(seen.slice(mark3).map((x) => x.path)).toEqual(["/v1/messages", "/v1/messages"]);
+    expect(seen[mark3]!.body).toContain('"content":"Lokal erkannt"');
   } finally {
     server.close();
   }

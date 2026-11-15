@@ -10,7 +10,7 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 13.11.2026:** „Checkliste einfügen“: unformatierten Text per KI als Einträge an eine Liste anhängen (4.11).
 
-**Umgesetzt am 15.11.2026:** Claude als Text-Anbieter für Bereinigung, Titelvorschlag und „Checkliste einfügen“ (4.12, Schritt 1), Erkennung über Groq und Gemini (Schritt 2). Die lokale Erkennung folgt.
+**Umgesetzt am 15.11.2026:** Claude als Text-Anbieter für Bereinigung, Titelvorschlag und „Checkliste einfügen“ (4.12, Schritt 1), Erkennung über Groq und Gemini (Schritt 2), lokale Erkennung am Desktop (Schritt 3). Die lokale Erkennung auf Android folgt.
 
 **Umgesetzt am 11.11.2026:** Seitenleiste am Desktop und Blatt „Mehr“ am Handy in Bereichen mit aufklappbaren Listen (4.5).
 
@@ -775,7 +775,7 @@ Wunsch vom 15.11.2026: Der OpenAI-Zugang fällt vielleicht weg. Entscheidungen m
 - **Lokale Erkennung [F]:** NVIDIA Parakeet TDT 0.6B v3 (int8, ≈ 640 MB, CC BY 4.0) über sherpa-onnx, auf Android und Desktop. Kann Deutsch, setzt Satzzeichen und Großschreibung selbst. Der Kontext aus den Titeln entfällt.
   - Das Modell steckt nicht in der App. „Modell herunterladen“ in den Einstellungen lädt die Einzeldateien (Encoder, Decoder, Joiner, Tokens) mit Fortschritt und Prüfsumme; danach Status und „Löschen“. Ablage: Desktop `userData/models/`, Android im App-Dokumentenverzeichnis, nie im Aufgabenordner.
   - Fehlt das Modell, erscheint „Für das Diktieren auf dem Gerät zuerst das Modell in den Einstellungen herunterladen“, und die Einstellungen öffnen sich.
-  - Desktop: Der Renderer dekodiert die Aufnahme zu 16 kHz mono; die Erkennung läuft im Main-Prozess.
+  - Desktop [V, Schritt 3]: Der Renderer dekodiert die WebM-Aufnahme mit `OfflineAudioContext` zu Float32 mono mit 16 kHz und schickt sie an den Main-Prozess. Dort erkennt `sherpa-onnx-node` 2.0.1 (`OfflineRecognizer.createAsync`, `decodeAsync`; das Add-on rechnet in eigenen Threads, die Oberfläche bleibt bedienbar). Das Add-on wird erst beim ersten lokalen Diktat geladen und nach 5 Minuten ohne Diktat freigegeben (≈ 1 GB Speicher). Es liegt im RPM entpackt neben `app.asar` (`asarUnpack`). Modell unter `<Datenordner>/models/parakeet-tdt-0.6b-v3-int8`, Download nach `.part`-Datei, SHA-256-Prüfung und Umbenennen; feste Revision `ed5d745` des Hugging-Face-Repos `csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8`. „Abbrechen“ während des Downloads, „Modell löschen“ danach.
   - Android: Aufnahme bei lokaler Erkennung mit 16 kHz; ein eigenes Expo-Modul dekodiert die m4a und ruft sherpa-onnx in einem Hintergrund-Thread auf. Die APK wächst um die Laufzeitbibliotheken.
 - **Schlüssel [F]:** je Anbieter ein eigener, gerätelokal wie in 4.9 (Android `expo-secure-store`, Desktop `safeStorage`), jeder maskiert, mit „Prüfen“ und „Entfernen“. Angezeigt wird nur der Schlüssel der gewählten Anbieter.
 - **Netz [F]:** An den gewählten Erkennungs-Anbieter geht die Aufnahme (nicht bei „Auf dem Gerät“), an den Text-Anbieter Rohtext, Notiz, Titel und der Text für die Checkliste. Der Einstellungstext nennt die gewählten Anbieter.

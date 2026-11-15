@@ -107,4 +107,16 @@ describe("Erkennung bei Groq und Gemini (4.12)", () => {
     expect(transcribeTarget(parseDictationSettings({ transcribeProvider: "gemini", geminiModel: " g " }))).toEqual({ provider: "gemini", model: "g" });
     expect(parseDictationSettings({ transcribeProvider: "mistral" }).transcribeProvider).toBe("openai");
   });
+
+  it("Auf dem Gerät: ohne Schlüssel und Netz, ohne Erkenner nomodel", async () => {
+    const local = { ...DEFAULT_DICTATION, transcribeProvider: "local" as const, cleanup: false };
+    const { fetch, calls } = fakeFetch([]);
+    const r = await runDictation({ fetch, key: "", settings: local, ctx, localTranscribe: async () => " Hallo lokal " });
+    expect(r).toEqual({ text: "Hallo lokal", raw: "Hallo lokal", cleaned: false });
+    expect(calls).toHaveLength(0);
+    await expect(runDictation({ fetch, key: "", settings: local, ctx })).rejects.toMatchObject({ kind: "nomodel" });
+    await expect(runDictation({ fetch, key: "", settings: local, ctx, localTranscribe: async () => "  " })).rejects.toMatchObject({ kind: "empty" });
+    await expect(runDictation({ fetch, key: "", settings: local, ctx, localTranscribe: async () => Promise.reject(new Error("onnx kaputt")) })).rejects.toMatchObject({ kind: "server", message: "onnx kaputt" });
+    expect(transcribeTarget(parseDictationSettings({ transcribeProvider: "local" }))).toEqual({ provider: "local", model: "parakeet-tdt-0.6b-v3-int8" });
+  });
 });

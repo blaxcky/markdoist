@@ -41,5 +41,8 @@
     "vite": "8.3.4",
     "zustand": "5.0.15"
   },
-  "desktopName": "markdoist.desktop"
+  "desktopName": "markdoist.desktop",
+  "dependencies": {
+    "sherpa-onnx-node": "2.0.1"
+  }
 }

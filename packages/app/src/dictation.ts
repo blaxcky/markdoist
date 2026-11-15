@@ -4,6 +4,7 @@
 // über OpenAI oder Claude.
 import { classifyStatus, DictationError, TRANSCRIBE_PROVIDERS, type ApiProvider, type DictationErrorKind, type TextProvider, type TranscribeProvider } from "./apiError";
 import { checkClaudeKey, CLAUDE_DEFAULT_MODEL, claudeTextWithFallback } from "./claude";
+import { LOCAL_MODEL } from "./localModel";
 
 export { API_PROVIDERS, classifyStatus, DictationError, PROVIDER_LABEL, TRANSCRIBE_PROVIDERS } from "./apiError";
 export type { ApiProvider, DictationErrorKind, TextProvider, TranscribeProvider } from "./apiError";
@@ -49,6 +50,7 @@ export const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta
 
 /** Basis-URL eines Erkennungs-Anbieters. */
 export function transcribeBaseUrl(p: TranscribeProvider): string {
+  // „local“ hat keine Adresse; der Wert wird nie benutzt.
   return p === "groq" ? GROQ_BASE_URL : p === "gemini" ? GEMINI_BASE_URL : OPENAI_BASE_URL;
 }
 
@@ -77,6 +79,7 @@ export function parseDictationSettings(raw: unknown): DictationSettings {
 /** Anbieter und Modell der Erkennung nach der Wahl in den Einstellungen. */
 export function transcribeTarget(s: DictationSettings): { provider: TranscribeProvider; model: string } {
   const provider = s.transcribeProvider;
+  if (provider === "local") return { provider, model: LOCAL_MODEL.id };
   return { provider, model: provider === "groq" ? s.groqModel : provider === "gemini" ? s.geminiModel : s.transcribeModel };
 }
 
@@ -259,6 +262,11 @@ export interface DictationRun {
   baseUrl?: string;
   /** Schlüssel als `x-goog-api-key` (Gemini) statt `Authorization: Bearer` */
   authStyle?: "bearer" | "goog";
+  /**
+   * Erkennung auf dem Gerät (4.12). Fehlt sie, obwohl „Auf dem Gerät“ gewählt ist, gibt es `nomodel`.
+   * Wirft `DictationError("nomodel")`, wenn das Modell nicht heruntergeladen ist.
+   */
+  localTranscribe?: (signal?: AbortSignal) => Promise<string>;
   onPhase?: (phase: "transcribing" | "cleaning") => void;
   /** Zeitgrenze je Anfrage in ms */
   timeoutMs?: number;
@@ -320,7 +328,7 @@ export async function request(run: DictationRun, path: string, init: { method: s
 /** Erkennung und Bereinigung. Scheitert die Bereinigung, kommt der Rohtext zurück. */
 export async function runDictation(run: DictationRun): Promise<DictationResult> {
   const { provider, model } = transcribeTarget(run.settings);
-  if (!run.key.trim()) throw new DictationError("nokey", undefined, undefined, provider);
+  if (provider !== "local" && !run.key.trim()) throw new DictationError("nokey", undefined, undefined, provider);
   run.onPhase?.("transcribing");
   const raw = await transcribe({ ...run, baseUrl: run.baseUrl ?? transcribeBaseUrl(provider) }, provider, model);
   if (!raw) throw new DictationError("empty");
@@ -335,6 +343,15 @@ export async function runDictation(run: DictationRun): Promise<DictationResult> 
 
 /** Erkennung beim gewählten Anbieter. */
 async function transcribe(run: DictationRun, provider: TranscribeProvider, model: string): Promise<string> {
+  if (provider === "local") {
+    if (!run.localTranscribe) throw new DictationError("nomodel");
+    try {
+      return (await run.localTranscribe(run.signal)).trim();
+    } catch (e) {
+      if (e instanceof DictationError) throw e;
+      throw new DictationError("server", e instanceof Error ? e.message : String(e));
+    }
+  }
   if (provider === "gemini") {
     if (!run.audio) throw new DictationError("server", "Keine Aufnahme", undefined, "gemini");
     const body = geminiTranscriptionRequest(run.ctx, run.audio.mime, await run.audio.base64());
@@ -433,7 +450,21 @@ export const T_DICTATION = {
   textSection: "Textmodell",
   textSectionHint: "Für Bereinigung, Titelvorschläge und „Checkliste einfügen“.",
   textProvider: "Anbieter",
-  providerNames: { openai: "OpenAI", anthropic: "Claude (Anthropic)", groq: "Groq", gemini: "Gemini (Google)" } as Record<ApiProvider, string>,
+  providerNames: { openai: "OpenAI", anthropic: "Claude (Anthropic)", groq: "Groq", gemini: "Gemini (Google)", local: "Auf dem Gerät" } as Record<ApiProvider | "local", string>,
+  /** Lokale Erkennung (4.12) */
+  local: {
+    model: "Modell",
+    download: (size: string) => `Modell herunterladen (≈ ${size})`,
+    downloading: (pct: number) => `Wird heruntergeladen … ${pct} %`,
+    cancel: "Abbrechen",
+    ready: (name: string) => `${name} ist bereit`,
+    remove: "Modell löschen",
+    failed: "Download fehlgeschlagen",
+    hint: "Die Erkennung läuft ohne Netz auf diesem Gerät. Das Modell (NVIDIA Parakeet TDT 0.6B v3, CC BY 4.0) wird einmalig von Hugging Face geladen.",
+  },
+  /** Hinweis bei lokaler Erkennung (4.12) */
+  keyHintLocal: (text: string) =>
+    `Die Schlüssel bleiben nur auf diesem Gerät und werden verschlüsselt gespeichert. Aufnahmen verlassen das Gerät nicht. Der erkannte Text zur Bereinigung, für Titelvorschläge die Notiz und der Listentitel und für „Checkliste einfügen“ der eingefügte Text und der Listentitel gehen an ${text}.`,
   /** Hinweis, wenn Erkennung und Textmodell bei verschiedenen Anbietern liegen (4.12) */
   keyHintFor: (stt: string, text: string) =>
     `Die Schlüssel bleiben nur auf diesem Gerät und werden verschlüsselt gespeichert. Aufnahmen sowie Listen- und Eintragstitel gehen beim Diktieren an ${stt}. Der erkannte Text zur Bereinigung, für Titelvorschläge die Notiz und der Listentitel und für „Checkliste einfügen“ der eingefügte Text und der Listentitel gehen an ${text}.`,
@@ -465,5 +496,6 @@ export const T_DICTATION = {
     server: "Der Anbieter hat einen Fehler gemeldet",
     empty: "Nichts erkannt",
     permission: "Kein Zugriff auf das Mikrofon",
+    nomodel: "Für das Diktieren auf dem Gerät zuerst das Modell in den Einstellungen herunterladen",
   } satisfies Record<DictationErrorKind, string>,
 };

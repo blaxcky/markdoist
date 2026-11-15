@@ -1,7 +1,21 @@
 // Einstellungen „Diktieren“ (4.9, 4.10, 4.12): Schlüssel nur maskiert, Modelle, Bereinigung und Titelvorschlag
 // an/aus, Anbieter für Erkennung (OpenAI, Groq, Gemini) und Text (OpenAI oder Claude).
 import { useEffect, useState } from "react";
-import { API_PROVIDERS, PROVIDER_LABEL, T, textModels, transcribeTarget, TRANSCRIBE_PROVIDERS, type ApiProvider, type TextProvider, type TranscribeProvider } from "@markdoist/app";
+import {
+  API_PROVIDERS,
+  formatMB,
+  LOCAL_MODEL_NAME,
+  modelBytes,
+  PROVIDER_LABEL,
+  T,
+  textModels,
+  transcribeTarget,
+  TRANSCRIBE_PROVIDERS,
+  type ApiProvider,
+  type LocalModelState,
+  type TextProvider,
+  type TranscribeProvider,
+} from "@markdoist/app";
 import { bridge, type DictationStatus } from "../bridge";
 import { useDialog } from "../dialog";
 
@@ -68,6 +82,62 @@ function KeyRow({ provider, st, apply }: { provider: ApiProvider; st: DictationS
   );
 }
 
+/** Lokales Modell (4.12): herunterladen mit Fortschritt, abbrechen, löschen. */
+function LocalModelRow() {
+  const L = D.local;
+  const [m, setM] = useState<LocalModelState | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void bridge()
+      .dictation.model.status()
+      .then((s) => alive && setM(s));
+    const off = bridge().dictation.model.onProgress((s) => alive && setM(s));
+    return () => {
+      alive = false;
+      off();
+    };
+  }, []);
+  if (!m) return null;
+  const download = () => {
+    setM({ state: "downloading", received: 0, total: modelBytes() });
+    void bridge().dictation.model.download().then(setM);
+  };
+  return (
+    <div className="local-model" data-testid="local-model">
+      {m.state === "ready" && (
+        <div className="key-row">
+          <span data-testid="local-model-state">{L.ready(LOCAL_MODEL_NAME)}</span>
+          <button className="btn" onClick={() => void bridge().dictation.model.remove().then(setM)} data-testid="local-model-remove">
+            {L.remove}
+          </button>
+        </div>
+      )}
+      {m.state === "downloading" && (
+        <div className="key-row">
+          <progress max={m.total} value={m.received} aria-label={L.model} />
+          <span data-testid="local-model-state">{L.downloading(Math.floor((m.received / Math.max(1, m.total)) * 100))}</span>
+          <button className="btn" onClick={() => void bridge().dictation.model.cancel()} data-testid="local-model-cancel">
+            {L.cancel}
+          </button>
+        </div>
+      )}
+      {(m.state === "missing" || m.state === "error") && (
+        <div className="key-row">
+          <button className="btn primary" onClick={download} data-testid="local-model-download">
+            {L.download(formatMB(modelBytes()))}
+          </button>
+        </div>
+      )}
+      {m.state === "error" && (
+        <p className="hint error" data-testid="local-model-error">
+          {L.failed}: {m.message}
+        </p>
+      )}
+      <p className="hint">{L.hint}</p>
+    </div>
+  );
+}
+
 export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
   const dialog = useDialog<HTMLDivElement>(onClose);
   const [st, setSt] = useState<DictationStatus | null>(null);
@@ -89,6 +159,7 @@ export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
   const titleField = claude ? "claudeTitleModel" : "titleModel";
   const stt = transcribeTarget(st.settings).provider;
   const sttField = stt === "groq" ? "groqModel" : stt === "gemini" ? "geminiModel" : "transcribeModel";
+  const sttKey: ApiProvider | null = stt === "local" ? null : stt;
   const anyKey = API_PROVIDERS.some((p) => st.keys[p].hasKey);
   // Ein Schlüssel wird nur einmal gezeigt, auch wenn Erkennung und Text beim selben Anbieter liegen.
   const textKey: ApiProvider = text;
@@ -113,18 +184,24 @@ export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
             ))}
           </select>
         </div>
-        <KeyRow key={stt} provider={stt} st={st} apply={apply} />
-        <div className="fields" style={{ gridTemplateColumns: "180px 1fr" }}>
-          <label htmlFor="dictation-model-transcribe">{D.modelTranscribe}</label>
-          <input
-            id="dictation-model-transcribe"
-            value={models[sttField]}
-            onChange={(e) => setModels((m) => ({ ...m, [sttField]: e.target.value }))}
-            onBlur={saveModels}
-            spellCheck={false}
-            data-testid="dictation-model-transcribe"
-          />
-        </div>
+        {sttKey ? (
+          <>
+            <KeyRow key={sttKey} provider={sttKey} st={st} apply={apply} />
+            <div className="fields" style={{ gridTemplateColumns: "180px 1fr" }}>
+              <label htmlFor="dictation-model-transcribe">{D.modelTranscribe}</label>
+              <input
+                id="dictation-model-transcribe"
+                value={models[sttField]}
+                onChange={(e) => setModels((m) => ({ ...m, [sttField]: e.target.value }))}
+                onBlur={saveModels}
+                spellCheck={false}
+                data-testid="dictation-model-transcribe"
+              />
+            </div>
+          </>
+        ) : (
+          <LocalModelRow />
+        )}
 
         <h3>{D.textSection}</h3>
         <p className="hint">{D.textSectionHint}</p>
@@ -140,7 +217,7 @@ export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
             <option value="anthropic">{D.providerNames.anthropic}</option>
           </select>
         </div>
-        {textKey !== stt && <KeyRow key={textKey} provider={textKey} st={st} apply={apply} />}
+        {textKey !== sttKey && <KeyRow key={textKey} provider={textKey} st={st} apply={apply} />}
 
         <label className="menu-row" style={{ padding: 0 }}>
           <input
@@ -193,7 +270,9 @@ export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
         </div>
 
         {st.insecure && anyKey && <p className="hint error">{D.keyInsecure}</p>}
-        <p className="hint">{stt === "openai" && text === "openai" ? D.keyHint : D.keyHintFor(PROVIDER_LABEL[stt], PROVIDER_LABEL[text])}</p>
+        <p className="hint">
+          {stt === "local" ? D.keyHintLocal(PROVIDER_LABEL[text]) : stt === "openai" && text === "openai" ? D.keyHint : D.keyHintFor(PROVIDER_LABEL[stt], PROVIDER_LABEL[text])}
+        </p>
         <div className="buttons">
           <button className="btn" onClick={onClose} data-testid="dictation-settings-close">
             Schließen

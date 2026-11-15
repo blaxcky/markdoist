@@ -33,7 +33,8 @@ export async function clearApiKey(p: ApiProvider = "openai"): Promise<void> {
 
 /** Schlüssel des gewählten Erkennungs-Anbieters (4.12). */
 export async function getTranscribeKey(settings?: DictationSettings): Promise<string | null> {
-  return getApiKey(transcribeTarget(settings ?? (await loadDictationSettings())).provider);
+  const p = transcribeTarget(settings ?? (await loadDictationSettings())).provider;
+  return p === "local" ? null : getApiKey(p);
 }
 
 /** Text-Anbieter mit Schlüssel und Modell für Titel und Listen (4.12). */

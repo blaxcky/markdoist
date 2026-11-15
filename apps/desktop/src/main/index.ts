@@ -7,7 +7,8 @@ import { FsAdapter } from "./fsAdapter";
 import { LocalStore, loadSettings, saveSettings, type Settings } from "./settings";
 import { stepZoom, zoomCommand, type ZoomCommand } from "./zoom";
 import { DictationService } from "./dictation";
-import type { ApiProvider, DictationContext, DictationSettings, FetchLike } from "@markdoist/app";
+import { LOCAL_MODEL, type ApiProvider, type DictationContext, type DictationSettings, type FetchLike, type LocalModelInfo } from "@markdoist/app";
+import { FakeEngine, LocalModelStore, SherpaEngine } from "./localStt";
 
 // Datenverzeichnis: ~/.config/markdoist (Plan 3.1). Für Tests überschreibbar.
 const dataDir = process.env.MARKDOIST_DATA_DIR ?? join(app.getPath("appData"), "markdoist");
@@ -23,6 +24,14 @@ let settings: Settings = { folder: null, theme: "system", zoom: 1 };
 let adapter: FsAdapter | null = null;
 let unwatch: (() => void) | null = null;
 const store = new LocalStore(dataDir);
+
+// Lokale Erkennung (4.12). MARKDOIST_TEST_LOCAL_MODEL (Modellbeschreibung als JSON) und
+// MARKDOIST_TEST_LOCAL_STT_TEXT (fester Text statt Erkennung) nur für E2E-Tests.
+const testModel = process.env.MARKDOIST_TEST_LOCAL_MODEL ? (JSON.parse(process.env.MARKDOIST_TEST_LOCAL_MODEL) as LocalModelInfo) : LOCAL_MODEL;
+const local = {
+  store: new LocalModelStore(join(dataDir, "models"), fetch, testModel),
+  engine: process.env.MARKDOIST_TEST_LOCAL_STT_TEXT ? new FakeEngine(process.env.MARKDOIST_TEST_LOCAL_STT_TEXT) : new SherpaEngine(),
+};
 
 // Diktieren (4.9, 4.12). Die MARKDOIST_*_BASE_URL nur für E2E-Tests (lokaler Ersatzserver).
 const dictation = new DictationService(
@@ -40,6 +49,8 @@ const dictation = new DictationService(
     groq: process.env.MARKDOIST_GROQ_BASE_URL,
     gemini: process.env.MARKDOIST_GEMINI_BASE_URL,
   },
+  undefined,
+  local,
 );
 
 /** Einstellungen ohne Diktier-Geheimnisse für den Renderer */
@@ -201,6 +212,14 @@ function registerIpc() {
   ipcMain.handle("dictation:setSettings", (_e, s: Partial<DictationSettings>) => dictation.setSettings(s));
   ipcMain.handle("dictation:title", (_e, note: string, list: string, force: boolean) => dictation.suggestTitle(note, list, force === true));
   ipcMain.handle("dictation:checklist", (_e, text: string, list: string) => dictation.checklist(text, list));
+  ipcMain.handle("dictation:model:status", () => dictation.modelState());
+  ipcMain.handle("dictation:model:download", (e) =>
+    dictation.downloadModel((s) => {
+      if (!e.sender.isDestroyed()) e.sender.send("dictation:model:progress", s);
+    }),
+  );
+  ipcMain.handle("dictation:model:cancel", () => dictation.cancelModel());
+  ipcMain.handle("dictation:model:remove", () => dictation.removeModel());
   ipcMain.handle("dictation:run", (e, audio: ArrayBuffer | Uint8Array, mime: string, ctx: DictationContext) =>
     dictation.run(audio, mime, ctx, (p) => {
       if (!e.sender.isDestroyed()) e.sender.send("dictation:phase", p);

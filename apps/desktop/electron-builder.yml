@@ -9,6 +9,10 @@ files:
   - package.json
   - "!**/*.map"
 asar: true
+# Lokale Erkennung (4.12): Das native Add-on von sherpa-onnx und seine .so-Dateien müssen außerhalb des asar
+# liegen, damit sie sich gegenseitig über $ORIGIN finden.
+asarUnpack:
+  - "**/node_modules/sherpa-onnx-*/**"
 linux:
   target:
     - rpm

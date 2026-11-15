@@ -1,6 +1,6 @@
 // Diktieren (4.9) am Desktop: Aufnahme mit MediaRecorder im Renderer, Erkennung und Bereinigung im Main-Prozess.
 import { useEffect, useRef, useState } from "react";
-import { formatDuration, MAX_RECORDING_MS, T, transcribeTarget, type DictationContext, type DictationErrorKind, type DictationResult } from "@markdoist/app";
+import { formatDuration, LOCAL_PCM_MIME, LOCAL_SAMPLE_RATE, MAX_RECORDING_MS, T, transcribeTarget, type DictationContext, type DictationErrorKind, type DictationResult } from "@markdoist/app";
 import { bridge } from "../bridge";
 import { IconMic } from "./Icons";
 
@@ -11,6 +11,21 @@ export const OPEN_DICTATION_SETTINGS = "markdoist:dictation-settings";
 function pickMime(): string {
   const want = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
   return want.find((m) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) ?? "";
+}
+
+/**
+ * Für die lokale Erkennung (4.12): Aufnahme zu mono Float32 mit 16 kHz dekodieren. decodeAudioData rechnet
+ * auf die Abtastrate des Kontexts um.
+ */
+async function toPcm(blob: Blob): Promise<ArrayBuffer> {
+  const ctx = new OfflineAudioContext(1, 1, LOCAL_SAMPLE_RATE);
+  const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+  const out = new Float32Array(buf.length);
+  for (let c = 0; c < buf.numberOfChannels; c++) {
+    const data = buf.getChannelData(c);
+    for (let i = 0; i < out.length; i++) out[i]! += data[i]! / buf.numberOfChannels;
+  }
+  return out.buffer;
 }
 
 export function DictateButton({ ctx, onResult, onError, testId = "dictate", label }: { ctx: () => DictationContext; onResult(r: DictationResult): void; onError(kind: DictationErrorKind): void; testId?: string; label?: string }) {
@@ -24,6 +39,7 @@ export function DictateButton({ ctx, onResult, onError, testId = "dictate", labe
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
   const gen = useRef(0);
   const cancelled = useRef(false);
+  const localStt = useRef(false);
   const cb = useRef({ ctx, onResult, onError });
   cb.current = { ctx, onResult, onError };
 
@@ -70,9 +86,13 @@ export function DictateButton({ ctx, onResult, onError, testId = "dictate", labe
 
   const start = async () => {
     const st = await bridge().dictation.status();
-    // Schlüssel des gewählten Erkennungs-Anbieters (4.12)
-    if (!st.keys[transcribeTarget(st.settings).provider].hasKey) {
-      cb.current.onError("nokey");
+    const stt = transcribeTarget(st.settings).provider;
+    localStt.current = stt === "local";
+    // Lokal: Modell muss heruntergeladen sein; sonst der Schlüssel des gewählten Anbieters (4.12).
+    const missing: DictationErrorKind | null =
+      stt === "local" ? ((await bridge().dictation.model.status()).state === "ready" ? null : "nomodel") : st.keys[stt].hasKey ? null : "nokey";
+    if (missing) {
+      cb.current.onError(missing);
       window.dispatchEvent(new CustomEvent(OPEN_DICTATION_SETTINGS));
       return;
     }
@@ -93,10 +113,17 @@ export function DictateButton({ ctx, onResult, onError, testId = "dictate", labe
       release();
       if (cancelled.current) return;
       const blob = new Blob(chunks.current, { type: r.mimeType || mime || "audio/webm" });
-      void blob.arrayBuffer().then((buf) => {
-        audio.current = { buf, mime: blob.type };
-        void send();
-      });
+      const local = localStt.current;
+      void (local ? toPcm(blob) : blob.arrayBuffer())
+        .then((buf) => {
+          audio.current = { buf, mime: local ? LOCAL_PCM_MIME : blob.type };
+          void send();
+        })
+        .catch(() => {
+          setError("empty");
+          setPhase("idle");
+          cb.current.onError("empty");
+        });
     };
     rec.current = r;
     r.start(1000);

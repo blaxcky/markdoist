@@ -355,3 +355,31 @@ PLAN1 4.12. Gemini nutzt auf Hinweis des Nutzers das Transkriptionsmodell `gemin
   - Keine echte Erkennung bei Groq oder Gemini, denn es gibt keinen gültigen Schlüssel. Insbesondere nicht belegt: Nimmt `gemini-3.5-transcribe` eingebettetes Audio an? Nimmt Gemini die Android-m4a als `audio/m4a` und die WebM des Desktops an? Wie gut wird Deutsch erkannt?
   - Groq wurde gegen die echte API gar nicht aufgerufen, auch nicht mit ungültigem Schlüssel.
   - Keine Sichtprüfung der neuen Auswahl.
+
+## Anbieter, Schritt 3: lokale Erkennung am Desktop (15.11.2026)
+
+PLAN1 4.12. NVIDIA Parakeet TDT 0.6B v3 (int8, CC BY 4.0) über `sherpa-onnx-node` 2.0.1 im Main-Prozess. Die Aufnahme wird im Renderer zu PCM (16 kHz mono) dekodiert.
+
+- **Kern:** `packages/app/test/providers.test.ts` prüft „Auf dem Gerät“:
+  - kein Schlüssel und kein Netzaufruf nötig
+  - ohne Erkenner `nomodel`, leere Erkennung „Nichts erkannt“, Fehler der Engine mit Ursache
+- **Desktop:** `apps/desktop/test/localStt.test.ts` prüft mit einem gestreamten Ersatz-`fetch` und echten Dateien:
+  - Download aller Dateien mit Fortschritt und SHA-256-Prüfung; ein zweiter Download lädt nichts
+  - falsche Prüfsumme: Fehler, keine `.part`-Datei bleibt liegen, der nächste Versuch holt nur die fehlende Datei
+  - HTTP-Fehler, Abbrechen (kein Fehler), Löschen
+  - Diktat auf dem Gerät mit PCM ohne Schlüssel und Netz; ohne Modell oder mit anderem Format `nomodel`
+- **Prüfstand:** `pnpm lint`, `pnpm typecheck` und `pnpm test` (5668 Tests) grün.
+- **Desktop-E2E:** „Programmieren: Diktieren …“ grün; Zeitgrenze für diesen Test auf 150 s angehoben. Neu darin:
+  - „Auf dem Gerät“ wählen, Modell über den Ersatzserver laden (`MARKDOIST_TEST_LOCAL_MODEL`, kleine Dateien mit echter Prüfsumme), „ist bereit“
+  - Diktat mit Chromiums Testmikrofon: Der Renderer dekodiert die WebM zu PCM, ein fester Ersatz-Erkenner (`MARKDOIST_TEST_LOCAL_STT_TEXT`) liefert den Text nur bei nicht leerer Aufnahme
+  - Ins Netz gehen nur Bereinigung und Titel (`/v1/messages`), keine Erkennung
+- **Echter Lauf mit dem echten Modell (lokal, nicht in CI):**
+  - Download über `LocalModelStore` von Hugging Face: 640 MB, alle vier Prüfsummen stimmen.
+  - Die deutsche Test-WAV des Modell-Repos lief über WebM/Opus und zurück zu PCM. sherpa-onnx erkannte „Alles hat ein Ende, nur die Wurst hat zwei.“ in 3,0 s inklusive Laden des Modells; danach 0,4 s für 2,8 s Audio.
+  - **In Electron:** Chromium bekam die WAV als Mikrofon (`--use-file-for-fake-audio-capture`), ohne Netz, Bereinigung aus. Der Eintrag „Alles hat ein Ende, nur die Wurst hat zwei.“ entstand 5,8 s nach „Fertig“. Das gilt im Entwicklungsbuild und in der gepackten App (`release/linux-unpacked`, Add-on entpackt neben `app.asar`).
+- **[V]-Abweichungen:** Die Erkennung läuft im Main-Prozess statt in einem eigenen Prozess, weil `decodeAsync` nicht blockiert.
+- **Nicht geprüft:**
+  - Das RPM selbst: Der lokale Paketbau scheitert an fpm, dessen Ruby `libcrypt.so.1` vermisst. Das ist ein Problem dieser Maschine; die CI baut auf Ubuntu. Geprüft ist der Inhalt von `linux-unpacked`, aus dem das RPM gepackt wird.
+  - Kein Download über die Oberfläche mit dem echten Modell; über die Oberfläche lief nur der Ersatzserver.
+  - Keine Messung bei 10 Minuten Diktat. Erwartet sind wenige Sekunden.
+  - Keine Sichtprüfung der Modellzeile.

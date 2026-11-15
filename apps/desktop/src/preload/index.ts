@@ -32,6 +32,17 @@ contextBridge.exposeInMainWorld("markdoist", {
     run: call("dictation:run"),
     title: call("dictation:title"),
     checklist: call("dictation:checklist"),
+    model: {
+      status: call("dictation:model:status"),
+      download: call("dictation:model:download"),
+      cancel: call("dictation:model:cancel"),
+      remove: call("dictation:model:remove"),
+      onProgress(fn: (s: unknown) => void) {
+        const h = (_e: unknown, s: unknown) => fn(s);
+        ipcRenderer.on("dictation:model:progress", h);
+        return () => ipcRenderer.removeListener("dictation:model:progress", h);
+      },
+    },
     onPhase(fn: (p: string) => void) {
       const h = (_e: unknown, p: string) => fn(p);
       ipcRenderer.on("dictation:phase", h);

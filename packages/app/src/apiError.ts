@@ -3,10 +3,10 @@
 /** Anbieter mit eigenem API-Schlüssel (4.12). */
 export type ApiProvider = "openai" | "anthropic" | "groq" | "gemini";
 
-/** Anbieter für die Spracherkennung (4.12). */
-export type TranscribeProvider = "openai" | "groq" | "gemini";
+/** Anbieter für die Spracherkennung (4.12); „local“ läuft ohne Netz auf dem Gerät. */
+export type TranscribeProvider = "openai" | "groq" | "gemini" | "local";
 
-export const TRANSCRIBE_PROVIDERS: readonly TranscribeProvider[] = ["openai", "groq", "gemini"];
+export const TRANSCRIBE_PROVIDERS: readonly TranscribeProvider[] = ["openai", "groq", "gemini", "local"];
 
 /** Anbieter für Bereinigung, Titelvorschlag und „Checkliste einfügen“ (4.12). */
 export type TextProvider = "openai" | "anthropic";
@@ -21,7 +21,7 @@ export const PROVIDER_LABEL: Record<ApiProvider, string> = {
   gemini: "Gemini",
 };
 
-export type DictationErrorKind = "nokey" | "auth" | "quota" | "network" | "timeout" | "server" | "empty" | "permission";
+export type DictationErrorKind = "nokey" | "auth" | "quota" | "network" | "timeout" | "server" | "empty" | "permission" | "nomodel";
 
 export class DictationError extends Error {
   constructor(
