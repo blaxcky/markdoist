@@ -49,7 +49,7 @@ export function AddItemScreen() {
     onResult: (r) => void addDev(r.text, !r.cleaned && r.cleanupError ? `${T.dev.created} · ${T.dictation.notCleaned}` : T.dev.created).then((o) => o.status !== "ok" && notify(o, T.dev.addItem)),
     onError: (kind, detail) => {
       notify({ status: "error", message: dictationErrorText(kind, detail) });
-      if (kind === "nokey") nav.navigate("Settings");
+      if (kind === "nokey" || kind === "nomodel") nav.navigate("Settings");
     },
   });
 

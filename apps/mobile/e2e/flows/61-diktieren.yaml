@@ -246,4 +246,27 @@ appId: de.markdoist.aufgaben
     id: dictation-stt-openai
 - assertNotVisible:
     id: dictation-gemini-key
+# Auf dem Gerät (4.12): Auswahl zeigt die Modellzeile statt Schlüssel und Modellname. Kein Download im Lauf
+# (640 MB); je nach Gerät steht dort „Modell herunterladen“ oder „… ist bereit“.
+- tapOn:
+    id: dictation-stt-local
+- extendedWaitUntil:
+    visible:
+      id: local-model
+    timeout: 4000
+- assertNotVisible:
+    id: dictation-model-transcribe
+- scrollUntilVisible:
+    element: ".*Aufnahmen verlassen das Gerät nicht.*"
+    direction: DOWN
+    timeout: 8000
+- scrollUntilVisible:
+    element:
+      id: dictation-stt-openai
+    direction: UP
+    timeout: 8000
+- tapOn:
+    id: dictation-stt-openai
+- assertVisible:
+    id: dictation-key
 - back

@@ -2,7 +2,23 @@
 // Bereinigung und Titelvorschlag an/aus, Anbieter für Erkennung (OpenAI, Groq, Gemini) und Text (OpenAI oder Claude).
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Switch, Text, TextInput, View } from "react-native";
-import { checkApiKey, maskKey, PROVIDER_LABEL, T, textModels, transcribeTarget, TRANSCRIBE_PROVIDERS, type ApiProvider, type DictationSettings as Settings, type FetchLike } from "@markdoist/app";
+import {
+  checkApiKey,
+  formatMB,
+  LOCAL_MODEL_NAME,
+  maskKey,
+  modelBytes,
+  PROVIDER_LABEL,
+  T,
+  textModels,
+  transcribeTarget,
+  TRANSCRIBE_PROVIDERS,
+  type ApiProvider,
+  type DictationSettings as Settings,
+  type FetchLike,
+  type TranscribeProvider,
+} from "@markdoist/app";
+import { cancelDownload, downloadModel, localAvailable, removeModel, useLocalModel } from "../dictation/local";
 import { useTheme } from "../theme";
 import { clearApiKey, saveDictationSettings, setApiKey, useDictationConfig } from "../dictation/store";
 
@@ -75,6 +91,54 @@ function KeyRow({ provider, value }: { provider: ApiProvider; value: string | nu
   );
 }
 
+/** Lokales Modell (4.12): herunterladen mit Fortschritt, abbrechen, löschen. */
+function LocalModelRow() {
+  const c = useTheme();
+  const L = D.local;
+  const m = useLocalModel();
+  if (!m) return null;
+  const btn = (label: string, onPress: () => void, testID: string, primary?: boolean) => (
+    <Pressable
+      onPress={onPress}
+      testID={testID}
+      style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: primary ? c.primary : c.outline, backgroundColor: primary ? c.primary : "transparent", alignSelf: "flex-start" }}
+    >
+      <Text style={{ color: primary ? c.onPrimary : c.fg }}>{label}</Text>
+    </Pressable>
+  );
+  const pct = m.state === "downloading" ? Math.floor((m.received / Math.max(1, m.total)) * 100) : 0;
+  return (
+    <View style={{ gap: 8 }} testID="local-model">
+      {m.state === "ready" && (
+        <>
+          <Text style={{ color: c.fg, fontSize: 15 }} testID="local-model-state">
+            {L.ready(LOCAL_MODEL_NAME)}
+          </Text>
+          {btn(L.remove, () => void removeModel(), "local-model-remove")}
+        </>
+      )}
+      {m.state === "downloading" && (
+        <>
+          <View style={{ height: 6, borderRadius: 3, backgroundColor: c.outline, overflow: "hidden" }} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: pct }}>
+            <View style={{ width: `${pct}%`, height: 6, backgroundColor: c.primary }} />
+          </View>
+          <Text style={{ color: c.fg, fontSize: 15 }} testID="local-model-state">
+            {L.downloading(pct)}
+          </Text>
+          {btn(L.cancel, cancelDownload, "local-model-cancel")}
+        </>
+      )}
+      {(m.state === "missing" || m.state === "error") && btn(L.download(formatMB(modelBytes())), () => void downloadModel(), "local-model-download", true)}
+      {m.state === "error" && (
+        <Text style={{ color: c.danger, fontSize: 13 }} testID="local-model-error">
+          {L.failed}: {m.message}
+        </Text>
+      )}
+      <Text style={{ color: c.muted, fontSize: 13 }}>{L.hint}</Text>
+    </View>
+  );
+}
+
 export function DictationSettings() {
   const c = useTheme();
   const { keys, settings, loaded } = useDictationConfig();
@@ -99,13 +163,15 @@ export function DictationSettings() {
   const claude = text === "anthropic";
   const cleanupField = claude ? "claudeCleanupModel" : "cleanupModel";
   const titleField = claude ? "claudeTitleModel" : "titleModel";
-  // „Auf dem Gerät“ kommt am Handy erst mit der Android-Umsetzung (4.12, Schritt 4).
+  // „Auf dem Gerät“ nur, wenn es die native Bibliothek für diese Architektur gibt.
+  const canLocal = localAvailable();
   const picked = transcribeTarget(settings).provider;
-  const stt = picked === "local" ? "openai" : picked;
+  const stt: TranscribeProvider = picked === "local" && !canLocal ? "openai" : picked;
+  const sttKey: ApiProvider | null = stt === "local" ? null : stt;
   const sttField = stt === "groq" ? "groqModel" : stt === "gemini" ? "geminiModel" : "transcribeModel";
   const heading = (label: string) => <Text style={{ color: c.fg, fontSize: 15, fontWeight: "600", marginTop: 12 }}>{label}</Text>;
   /** Auswahl-Chip; `group` „text“ oder „stt“ ergibt die Testkennung `dictation-<group>-<anbieter>`. */
-  const chip = (group: "text" | "stt", p: ApiProvider, on: boolean, patch: Partial<Settings>) => {
+  const chip = (group: "text" | "stt", p: ApiProvider | "local", on: boolean, patch: Partial<Settings>) => {
     return (
       <Pressable
         key={p}
@@ -126,11 +192,11 @@ export function DictationSettings() {
       <Text style={{ color: c.muted, fontSize: 13, marginTop: 16 }}>{D.section}</Text>
       {heading(D.transcribeSection)}
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }} accessibilityRole="radiogroup" accessibilityLabel={D.transcribeSection}>
-        {TRANSCRIBE_PROVIDERS.filter((p) => p !== "local").map((p) => chip("stt", p as ApiProvider, stt === p, { transcribeProvider: p }))}
+        {TRANSCRIBE_PROVIDERS.filter((p) => p !== "local" || canLocal).map((p) => chip("stt", p, stt === p, { transcribeProvider: p }))}
       </View>
-      <KeyRow key={stt} provider={stt} value={keys[stt]} />
-      <Text style={{ color: c.fg, fontSize: 15, marginTop: 8 }}>{D.modelTranscribe}</Text>
-      <TextInput
+      {sttKey ? <KeyRow key={sttKey} provider={sttKey} value={keys[sttKey]} /> : <LocalModelRow />}
+      {sttKey && <Text style={{ color: c.fg, fontSize: 15, marginTop: 8 }}>{D.modelTranscribe}</Text>}
+      {sttKey && <TextInput
         value={models[sttField]}
         onChangeText={(v) => setModels((m) => ({ ...m, [sttField]: v }))}
         onEndEditing={saveModels}
@@ -138,7 +204,7 @@ export function DictationSettings() {
         autoCorrect={false}
         style={field}
         testID="dictation-model-transcribe"
-      />
+      />}
 
       {heading(D.textSection)}
       <Text style={{ color: c.muted, fontSize: 13 }}>{D.textSectionHint}</Text>
@@ -146,7 +212,7 @@ export function DictationSettings() {
         {chip("text", "openai", text === "openai", { textProvider: "openai" })}
         {chip("text", "anthropic", text === "anthropic", { textProvider: "anthropic" })}
       </View>
-      {text !== stt && <KeyRow key={text} provider={text} value={keys[text]} />}
+      {text !== sttKey && <KeyRow key={text} provider={text} value={keys[text]} />}
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
         <View style={{ flex: 1 }}>
@@ -183,7 +249,7 @@ export function DictationSettings() {
         style={field}
         testID="dictation-model-title"
       />
-      <Text style={{ color: c.muted, fontSize: 13, marginTop: 8 }}>{stt === "openai" && text === "openai" ? D.keyHint : D.keyHintFor(PROVIDER_LABEL[stt], PROVIDER_LABEL[text])}</Text>
+      <Text style={{ color: c.muted, fontSize: 13, marginTop: 8 }}>{sttKey === null ? D.keyHintLocal(PROVIDER_LABEL[text]) : sttKey === "openai" && text === "openai" ? D.keyHint : D.keyHintFor(PROVIDER_LABEL[sttKey], PROVIDER_LABEL[text])}</Text>
     </View>
   );
 }

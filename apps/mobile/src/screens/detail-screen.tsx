@@ -227,7 +227,7 @@ export function DetailScreen() {
     onResult: (r) => onDictated.current(r),
     onError: (kind, detail) => {
       notify({ status: "error", message: dictationErrorText(kind, detail) });
-      if (kind === "nokey") nav.navigate("Settings");
+      if (kind === "nokey" || kind === "nomodel") nav.navigate("Settings");
     },
   });
 

@@ -1,0 +1,71 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'de.markdoist.localstt'
+version = '0.1.0'
+
+// Lokale Erkennung (Plan 4.12): offizielles sherpa-onnx-AAR aus dem GitHub-Release, Variante mit statisch
+// gelinkter onnxruntime. Feste Version und Prüfsumme; das AAR liegt in einem lokalen Maven-Verzeichnis unter
+// android/.gradle und wird nur geladen, wenn es fehlt oder nicht stimmt.
+def sherpaVersion = "2.0.1"
+def sherpaSha256 = "07e042d97f3a6bd5b7fe74d4eef0513dc01a714b16c15a903250095aba43a575"
+def sherpaUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${sherpaVersion}/sherpa-onnx-static-link-onnxruntime-${sherpaVersion}.aar"
+def sherpaRepo = new File(rootProject.projectDir, ".gradle/markdoist-sherpa-maven")
+def sherpaDir = new File(sherpaRepo, "com/k2fsa/sherpa-onnx/${sherpaVersion}")
+def sherpaAar = new File(sherpaDir, "sherpa-onnx-${sherpaVersion}.aar")
+
+def sha256Of = { File f ->
+  def md = java.security.MessageDigest.getInstance("SHA-256")
+  f.withInputStream { input ->
+    byte[] buf = new byte[1 << 16]
+    int n
+    while ((n = input.read(buf)) > 0) md.update(buf, 0, n)
+  }
+  md.digest().encodeHex().toString()
+}
+
+if (!sherpaAar.isFile() || sha256Of(sherpaAar) != sherpaSha256) {
+  sherpaDir.mkdirs()
+  def part = new File(sherpaDir, "sherpa-onnx-${sherpaVersion}.aar.part")
+  logger.lifecycle("sherpa-onnx ${sherpaVersion}: lade ${sherpaUrl}")
+  new URL(sherpaUrl).withInputStream { input -> part.withOutputStream { out -> out << input } }
+  if (sha256Of(part) != sherpaSha256) {
+    part.delete()
+    throw new GradleException("sherpa-onnx ${sherpaVersion}: Prüfsumme des AAR stimmt nicht")
+  }
+  part.renameTo(sherpaAar)
+  new File(sherpaDir, "sherpa-onnx-${sherpaVersion}.pom").text = """<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.k2fsa</groupId>
+  <artifactId>sherpa-onnx</artifactId>
+  <version>${sherpaVersion}</version>
+  <packaging>aar</packaging>
+</project>
+"""
+}
+
+// Die App löst die Abhängigkeit mit ihren eigenen Repositories auf; darum für alle Projekte.
+rootProject.allprojects {
+  repositories {
+    maven { url = sherpaRepo.toURI() }
+  }
+}
+
+android {
+  namespace "de.markdoist.localstt"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+    consumerProguardFiles "proguard-rules.pro"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  implementation "com.k2fsa:sherpa-onnx:${sherpaVersion}@aar"
+}

@@ -5,7 +5,8 @@ import { getRecordingPermissionsAsync, RecordingPresets, requestRecordingPermiss
 import { File, UploadType } from "expo-file-system";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { DictationError, MAX_RECORDING_MS, runDictation, transcribeTarget, type DictationContext, type DictationErrorKind, type DictationResult, type FetchLike, type UploadLike } from "@markdoist/app";
-import { getTranscribeKey, loadDictationSettings, loadTextTarget, onDictationConfigChange } from "./store";
+import { dictationMissing, getTranscribeKey, loadDictationSettings, loadTextTarget, onDictationConfigChange } from "./store";
+import { onModelChange, transcribeLocal } from "./local";
 
 // Sprache braucht kein Stereo und keine 128 kbit/s: Mono mit 64 kbit/s hält den Upload klein (10 min ≈ 5 MB).
 const OPTIONS: RecordingOptions = { ...RecordingPresets.HIGH_QUALITY, numberOfChannels: 1, bitRate: 64000 };
@@ -130,7 +131,8 @@ export function useDictation(opts: { enabled: boolean; ctx: () => DictationConte
     const my = gen.current;
     const settings = await loadDictationSettings();
     const key = await getTranscribeKey(settings);
-    const gemini = transcribeTarget(settings).provider === "gemini";
+    const stt = transcribeTarget(settings).provider;
+    const gemini = stt === "gemini";
     const text = await loadTextTarget();
     try {
       const r = await runDictation({
@@ -141,6 +143,8 @@ export function useDictation(opts: { enabled: boolean; ctx: () => DictationConte
         ctx: cb.current.ctx(),
         // Gemini erwartet die Aufnahme im JSON, die anderen als Datei (4.12).
         ...(gemini ? { audio: { mime: "audio/m4a", base64: () => new File(uri).base64() } } : { upload: nativeUpload(uri) }),
+        // Auf dem Gerät (4.12): sherpa-onnx dekodiert die m4a selbst.
+        ...(stt === "local" ? { localTranscribe: () => transcribeLocal(uri) } : {}),
         onPhase: (p) => gen.current === my && setState((s) => ({ ...s, phase: p })),
       });
       if (gen.current !== my) return;
@@ -192,12 +196,12 @@ export function useDictation(opts: { enabled: boolean; ctx: () => DictationConte
       setState({ phase: "error", ms: 0, error: kind, canRetry: false });
       cb.current.onError(kind);
     };
-    // Ohne Schlüssel gar nicht erst aufnehmen. Ist er schon bekannt, entfällt das Lesen aus dem Keystore.
+    // Ohne Schlüssel (bzw. lokales Modell) gar nicht erst aufnehmen. Ist alles bekannt, entfällt das Nachsehen.
     if (!keyRef.current) {
-      const key = !!(await getTranscribeKey());
-      setHasKey(key);
-      if (!key) {
-        cb.current.onError("nokey");
+      const missing = await dictationMissing();
+      setHasKey(!missing);
+      if (missing) {
+        cb.current.onError(missing);
         return;
       }
     }
@@ -266,15 +270,17 @@ export function useDictation(opts: { enabled: boolean; ctx: () => DictationConte
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    const loadKey = () => void getTranscribeKey().then((k) => alive && setHasKey(!!k));
+    const loadKey = () => void dictationMissing().then((m) => alive && setHasKey(!m));
     loadKey();
     const off = onDictationConfigChange(loadKey);
+    const offModel = onModelChange((s) => s.state !== "downloading" && loadKey());
     void getRecordingPermissionsAsync()
       .then((p) => alive && setHasPerm(p.granted))
       .catch(() => {});
     return () => {
       alive = false;
       off();
+      offModel();
     };
   }, [enabled]);
 

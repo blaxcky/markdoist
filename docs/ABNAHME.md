@@ -383,3 +383,18 @@ PLAN1 4.12. NVIDIA Parakeet TDT 0.6B v3 (int8, CC BY 4.0) über `sherpa-onnx-nod
   - Kein Download über die Oberfläche mit dem echten Modell; über die Oberfläche lief nur der Ersatzserver.
   - Keine Messung bei 10 Minuten Diktat. Erwartet sind wenige Sekunden.
   - Keine Sichtprüfung der Modellzeile.
+
+## Anbieter, Schritt 4: lokale Erkennung auf Android (15.11.2026)
+
+PLAN1 4.12. Expo-Modul `apps/mobile/modules/local-stt` (Kotlin) mit dem sherpa-onnx-AAR 2.0.1 aus dem GitHub-Release (feste SHA-256, beim Gradle-Build geladen).
+
+- **Build:** Release-Build x86_64 grün. Gradle lud das AAR einmal und prüfte die Prüfsumme. Im APK liegen `lib/x86_64/libsherpa-onnx-jni.so` und die sherpa-Klassen mit ihren ursprünglichen Feldnamen (`encoder`, `modelType`, `featConfig`); die Keep-Regel wirkt also trotz R8. Das APK wuchs von 34 auf 62 MB; bei arm64 im Release sind etwa 24 MB zu erwarten.
+- **Prüfstand:** `pnpm lint`, `pnpm typecheck` und `pnpm test` (5668 Tests) grün.
+- **Android-E2E:** Flow `61-diktieren.yaml` auf Genymotion komplett grün. Neu: „Auf dem Gerät“ zeigt die Modellzeile statt Schlüssel und Modellname, dazu den Hinweis „Aufnahmen verlassen das Gerät nicht“. Zurück auf OpenAI erscheint wieder das Schlüsselfeld.
+- **Echter Lauf auf Genymotion (von Hand, nicht in `run.sh`):**
+  - „Modell herunterladen“ in der App lud die 640 MB über das Kotlin-Modul von Hugging Face, mit Fortschrittsanzeige und Prüfsummen, bis „… ist bereit“.
+  - Danach ein Diktat im Eingabeblatt eines Boards mit 3 s Aufnahme: m4a dekodiert, Modell geladen, erkannt. Ergebnis „Nichts erkannt“, denn das virtuelle Mikrofon von Genymotion liefert Stille. Kein Absturz, kein „Modell fehlt“.
+- **Nicht geprüft:**
+  - **Erkennung echter Sprache auf Android.** Der Emulator liefert keinen Ton, und das Audio-Routing des Rechners habe ich nicht umgebaut. Offen ist damit, ob Dekodierung und Umrechnung echter AAC-Aufnahmen stimmen. Am Desktop ist dasselbe Modell mit echter Sprache geprüft.
+  - Keine Messung auf einem echten Handy (Ladezeit des Modells, Dauer, Speicher).
+  - Release-APK für arm64 nicht lokal gebaut; das macht die CI.
