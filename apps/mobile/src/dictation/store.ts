@@ -2,7 +2,7 @@
 // gerätelokalen kv.
 import { useEffect, useState } from "react";
 import * as SecureStore from "expo-secure-store";
-import { API_PROVIDERS, parseDictationSettings, textModels, type ApiProvider, type DictationSettings, type TextTarget } from "@markdoist/app";
+import { API_PROVIDERS, parseDictationSettings, textModels, transcribeTarget, type ApiProvider, type DictationSettings, type TextTarget } from "@markdoist/app";
 import { kv } from "../repo";
 
 /** Ablagename im Keystore; OpenAI behält den Namen aus 4.9. */
@@ -29,6 +29,11 @@ export async function setApiKey(key: string, p: ApiProvider = "openai"): Promise
 export async function clearApiKey(p: ApiProvider = "openai"): Promise<void> {
   await SecureStore.deleteItemAsync(keyName(p));
   changed();
+}
+
+/** Schlüssel des gewählten Erkennungs-Anbieters (4.12). */
+export async function getTranscribeKey(settings?: DictationSettings): Promise<string | null> {
+  return getApiKey(transcribeTarget(settings ?? (await loadDictationSettings())).provider);
 }
 
 /** Text-Anbieter mit Schlüssel und Modell für Titel und Listen (4.12). */

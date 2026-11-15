@@ -1,7 +1,7 @@
 // Einstellungen „Diktieren“ (4.9, 4.10, 4.12): Schlüssel nur maskiert, Modelle, Bereinigung und Titelvorschlag
-// an/aus, Text-Anbieter (OpenAI oder Claude).
+// an/aus, Anbieter für Erkennung (OpenAI, Groq, Gemini) und Text (OpenAI oder Claude).
 import { useEffect, useState } from "react";
-import { PROVIDER_LABEL, T, textModels, type ApiProvider, type TextProvider } from "@markdoist/app";
+import { API_PROVIDERS, PROVIDER_LABEL, T, textModels, transcribeTarget, TRANSCRIBE_PROVIDERS, type ApiProvider, type TextProvider, type TranscribeProvider } from "@markdoist/app";
 import { bridge, type DictationStatus } from "../bridge";
 import { useDialog } from "../dialog";
 
@@ -71,12 +71,12 @@ function KeyRow({ provider, st, apply }: { provider: ApiProvider; st: DictationS
 export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
   const dialog = useDialog<HTMLDivElement>(onClose);
   const [st, setSt] = useState<DictationStatus | null>(null);
-  const [models, setModels] = useState({ transcribeModel: "", cleanupModel: "", titleModel: "", claudeCleanupModel: "", claudeTitleModel: "" });
+  const [models, setModels] = useState({ transcribeModel: "", groqModel: "", geminiModel: "", cleanupModel: "", titleModel: "", claudeCleanupModel: "", claudeTitleModel: "" });
 
   const apply = (s: DictationStatus) => {
     setSt(s);
-    const { transcribeModel, cleanupModel, titleModel, claudeCleanupModel, claudeTitleModel } = s.settings;
-    setModels({ transcribeModel, cleanupModel, titleModel, claudeCleanupModel, claudeTitleModel });
+    const { transcribeModel, groqModel, geminiModel, cleanupModel, titleModel, claudeCleanupModel, claudeTitleModel } = s.settings;
+    setModels({ transcribeModel, groqModel, geminiModel, cleanupModel, titleModel, claudeCleanupModel, claudeTitleModel });
   };
   useEffect(() => void bridge().dictation.status().then(apply), []);
   if (!st) return null;
@@ -87,20 +87,39 @@ export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
   // Feldnamen der Modelle des gewählten Text-Anbieters
   const cleanupField = claude ? "claudeCleanupModel" : "cleanupModel";
   const titleField = claude ? "claudeTitleModel" : "titleModel";
-  const anyKey = st.keys.openai.hasKey || st.keys.anthropic.hasKey;
+  const stt = transcribeTarget(st.settings).provider;
+  const sttField = stt === "groq" ? "groqModel" : stt === "gemini" ? "geminiModel" : "transcribeModel";
+  const anyKey = API_PROVIDERS.some((p) => st.keys[p].hasKey);
+  // Ein Schlüssel wird nur einmal gezeigt, auch wenn Erkennung und Text beim selben Anbieter liegen.
+  const textKey: ApiProvider = text;
 
   return (
     <div className="modal-back" onClick={onClose}>
       <div ref={dialog} className="modal dictation-settings" role="dialog" aria-modal="true" aria-label={D.section} onClick={(e) => e.stopPropagation()} data-testid="dictation-settings">
         <h2>{D.section}</h2>
         <h3>{D.transcribeSection}</h3>
-        <KeyRow provider="openai" st={st} apply={apply} />
+        <div className="fields" style={{ gridTemplateColumns: "180px 1fr" }}>
+          <label htmlFor="dictation-transcribe-provider">{D.textProvider}</label>
+          <select
+            id="dictation-transcribe-provider"
+            value={stt}
+            onChange={(e) => void bridge().dictation.setSettings({ ...models, transcribeProvider: e.target.value as TranscribeProvider }).then(apply)}
+            data-testid="dictation-transcribe-provider"
+          >
+            {TRANSCRIBE_PROVIDERS.map((p) => (
+              <option key={p} value={p}>
+                {D.providerNames[p]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <KeyRow key={stt} provider={stt} st={st} apply={apply} />
         <div className="fields" style={{ gridTemplateColumns: "180px 1fr" }}>
           <label htmlFor="dictation-model-transcribe">{D.modelTranscribe}</label>
           <input
             id="dictation-model-transcribe"
-            value={models.transcribeModel}
-            onChange={(e) => setModels((m) => ({ ...m, transcribeModel: e.target.value }))}
+            value={models[sttField]}
+            onChange={(e) => setModels((m) => ({ ...m, [sttField]: e.target.value }))}
             onBlur={saveModels}
             spellCheck={false}
             data-testid="dictation-model-transcribe"
@@ -121,7 +140,7 @@ export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
             <option value="anthropic">{D.providerNames.anthropic}</option>
           </select>
         </div>
-        {claude && <KeyRow provider="anthropic" st={st} apply={apply} />}
+        {textKey !== stt && <KeyRow key={textKey} provider={textKey} st={st} apply={apply} />}
 
         <label className="menu-row" style={{ padding: 0 }}>
           <input
@@ -174,7 +193,7 @@ export function DictationSettingsDialog({ onClose }: { onClose(): void }) {
         </div>
 
         {st.insecure && anyKey && <p className="hint error">{D.keyInsecure}</p>}
-        <p className="hint">{claude ? D.keyHintFor(PROVIDER_LABEL.openai, PROVIDER_LABEL.anthropic) : D.keyHint}</p>
+        <p className="hint">{stt === "openai" && text === "openai" ? D.keyHint : D.keyHintFor(PROVIDER_LABEL[stt], PROVIDER_LABEL[text])}</p>
         <div className="buttons">
           <button className="btn" onClick={onClose} data-testid="dictation-settings-close">
             Schließen

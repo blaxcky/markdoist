@@ -10,7 +10,7 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 13.11.2026:** „Checkliste einfügen“: unformatierten Text per KI als Einträge an eine Liste anhängen (4.11).
 
-**Umgesetzt am 15.11.2026:** Claude als Text-Anbieter für Bereinigung, Titelvorschlag und „Checkliste einfügen“ (4.12, Schritt 1). Groq, Gemini und die lokale Erkennung folgen.
+**Umgesetzt am 15.11.2026:** Claude als Text-Anbieter für Bereinigung, Titelvorschlag und „Checkliste einfügen“ (4.12, Schritt 1), Erkennung über Groq und Gemini (Schritt 2). Die lokale Erkennung folgt.
 
 **Umgesetzt am 11.11.2026:** Seitenleiste am Desktop und Blatt „Mehr“ am Handy in Bereichen mit aufklappbaren Listen (4.5).
 
@@ -768,8 +768,8 @@ Wunsch vom 15.11.2026: Der OpenAI-Zugang fällt vielleicht weg. Entscheidungen m
   - **Textmodell** für Bereinigung (4.9), Titelvorschlag (4.10) und „Checkliste einfügen“ (4.11): OpenAI (wie bisher) oder Claude.
   - Ohne Änderung bleibt alles wie bisher: Ältere Einstellungen gelten als OpenAI für beides.
 - **Anbieter [V]:**
-  - Groq: `https://api.groq.com/openai/v1/audio/transcriptions`, Modell `whisper-large-v3-turbo`, Felder `language=de` und `prompt` (Titel als Kontext).
-  - Gemini: `generateContent` mit der Aufnahme als Audio-Teil und der Anweisung, wörtlich auf Deutsch zu transkribieren; Listen- und Eintragstitel als Kontext. Standardmodell `gemini-flash-latest`. Grenze für eingebettetes Audio: 20 MB.
+  - Groq: `https://api.groq.com/openai/v1/audio/transcriptions`, Modell `whisper-large-v3-turbo`, Felder `language=de` und `prompt` (Titel als Kontext); Upload wie bei OpenAI.
+  - Gemini [F, Hinweis vom 15.11.2026]: das Transkriptionsmodell `gemini-3.5-transcribe` über `models/<modell>:generateContent`, Schlüssel als `x-goog-api-key`. Die Aufnahme steht als Base64 im JSON (`inlineData`), kein eigener Upload. `generationConfig.audioTranscriptionConfig` mit `languageCodes: ["de-DE"]` und Listen- und Eintragstitel als `customVocabulary`; einen freien Prompt kennt das Modell nicht. Android schickt die m4a als `audio/m4a` (Gemini kennt `audio/mp4` nicht), der Desktop `audio/webm`. Gemini meldet einen ungültigen Schlüssel als HTTP 400 „API key not valid“; die App zeigt dann „API-Schlüssel ungültig“ [V].
   - Claude: Messages API über das offizielle SDK `@anthropic-ai/sdk`, Modell `claude-haiku-5-5` für Bereinigung, Titel und Checkliste, Aufwand `low` (`output_config.effort`; das Denken wird nicht abgeschaltet, weil andere eintragbare Claude-Modelle das ablehnen). Titel und Checkliste kommen als JSON nach demselben Schema wie bei OpenAI (`output_config.format`). Lehnt das Modell diese Angaben ab (HTTP 400), folgt einmal die einfache Anfrage ohne sie; das gilt auch für die Bereinigung [V]. Das SDK wiederholt nichts selbst (`maxRetries: 0`). Eine Ablehnung oder ein abgeschnittener Text zählt als gescheiterte Bereinigung (Rohtext, wie 4.9).
   - Alle Modellnamen bleiben in den Einstellungen änderbar; der Standard folgt dem gewählten Anbieter.
 - **Lokale Erkennung [F]:** NVIDIA Parakeet TDT 0.6B v3 (int8, ≈ 640 MB, CC BY 4.0) über sherpa-onnx, auf Android und Desktop. Kann Deutsch, setzt Satzzeichen und Großschreibung selbst. Der Kontext aus den Titeln entfällt.
@@ -780,6 +780,7 @@ Wunsch vom 15.11.2026: Der OpenAI-Zugang fällt vielleicht weg. Entscheidungen m
 - **Schlüssel [F]:** je Anbieter ein eigener, gerätelokal wie in 4.9 (Android `expo-secure-store`, Desktop `safeStorage`), jeder maskiert, mit „Prüfen“ und „Entfernen“. Angezeigt wird nur der Schlüssel der gewählten Anbieter.
 - **Netz [F]:** An den gewählten Erkennungs-Anbieter geht die Aufnahme (nicht bei „Auf dem Gerät“), an den Text-Anbieter Rohtext, Notiz, Titel und der Text für die Checkliste. Der Einstellungstext nennt die gewählten Anbieter.
 - **Einstellungen [V, Schritt 1]:** Abschnitte „Spracherkennung“ (OpenAI-Schlüssel, Erkennungsmodell) und „Textmodell“ mit der Wahl OpenAI oder „Claude (Anthropic)“ (Desktop Auswahlliste, Android zwei Chips). Bei Claude erscheinen der Claude-Schlüssel und die Claude-Modelle; die OpenAI-Modelle bleiben gespeichert. Ohne Claude-Schlüssel wird das Diktat nicht bereinigt eingefügt; Titel und Checkliste melden „… einen Claude-API-Schlüssel in den Einstellungen hinterlegen“. Die Fehlertexte für Zeitüberschreitung und Serverfehler nennen keinen Anbieter mehr.
+- **Einstellungen [V, Schritt 2]:** Im Abschnitt „Spracherkennung“ die Wahl OpenAI, Groq oder „Gemini (Google)“ (Desktop Auswahlliste, Android Chips), darunter Schlüssel und Modell des gewählten Anbieters. Liegen Erkennung und Text beim selben Anbieter, erscheint dessen Schlüssel nur einmal. Der Diktierknopf prüft den Schlüssel des Erkennungs-Anbieters; der Hinweis ohne Schlüssel lautet jetzt „Für das Diktieren einen API-Schlüssel in den Einstellungen hinterlegen“.
 - **Reihenfolge der Umsetzung [F]:** erst Claude, dann Groq und Gemini, dann die lokale Erkennung am Desktop, zuletzt auf Android. Jeder Schritt wird einzeln ausgeliefert.
 - **Nicht vorgesehen [F]:** Mistral, ElevenLabs, eigener Server, ein zweites lokales Modell (Whisper), Live-Mitschrift.
 

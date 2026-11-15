@@ -3,8 +3,7 @@
 // Maske; die CSP des Renderers bleibt unverändert.
 import {
   API_PROVIDERS,
-  checkClaudeKey,
-  checkKey,
+  checkApiKey,
   checklistFromText,
   DictationError,
   maskKey,
@@ -12,6 +11,7 @@ import {
   runDictation,
   suggestTitle,
   textModels,
+  transcribeTarget,
   type ApiProvider,
   type DictationContext,
   type DictationErrorKind,
@@ -157,8 +157,7 @@ export class DictationService {
 
   async check(which?: ApiProvider): Promise<{ ok: true } | { ok: false; kind: DictationErrorKind }> {
     const p = provider(which);
-    if (p === "anthropic") return checkClaudeKey({ key: this.key(p) ?? "", baseUrl: this.baseUrls.anthropic, fetch: this.claudeFetch });
-    return checkKey(this.fetch, this.key() ?? "", this.baseUrls.openai);
+    return checkApiKey(p, { fetch: this.fetch, key: this.key(p) ?? "", baseUrl: this.baseUrls[p], claudeFetch: this.claudeFetch });
   }
 
   /** Anbieter, Schlüssel und Modell für Titel und Checkliste (4.12). */
@@ -172,13 +171,17 @@ export class DictationService {
     const ext = type.includes("mp4") || type.includes("m4a") ? "m4a" : type.includes("ogg") ? "ogg" : type.includes("wav") ? "wav" : "webm";
     const bytes = new Uint8Array(audio instanceof Uint8Array ? audio : new Uint8Array(audio)); // Kopie mit eigenem ArrayBuffer
     if (bytes.byteLength > 25 * 1024 * 1024) return { ok: false, kind: "server" };
+    const settings = this.settings();
+    const stt = transcribeTarget(settings).provider;
     try {
       const result = await runDictation({
         fetch: this.fetch,
-        key: this.key() ?? "",
-        settings: this.settings(),
+        key: this.key(stt) ?? "",
+        settings,
         ctx: { list: typeof ctx?.list === "string" ? ctx.list : undefined, title: typeof ctx?.title === "string" ? ctx.title : undefined },
-        baseUrl: this.baseUrls.openai,
+        baseUrl: this.baseUrls[stt],
+        // Gemini erwartet die Aufnahme im JSON (4.12).
+        audio: { mime: type, base64: async () => Buffer.from(bytes).toString("base64") },
         text: (({ provider, key, baseUrl, claudeFetch }) => ({ provider, key, baseUrl, claudeFetch }))(this.textTarget()),
         onPhase,
         form: (fields) => {

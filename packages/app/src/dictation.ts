@@ -1,14 +1,21 @@
 // Diktieren (Plan 4.9): Aufnahme → OpenAI-Erkennung → Bereinigung → Text für die Notiz.
 // Plattformfrei: fetch und das Formular mit der Audiodatei kommen von der Plattform.
-// Seit 4.12 laufen Bereinigung, Titel und Checkliste wahlweise über OpenAI oder Claude.
-import { classifyStatus, DictationError, type ApiProvider, type DictationErrorKind, type TextProvider } from "./apiError";
-import { CLAUDE_DEFAULT_MODEL, claudeTextWithFallback } from "./claude";
+// Seit 4.12 läuft die Erkennung wahlweise über OpenAI, Groq oder Gemini, Bereinigung, Titel und Checkliste
+// über OpenAI oder Claude.
+import { classifyStatus, DictationError, TRANSCRIBE_PROVIDERS, type ApiProvider, type DictationErrorKind, type TextProvider, type TranscribeProvider } from "./apiError";
+import { checkClaudeKey, CLAUDE_DEFAULT_MODEL, claudeTextWithFallback } from "./claude";
 
-export { API_PROVIDERS, classifyStatus, DictationError, PROVIDER_LABEL } from "./apiError";
-export type { ApiProvider, DictationErrorKind, TextProvider } from "./apiError";
+export { API_PROVIDERS, classifyStatus, DictationError, PROVIDER_LABEL, TRANSCRIBE_PROVIDERS } from "./apiError";
+export type { ApiProvider, DictationErrorKind, TextProvider, TranscribeProvider } from "./apiError";
 
 export interface DictationSettings {
+  /** Anbieter für die Erkennung (4.12) */
+  transcribeProvider: TranscribeProvider;
+  /** Erkennungsmodell bei OpenAI */
   transcribeModel: string;
+  /** Erkennungsmodell bei Groq bzw. Gemini (4.12) */
+  groqModel: string;
+  geminiModel: string;
   cleanupModel: string;
   cleanup: boolean;
   /** Modell für Titel und Art eines Programmier-Eintrags (4.10) */
@@ -23,7 +30,10 @@ export interface DictationSettings {
 }
 
 export const DEFAULT_DICTATION: DictationSettings = {
+  transcribeProvider: "openai",
   transcribeModel: "gpt-transcribe",
+  groqModel: "whisper-large-v3-turbo",
+  geminiModel: "gemini-3.5-transcribe",
   cleanupModel: "gpt-6.1-terra",
   cleanup: true,
   titleModel: "gpt-6-luna",
@@ -34,13 +44,24 @@ export const DEFAULT_DICTATION: DictationSettings = {
 };
 
 export const OPENAI_BASE_URL = "https://api.openai.com/v1";
+export const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
+export const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
+
+/** Basis-URL eines Erkennungs-Anbieters. */
+export function transcribeBaseUrl(p: TranscribeProvider): string {
+  return p === "groq" ? GROQ_BASE_URL : p === "gemini" ? GEMINI_BASE_URL : OPENAI_BASE_URL;
+}
 
 /** Liest gespeicherte Einstellungen tolerant ein; Unbekanntes fällt auf die Standardwerte zurück. */
 export function parseDictationSettings(raw: unknown): DictationSettings {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const str = (v: unknown, d: string) => (typeof v === "string" && v.trim() ? v.trim() : d);
   return {
+    // Ältere Einstellungen kennen nur OpenAI.
+    transcribeProvider: TRANSCRIBE_PROVIDERS.includes(o.transcribeProvider as TranscribeProvider) ? (o.transcribeProvider as TranscribeProvider) : "openai",
     transcribeModel: str(o.transcribeModel, DEFAULT_DICTATION.transcribeModel),
+    groqModel: str(o.groqModel, DEFAULT_DICTATION.groqModel),
+    geminiModel: str(o.geminiModel, DEFAULT_DICTATION.geminiModel),
     cleanupModel: str(o.cleanupModel, DEFAULT_DICTATION.cleanupModel),
     cleanup: typeof o.cleanup === "boolean" ? o.cleanup : DEFAULT_DICTATION.cleanup,
     // „gpt-6.1-luna“ war der erste, falsche Standard (10.11.2026); das Modell heißt „gpt-6-luna“.
@@ -51,6 +72,12 @@ export function parseDictationSettings(raw: unknown): DictationSettings {
     claudeCleanupModel: str(o.claudeCleanupModel, DEFAULT_DICTATION.claudeCleanupModel),
     claudeTitleModel: str(o.claudeTitleModel, DEFAULT_DICTATION.claudeTitleModel),
   };
+}
+
+/** Anbieter und Modell der Erkennung nach der Wahl in den Einstellungen. */
+export function transcribeTarget(s: DictationSettings): { provider: TranscribeProvider; model: string } {
+  const provider = s.transcribeProvider;
+  return { provider, model: provider === "groq" ? s.groqModel : provider === "gemini" ? s.geminiModel : s.transcribeModel };
 }
 
 /** Anbieter und Modelle für Bereinigung sowie Titel und Listen nach der Wahl in den Einstellungen. */
@@ -83,13 +110,43 @@ export function transcriptionPrompt(ctx: DictationContext): string {
   return parts.length ? `Diktierte Notiz zu einer Programmieraufgabe. ${parts.join(". ")}.` : "Diktierte Notiz zu einer Programmieraufgabe.";
 }
 
-/** Formularfelder für `/audio/transcriptions` ohne die Datei. */
+/** Formularfelder für `/audio/transcriptions` ohne die Datei (OpenAI und Groq). */
 export function transcriptionFields(settings: DictationSettings, ctx: DictationContext): [string, string][] {
+  const { provider, model } = transcribeTarget(settings);
+  // Groq nimmt das Whisper-Feld `language`; OpenAI seit `gpt-transcribe` `languages[]`.
   return [
-    ["model", settings.transcribeModel],
-    ["languages[]", "de"],
+    ["model", model],
+    provider === "groq" ? ["language", "de"] : ["languages[]", "de"],
     ["prompt", transcriptionPrompt(ctx)],
   ];
+}
+
+/** Gemini kennt `audio/mp4` nicht, wohl aber `audio/m4a` (gleiche Datei). */
+export function geminiMime(mime: string): string {
+  const m = mime.split(";")[0]!.trim().toLowerCase();
+  return m === "audio/mp4" || m === "audio/x-m4a" ? "audio/m4a" : m;
+}
+
+/** Body für `models/<modell>:generateContent` mit der Aufnahme direkt im Request (Gemini, 4.12). */
+export function geminiTranscriptionRequest(ctx: DictationContext, mime: string, base64: string): Record<string, unknown> {
+  // Kein freier Prompt beim Transkriptionsmodell; Listen- und Eintragstitel helfen als Vokabular.
+  const vocab = [ctx.list, ctx.title].map((s) => (s ?? "").trim().slice(0, 80)).filter(Boolean);
+  return {
+    contents: [{ role: "user", parts: [{ inlineData: { mimeType: geminiMime(mime), data: base64 } }] }],
+    generationConfig: { audioTranscriptionConfig: { languageCodes: ["de-DE"], ...(vocab.length ? { customVocabulary: vocab } : {}) } },
+  };
+}
+
+/** Text aus einer generateContent-Antwort (`candidates[0].content.parts[].text`). */
+export function parseGeminiTranscription(json: unknown): string {
+  const o = (json ?? {}) as { candidates?: { content?: { parts?: { text?: unknown }[] } }[]; promptFeedback?: { blockReason?: unknown } };
+  if (!Array.isArray(o.candidates) || !o.candidates.length) {
+    const block = o.promptFeedback?.blockReason;
+    throw new DictationError("server", typeof block === "string" ? `Abgelehnt: ${block}` : "Antwort ohne Text", undefined, "gemini");
+  }
+  let text = "";
+  for (const p of o.candidates[0]!.content?.parts ?? []) if (typeof p?.text === "string") text += p.text;
+  return text.trim();
 }
 
 export function parseTranscription(json: unknown): string {
@@ -181,6 +238,12 @@ export interface TextTarget {
   claudeFetch?: typeof globalThis.fetch;
 }
 
+/** Aufnahme für Anbieter, die sie im JSON statt als Datei erwarten (Gemini). */
+export interface AudioData {
+  mime: string;
+  base64(): Promise<string>;
+}
+
 export interface DictationRun {
   fetch: FetchLike;
   /** Ist es gesetzt, lädt die Erkennung darüber hoch; `form` wird dann nicht gebraucht. */
@@ -190,7 +253,12 @@ export interface DictationRun {
   ctx: DictationContext;
   /** Baut das multipart-Formular: Felder plus Audiodatei. */
   form?: (fields: [string, string][]) => unknown;
+  /** Aufnahme für Gemini (4.12) */
+  audio?: AudioData;
+  /** Basis-URL des Erkennungs-Anbieters; fehlt sie, die echte des Anbieters */
   baseUrl?: string;
+  /** Schlüssel als `x-goog-api-key` (Gemini) statt `Authorization: Bearer` */
+  authStyle?: "bearer" | "goog";
   onPhase?: (phase: "transcribing" | "cleaning") => void;
   /** Zeitgrenze je Anfrage in ms */
   timeoutMs?: number;
@@ -219,7 +287,8 @@ export async function request(run: DictationRun, path: string, init: { method: s
   else outer?.addEventListener("abort", abortOuter);
   let res: Awaited<ReturnType<FetchLike>>;
   const url = `${run.baseUrl ?? OPENAI_BASE_URL}${path}`;
-  const headers = { Authorization: `Bearer ${run.key.trim()}`, ...init.headers };
+  const auth: Record<string, string> = run.authStyle === "goog" ? { "x-goog-api-key": run.key.trim() } : { Authorization: `Bearer ${run.key.trim()}` };
+  const headers = { ...auth, ...init.headers };
   try {
     res = send ? await send(url, headers, ctrl?.signal) : await run.fetch(url, { ...init, headers, ...(ctrl ? { signal: ctrl.signal } : {}) });
   } catch (e) {
@@ -237,7 +306,9 @@ export async function request(run: DictationRun, path: string, init: { method: s
     } catch {
       // kein JSON
     }
-    throw new DictationError(classifyStatus(res.status), reason ? `HTTP ${res.status}: ${reason}` : `HTTP ${res.status}`, res.status);
+    // Gemini meldet einen ungültigen Schlüssel als 400 („API key not valid“).
+    const kind = res.status === 400 && /api key not valid|invalid api key/i.test(reason) ? "auth" : classifyStatus(res.status);
+    throw new DictationError(kind, reason ? `HTTP ${res.status}: ${reason}` : `HTTP ${res.status}`, res.status);
   }
   try {
     return await res.json();
@@ -248,15 +319,10 @@ export async function request(run: DictationRun, path: string, init: { method: s
 
 /** Erkennung und Bereinigung. Scheitert die Bereinigung, kommt der Rohtext zurück. */
 export async function runDictation(run: DictationRun): Promise<DictationResult> {
-  if (!run.key.trim()) throw new DictationError("nokey");
+  const { provider, model } = transcribeTarget(run.settings);
+  if (!run.key.trim()) throw new DictationError("nokey", undefined, undefined, provider);
   run.onPhase?.("transcribing");
-  const fields = transcriptionFields(run.settings, run.ctx);
-  const upload = run.upload;
-  const raw = parseTranscription(
-    upload
-      ? await request(run, "/audio/transcriptions", { method: "POST", headers: {} }, (url, headers, signal) => upload(url, { headers, fields, ...(signal ? { signal } : {}) }))
-      : await request(run, "/audio/transcriptions", { method: "POST", headers: {}, body: run.form?.(fields) }),
-  );
+  const raw = await transcribe({ ...run, baseUrl: run.baseUrl ?? transcribeBaseUrl(provider) }, provider, model);
   if (!raw) throw new DictationError("empty");
   if (!run.settings.cleanup) return { text: raw, raw, cleaned: false };
   run.onPhase?.("cleaning");
@@ -265,6 +331,27 @@ export async function runDictation(run: DictationRun): Promise<DictationResult> 
   } catch (e) {
     return { text: raw, raw, cleaned: false, cleanupError: e instanceof DictationError ? e.kind : "server" };
   }
+}
+
+/** Erkennung beim gewählten Anbieter. */
+async function transcribe(run: DictationRun, provider: TranscribeProvider, model: string): Promise<string> {
+  if (provider === "gemini") {
+    if (!run.audio) throw new DictationError("server", "Keine Aufnahme", undefined, "gemini");
+    const body = geminiTranscriptionRequest(run.ctx, run.audio.mime, await run.audio.base64());
+    const json = await request({ ...run, authStyle: "goog" }, `/models/${encodeURIComponent(model.replace(/^models\//, ""))}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return parseGeminiTranscription(json);
+  }
+  const fields = transcriptionFields(run.settings, run.ctx);
+  const upload = run.upload;
+  return parseTranscription(
+    upload
+      ? await request(run, "/audio/transcriptions", { method: "POST", headers: {} }, (url, headers, signal) => upload(url, { headers, fields, ...(signal ? { signal } : {}) }))
+      : await request(run, "/audio/transcriptions", { method: "POST", headers: {}, body: run.form?.(fields) }),
+  );
 }
 
 /** Bereinigt den Rohtext beim gewählten Anbieter. */
@@ -285,6 +372,26 @@ async function cleanupText(run: DictationRun, raw: string): Promise<string> {
     body: JSON.stringify(cleanupRequest(raw, run.settings, run.ctx)),
   });
   return extractOutputText(json);
+}
+
+/** Prüft den Schlüssel eines Anbieters (4.12); `baseUrl` nur für Tests. */
+export async function checkApiKey(
+  provider: ApiProvider,
+  opts: { fetch: FetchLike; key: string; baseUrl?: string; claudeFetch?: typeof globalThis.fetch },
+): Promise<{ ok: true } | { ok: false; kind: DictationErrorKind }> {
+  if (provider === "anthropic") return checkClaudeKey({ key: opts.key, baseUrl: opts.baseUrl, fetch: opts.claudeFetch });
+  if (provider !== "gemini") return checkKey(opts.fetch, opts.key, opts.baseUrl ?? transcribeBaseUrl(provider));
+  if (!opts.key.trim()) return { ok: false, kind: "nokey" };
+  try {
+    await request(
+      { fetch: opts.fetch, key: opts.key, baseUrl: opts.baseUrl ?? GEMINI_BASE_URL, authStyle: "goog", settings: DEFAULT_DICTATION, ctx: {}, timeoutMs: 20_000 },
+      "/models?pageSize=1",
+      { method: "GET", headers: {} },
+    );
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, kind: e instanceof DictationError ? e.kind : "server" };
+  }
 }
 
 /** Prüft den Schlüssel mit `GET /models`. */
@@ -321,12 +428,12 @@ export const T_DICTATION = {
   notCleaned: "Nicht bereinigt eingefügt",
   keyLabel: "OpenAI-API-Schlüssel",
   keyLabelFor: (label: string) => `${label}-API-Schlüssel`,
-  keyPlaceholderFor: { openai: "sk-…", anthropic: "sk-ant-…" } as Record<ApiProvider, string>,
+  keyPlaceholderFor: { openai: "sk-…", anthropic: "sk-ant-…", groq: "gsk_…", gemini: "AIza…" } as Record<ApiProvider, string>,
   transcribeSection: "Spracherkennung",
   textSection: "Textmodell",
   textSectionHint: "Für Bereinigung, Titelvorschläge und „Checkliste einfügen“.",
   textProvider: "Anbieter",
-  providerNames: { openai: "OpenAI", anthropic: "Claude (Anthropic)" } as Record<ApiProvider, string>,
+  providerNames: { openai: "OpenAI", anthropic: "Claude (Anthropic)", groq: "Groq", gemini: "Gemini (Google)" } as Record<ApiProvider, string>,
   /** Hinweis, wenn Erkennung und Textmodell bei verschiedenen Anbietern liegen (4.12) */
   keyHintFor: (stt: string, text: string) =>
     `Die Schlüssel bleiben nur auf diesem Gerät und werden verschlüsselt gespeichert. Aufnahmen sowie Listen- und Eintragstitel gehen beim Diktieren an ${stt}. Der erkannte Text zur Bereinigung, für Titelvorschläge die Notiz und der Listentitel und für „Checkliste einfügen“ der eingefügte Text und der Listentitel gehen an ${text}.`,
@@ -350,7 +457,7 @@ export const T_DICTATION = {
   autoTitleHint: "Neue Programmier-Einträge bekommen Titel und Art aus der Notiz. Dafür gehen Notiz und Listentitel an OpenAI.",
   autoTitleHintFor: (label: string) => `Neue Programmier-Einträge bekommen Titel und Art aus der Notiz. Dafür gehen Notiz und Listentitel an ${label}.`,
   errors: {
-    nokey: "Für das Diktieren einen OpenAI-API-Schlüssel in den Einstellungen hinterlegen",
+    nokey: "Für das Diktieren einen API-Schlüssel in den Einstellungen hinterlegen",
     auth: "API-Schlüssel ungültig",
     quota: "Kontingent erschöpft oder zu viele Anfragen",
     network: "Kein Netz",

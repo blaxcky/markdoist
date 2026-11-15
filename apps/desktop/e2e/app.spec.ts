@@ -825,16 +825,18 @@ test("Müllabfuhr: ICS importieren, Abfuhrart öffnen, Termin überspringen, ern
 
 test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, erneuter Versuch und Titelvorschlag (4.9, 4.10, 4.12)", async () => {
   // Lokaler Ersatz für die OpenAI- und die Claude-API; das Mikrofon liefert Chromiums Testton.
-  const seen: { path: string; auth: string; body: string }[] = [];
+  const seen: { path: string; auth: string; goog: string; body: string }[] = [];
   let mode: "ok" | "401" = "ok";
   const server = createServer((req, res) => {
     let body = "";
     req.setEncoding("latin1");
     req.on("data", (c) => (body += c));
     req.on("end", () => {
-      seen.push({ path: req.url ?? "", auth: req.headers.authorization ?? "", body });
+      seen.push({ path: req.url ?? "", auth: req.headers.authorization ?? "", goog: String(req.headers["x-goog-api-key"] ?? ""), body });
       res.setHeader("Content-Type", "application/json");
       if (mode === "401") return void res.writeHead(401).end("{}");
+      // Gemini (4.12): Transkription über generateContent
+      if (req.url === "/v1beta/models/gemini-3.5-transcribe:generateContent") return void res.end(JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text: "äh Gemini hat das erkannt" }] } }] }));
       // Claude (4.12): Messages API
       if (req.url === "/v1/messages") {
         const text = body.includes('"json_schema"') ? JSON.stringify({ title: "Knopf rot (Claude)", type: "bug" }) : "Der Knopf ist rot (Claude).";
@@ -865,6 +867,7 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
         MARKDOIST_TEST_TZ: "Europe/Berlin",
         MARKDOIST_OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`,
         MARKDOIST_ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}`,
+        MARKDOIST_GEMINI_BASE_URL: `http://127.0.0.1:${port}/v1beta`,
       },
     });
     page = await app.firstWindow();
@@ -968,6 +971,29 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
     const byClaude = (await readdir(folder)).find((n) => n.startsWith("Der Knopf ist rot (Claude)"))!;
     await expect.poll(() => file(byClaude)).toContain("dev_type: bug\n");
     expect(await file(byClaude)).toMatch(/---\nDer Knopf ist rot \(Claude\)\.\n$/);
+
+    // Erkennung über Gemini (4.12): eigener Schlüssel, Aufnahme als Base64 im JSON, Bereinigung weiter über Claude.
+    await page.getByTestId("user-menu").click();
+    await page.getByTestId("menu-dictation").click();
+    await page.getByTestId("dictation-transcribe-provider").selectOption("gemini");
+    await expect(page.getByTestId("dictation-model-transcribe")).toHaveValue("gemini-3.5-transcribe");
+    await page.getByTestId("dictation-gemini-key").fill("AIza-e2e-geheim-9012");
+    await page.getByTestId("dictation-gemini-key-save").click();
+    await expect(page.getByTestId("dictation-gemini-key-masked")).toHaveText("AI…9012");
+    await page.getByTestId("dictation-settings-close").click();
+    const mark2 = seen.length;
+    await page.getByTestId("dev-dictate").click();
+    await expect(page.getByTestId("dictate-state")).toContainText("Aufnahme");
+    await page.waitForTimeout(800);
+    await page.getByTestId("dictate-stop").click();
+    await expect(page.locator('[data-testid="dev-item-row"][data-text="Knopf rot (Claude)"]')).toHaveCount(2);
+    expect(seen.slice(mark2).map((x) => x.path)).toEqual(["/v1beta/models/gemini-3.5-transcribe:generateContent", "/v1/messages", "/v1/messages"]);
+    const geminiCall = seen[mark2]!;
+    expect(geminiCall.goog).toBe("AIza-e2e-geheim-9012");
+    expect(geminiCall.auth).toBe("");
+    expect(geminiCall.body).toContain('"mimeType":"audio/webm"');
+    expect(geminiCall.body).toContain('"languageCodes":["de-DE"]');
+    expect(seen[mark2 + 1]!.body).toContain("Gemini hat das erkannt");
   } finally {
     server.close();
   }

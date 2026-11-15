@@ -24,8 +24,7 @@ let adapter: FsAdapter | null = null;
 let unwatch: (() => void) | null = null;
 const store = new LocalStore(dataDir);
 
-// Diktieren (4.9, 4.12). MARKDOIST_OPENAI_BASE_URL und MARKDOIST_ANTHROPIC_BASE_URL nur für E2E-Tests
-// (lokaler Ersatzserver).
+// Diktieren (4.9, 4.12). Die MARKDOIST_*_BASE_URL nur für E2E-Tests (lokaler Ersatzserver).
 const dictation = new DictationService(
   safeStorage,
   () => settings.dictation,
@@ -35,7 +34,12 @@ const dictation = new DictationService(
     await saveSettings(dataDir, settings);
   },
   fetch as unknown as FetchLike,
-  { openai: process.env.MARKDOIST_OPENAI_BASE_URL, anthropic: process.env.MARKDOIST_ANTHROPIC_BASE_URL },
+  {
+    openai: process.env.MARKDOIST_OPENAI_BASE_URL,
+    anthropic: process.env.MARKDOIST_ANTHROPIC_BASE_URL,
+    groq: process.env.MARKDOIST_GROQ_BASE_URL,
+    gemini: process.env.MARKDOIST_GEMINI_BASE_URL,
+  },
 );
 
 /** Einstellungen ohne Diktier-Geheimnisse für den Renderer */

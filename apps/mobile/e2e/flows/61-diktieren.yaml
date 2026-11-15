@@ -195,4 +195,55 @@ appId: de.markdoist.aufgaben
     id: dictation-text-openai
 - assertNotVisible:
     id: dictation-anthropic-key
+# Erkennung über Gemini (4.12): eigener Schlüssel; „Prüfen“ geht echt zu Google. Gemini meldet den ungültigen
+# Testschlüssel als 400 „API key not valid“, die App zeigt „API-Schlüssel ungültig“. Kostet nichts.
+- scrollUntilVisible:
+    element:
+      id: dictation-stt-gemini
+    direction: UP
+    timeout: 8000
+- tapOn:
+    id: dictation-stt-gemini
+- scrollUntilVisible:
+    element:
+      id: dictation-gemini-key
+    direction: DOWN
+    timeout: 8000
+- tapOn:
+    id: dictation-gemini-key
+- inputText: "AIza-maestro-9012"
+- hideKeyboard
+- tapOn:
+    id: dictation-gemini-key-save
+- extendedWaitUntil:
+    visible:
+      id: dictation-gemini-key-masked
+      text: "AI…9012"
+    timeout: 4000
+- assertVisible:
+    id: dictation-model-transcribe
+    text: "gemini-3.5-transcribe"
+- tapOn:
+    id: dictation-gemini-key-check
+- scrollUntilVisible:
+    element:
+      id: dictation-gemini-status
+      text: "API-Schlüssel ungültig"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: dictation-gemini-key-remove
+- extendedWaitUntil:
+    visible:
+      id: dictation-gemini-key
+    timeout: 4000
+- scrollUntilVisible:
+    element:
+      id: dictation-stt-openai
+    direction: UP
+    timeout: 8000
+- tapOn:
+    id: dictation-stt-openai
+- assertNotVisible:
+    id: dictation-gemini-key
 - back

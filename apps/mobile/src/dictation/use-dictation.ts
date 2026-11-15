@@ -4,8 +4,8 @@ import { AppState } from "react-native";
 import { getRecordingPermissionsAsync, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, type RecordingOptions } from "expo-audio";
 import { File, UploadType } from "expo-file-system";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
-import { DictationError, MAX_RECORDING_MS, runDictation, type DictationContext, type DictationErrorKind, type DictationResult, type FetchLike, type UploadLike } from "@markdoist/app";
-import { getApiKey, loadDictationSettings, loadTextTarget, onDictationConfigChange } from "./store";
+import { DictationError, MAX_RECORDING_MS, runDictation, transcribeTarget, type DictationContext, type DictationErrorKind, type DictationResult, type FetchLike, type UploadLike } from "@markdoist/app";
+import { getTranscribeKey, loadDictationSettings, loadTextTarget, onDictationConfigChange } from "./store";
 
 // Sprache braucht kein Stereo und keine 128 kbit/s: Mono mit 64 kbit/s hält den Upload klein (10 min ≈ 5 MB).
 const OPTIONS: RecordingOptions = { ...RecordingPresets.HIGH_QUALITY, numberOfChannels: 1, bitRate: 64000 };
@@ -128,8 +128,9 @@ export function useDictation(opts: { enabled: boolean; ctx: () => DictationConte
 
   const send = useCallback(async (uri: string) => {
     const my = gen.current;
-    const key = await getApiKey();
     const settings = await loadDictationSettings();
+    const key = await getTranscribeKey(settings);
+    const gemini = transcribeTarget(settings).provider === "gemini";
     const text = await loadTextTarget();
     try {
       const r = await runDictation({
@@ -138,7 +139,8 @@ export function useDictation(opts: { enabled: boolean; ctx: () => DictationConte
         settings,
         text: { provider: text.provider, key: text.key },
         ctx: cb.current.ctx(),
-        upload: nativeUpload(uri),
+        // Gemini erwartet die Aufnahme im JSON, die anderen als Datei (4.12).
+        ...(gemini ? { audio: { mime: "audio/m4a", base64: () => new File(uri).base64() } } : { upload: nativeUpload(uri) }),
         onPhase: (p) => gen.current === my && setState((s) => ({ ...s, phase: p })),
       });
       if (gen.current !== my) return;
@@ -192,7 +194,7 @@ export function useDictation(opts: { enabled: boolean; ctx: () => DictationConte
     };
     // Ohne Schlüssel gar nicht erst aufnehmen. Ist er schon bekannt, entfällt das Lesen aus dem Keystore.
     if (!keyRef.current) {
-      const key = !!(await getApiKey());
+      const key = !!(await getTranscribeKey());
       setHasKey(key);
       if (!key) {
         cb.current.onError("nokey");
@@ -264,7 +266,7 @@ export function useDictation(opts: { enabled: boolean; ctx: () => DictationConte
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    const loadKey = () => void getApiKey().then((k) => alive && setHasKey(!!k));
+    const loadKey = () => void getTranscribeKey().then((k) => alive && setHasKey(!!k));
     loadKey();
     const off = onDictationConfigChange(loadKey);
     void getRecordingPermissionsAsync()

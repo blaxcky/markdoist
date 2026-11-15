@@ -57,7 +57,10 @@ describe("Diktieren am Desktop (4.9)", () => {
     const st = await svc.clearKey();
     expect(st.hasKey).toBe(false);
     expect(stored()).toEqual({
+      transcribeProvider: "openai",
       transcribeModel: "x-transcribe",
+      groqModel: "whisper-large-v3-turbo",
+      geminiModel: "gemini-3.5-transcribe",
       cleanupModel: "gpt-6.1-terra",
       cleanup: false,
       titleModel: "gpt-6-luna",
@@ -145,7 +148,12 @@ describe("Anbieter am Desktop (4.12)", () => {
     const { svc, stored } = setup();
     await svc.setKey(KEY);
     const st = await svc.setKey(ANT, "anthropic");
-    expect(st.keys).toEqual({ openai: { hasKey: true, masked: "sk-…abcd" }, anthropic: { hasKey: true, masked: "sk-…9876" } });
+    expect(st.keys).toEqual({
+      openai: { hasKey: true, masked: "sk-…abcd" },
+      anthropic: { hasKey: true, masked: "sk-…9876" },
+      groq: { hasKey: false, masked: null },
+      gemini: { hasKey: false, masked: null },
+    });
     expect(JSON.stringify(stored())).not.toContain("geheim");
     expect(svc.key("anthropic")).toBe(ANT);
     const after = await svc.clearKey("anthropic");
@@ -181,5 +189,41 @@ describe("Anbieter am Desktop (4.12)", () => {
     await svc.setKey(KEY);
     await svc.setSettings({ textProvider: "anthropic" });
     expect(await svc.suggestTitle("n", "", true)).toEqual({ ok: false, kind: "nokey", detail: "nokey", provider: "anthropic" });
+  });
+});
+
+describe("Erkennung bei Groq und Gemini am Desktop (4.12)", () => {
+  it("Gemini: Schlüssel des Anbieters, Aufnahme als Base64, eigene Basis-URL", async () => {
+    const calls: { url: string; headers: Record<string, string>; body: string }[] = [];
+    const fetch: FetchLike = async (url, init) => {
+      calls.push({ url, headers: init.headers, body: String(init.body) });
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: "Hallo Gemini" }] } }] }) };
+    };
+    let stored: StoredDictation | undefined;
+    const svc = new DictationService(box(), () => stored, async (d) => void (stored = d), fetch, { gemini: "http://127.0.0.1:2/v1beta" });
+    await svc.setKey("AIza-geheim-0000", "gemini");
+    await svc.setSettings({ transcribeProvider: "gemini", cleanup: false });
+    // Ohne OpenAI-Schlüssel geht es trotzdem: Erkennung braucht nur den Gemini-Schlüssel.
+    const r = await svc.run(new Uint8Array([65, 66, 67]).buffer, "audio/webm;codecs=opus", { list: "Markdoist" });
+    expect(r).toEqual({ ok: true, result: { text: "Hallo Gemini", raw: "Hallo Gemini", cleaned: false } });
+    expect(calls[0]!.url).toBe("http://127.0.0.1:2/v1beta/models/gemini-3.5-transcribe:generateContent");
+    expect(calls[0]!.headers["x-goog-api-key"]).toBe("AIza-geheim-0000");
+    expect(JSON.parse(calls[0]!.body).contents[0].parts[0].inlineData).toEqual({ mimeType: "audio/webm", data: "QUJD" });
+    expect(JSON.stringify(stored)).not.toContain("geheim");
+  });
+
+  it("Groq: ohne Groq-Schlüssel nokey, mit Schlüssel an die Groq-URL", async () => {
+    const urls: string[] = [];
+    const fetch: FetchLike = async (url) => {
+      urls.push(url);
+      return { ok: true, status: 200, json: async () => ({ text: "Hallo Groq" }) };
+    };
+    const { svc } = setup(box(), fetch);
+    await svc.setKey(KEY);
+    await svc.setSettings({ transcribeProvider: "groq", cleanup: false });
+    expect(await svc.run(new ArrayBuffer(1), "audio/webm", {})).toEqual({ ok: false, kind: "nokey" });
+    await svc.setKey("gsk_test_1234", "groq");
+    expect(await svc.run(new ArrayBuffer(1), "audio/webm", {})).toMatchObject({ ok: true, result: { text: "Hallo Groq" } });
+    expect(urls).toEqual(["https://api.groq.com/openai/v1/audio/transcriptions"]);
   });
 });

@@ -331,3 +331,27 @@ PLAN1 4.12; Wunsch und Entscheidungen vom 15.11.2026 (Plan und `.fragen/2026-11-
 - **Nicht geprüft:**
   - Keine erfolgreiche Anfrage an die echte Claude-API, denn im Test gibt es keinen gültigen Schlüssel. Also nicht geprüft, wie gut Haiku bereinigt und betitelt, und nicht, dass die echte API das JSON-Schema für Titel und Checkliste annimmt.
   - Keine Sichtprüfung der neuen Einstellungsabschnitte.
+
+## Anbieter, Schritt 2: Erkennung über Groq und Gemini (15.11.2026)
+
+PLAN1 4.12. Gemini nutzt auf Hinweis des Nutzers das Transkriptionsmodell `gemini-3.5-transcribe`. Anfrageform laut Gemini-Doku (Transkriptionsseite und „File input methods“): `generateContent` mit `generationConfig.audioTranscriptionConfig` (`languageCodes`, `customVocabulary`). Die Doku zeigt für Audio nur hochgeladene Dateien. Die eingebettete Form (`inlineData`) ist dort für Dokumente belegt und für Audio übernommen.
+
+- **Kern (AK-56, Teil Erkennung):** `packages/app/test/providers.test.ts` prüft mit gefälschtem `fetch`:
+  - Groq: Feld `language=de`, Modell `whisper-large-v3-turbo`, Groq-URL, `Bearer`
+  - Gemini: Aufnahme als Base64 in `inlineData`, `audio/mp4` wird `audio/m4a`, WebM bleibt WebM, `languageCodes: ["de-DE"]`, Titel als `customVocabulary`, Schlüssel als `x-goog-api-key` ohne `Authorization`, eigenes Modell und eigene Basis-URL
+  - Gemini-Fehler: leere Antwort ergibt „Nichts erkannt“, gesperrt ergibt `server`, 400 „API key not valid“ ergibt „API-Schlüssel ungültig“, fehlender Schlüssel ergibt `nokey` mit Anbieter
+  - Schlüsselprüfung je Anbieter (`GET /models` bei Groq, `GET /models?pageSize=1` bei Gemini); alte Einstellungen ergeben OpenAI
+- **Desktop-Dienst:** Erkennung nur mit dem Schlüssel des gewählten Anbieters, Gemini mit Base64 und eigener Basis-URL, Groq ohne Groq-Schlüssel `nokey`. Die Gemini- und Groq-Schlüssel stehen nicht im Klartext in der Ablage.
+- **Prüfstand:** `pnpm lint`, `pnpm typecheck` und `pnpm test` (5662 Tests) grün.
+- **Desktop-E2E:** „Programmieren: Diktieren …“ und „Listen: Checkliste aus Text einfügen …“ grün. Neu im Diktier-Test:
+  - Erkennung auf Gemini stellen; das Modellfeld zeigt `gemini-3.5-transcribe`
+  - Gemini-Schlüssel speichern, nur maskiert sichtbar
+  - Diktieren im Board: `generateContent` am Ersatzserver (`MARKDOIST_GEMINI_BASE_URL`) mit `x-goog-api-key`, `audio/webm` und `de-DE`, danach Bereinigung und Titel über Claude mit dem erkannten Text
+- **Android-E2E:** Release-Build x86_64 auf Genymotion. Flow `61-diktieren.yaml` ist komplett grün. Neu darin:
+  - Gemini-Chip wählen, Gemini-Schlüssel speichern, nur maskiert sichtbar; das Modellfeld zeigt `gemini-3.5-transcribe`
+  - „Prüfen“ geht **echt zu Google** und zeigt mit dem ungültigen Testschlüssel „API-Schlüssel ungültig“. Damit sind der Header und die 400-Zuordnung gegen die echte API belegt.
+  - Schlüssel entfernen, zurück auf OpenAI
+- **Nicht geprüft:**
+  - Keine echte Erkennung bei Groq oder Gemini, denn es gibt keinen gültigen Schlüssel. Insbesondere nicht belegt: Nimmt `gemini-3.5-transcribe` eingebettetes Audio an? Nimmt Gemini die Android-m4a als `audio/m4a` und die WebM des Desktops an? Wie gut wird Deutsch erkannt?
+  - Groq wurde gegen die echte API gar nicht aufgerufen, auch nicht mit ungültigem Schlüssel.
+  - Keine Sichtprüfung der neuen Auswahl.

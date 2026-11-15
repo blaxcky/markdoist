@@ -1,6 +1,6 @@
 // Diktieren (4.9) am Desktop: Aufnahme mit MediaRecorder im Renderer, Erkennung und Bereinigung im Main-Prozess.
 import { useEffect, useRef, useState } from "react";
-import { formatDuration, MAX_RECORDING_MS, T, type DictationContext, type DictationErrorKind, type DictationResult } from "@markdoist/app";
+import { formatDuration, MAX_RECORDING_MS, T, transcribeTarget, type DictationContext, type DictationErrorKind, type DictationResult } from "@markdoist/app";
 import { bridge } from "../bridge";
 import { IconMic } from "./Icons";
 
@@ -70,7 +70,8 @@ export function DictateButton({ ctx, onResult, onError, testId = "dictate", labe
 
   const start = async () => {
     const st = await bridge().dictation.status();
-    if (!st.hasKey) {
+    // Schlüssel des gewählten Erkennungs-Anbieters (4.12)
+    if (!st.keys[transcribeTarget(st.settings).provider].hasKey) {
       cb.current.onError("nokey");
       window.dispatchEvent(new CustomEvent(OPEN_DICTATION_SETTINGS));
       return;

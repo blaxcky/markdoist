@@ -187,7 +187,10 @@ describe("Diktieren (4.9)", () => {
   it("Einstellungen, Maske, Dauer, Texte", () => {
     expect(parseDictationSettings(null)).toEqual(DEFAULT_DICTATION);
     expect(parseDictationSettings({ transcribeModel: " x ", cleanupModel: "", cleanup: false })).toEqual({
+      transcribeProvider: "openai",
       transcribeModel: "x",
+      groqModel: "whisper-large-v3-turbo",
+      geminiModel: "gemini-3.5-transcribe",
       cleanupModel: "gpt-6.1-terra",
       cleanup: false,
       titleModel: "gpt-6-luna",

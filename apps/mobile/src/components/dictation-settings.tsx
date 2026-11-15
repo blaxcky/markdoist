@@ -1,8 +1,8 @@
 // Einstellungen „Diktieren“ (4.9, 4.10, 4.12): API-Schlüssel je Anbieter (nur maskiert sichtbar), Modelle,
-// Bereinigung und Titelvorschlag an/aus, Text-Anbieter (OpenAI oder Claude).
+// Bereinigung und Titelvorschlag an/aus, Anbieter für Erkennung (OpenAI, Groq, Gemini) und Text (OpenAI oder Claude).
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Switch, Text, TextInput, View } from "react-native";
-import { checkClaudeKey, checkKey, maskKey, PROVIDER_LABEL, T, textModels, type ApiProvider, type FetchLike, type TextProvider } from "@markdoist/app";
+import { checkApiKey, maskKey, PROVIDER_LABEL, T, textModels, transcribeTarget, TRANSCRIBE_PROVIDERS, type ApiProvider, type DictationSettings as Settings, type FetchLike } from "@markdoist/app";
 import { useTheme } from "../theme";
 import { clearApiKey, saveDictationSettings, setApiKey, useDictationConfig } from "../dictation/store";
 
@@ -25,7 +25,7 @@ function KeyRow({ provider, value }: { provider: ApiProvider; value: string | nu
   const check = async () => {
     if (!value) return;
     setBusy(true);
-    const r = provider === "anthropic" ? await checkClaudeKey({ key: value }) : await checkKey(fetch as unknown as FetchLike, value);
+    const r = await checkApiKey(provider, { fetch: fetch as unknown as FetchLike, key: value });
     setBusy(false);
     setStatus(r.ok ? { text: D.keyOk } : { text: D.errors[r.kind], error: true });
   };
@@ -80,6 +80,8 @@ export function DictationSettings() {
   const { keys, settings, loaded } = useDictationConfig();
   const pick = () => ({
     transcribeModel: settings.transcribeModel,
+    groqModel: settings.groqModel,
+    geminiModel: settings.geminiModel,
     cleanupModel: settings.cleanupModel,
     titleModel: settings.titleModel,
     claudeCleanupModel: settings.claudeCleanupModel,
@@ -88,7 +90,7 @@ export function DictationSettings() {
   const [models, setModels] = useState(pick);
   useEffect(
     () => setModels(pick()),
-    [settings.transcribeModel, settings.cleanupModel, settings.titleModel, settings.claudeCleanupModel, settings.claudeTitleModel],
+    [settings.transcribeModel, settings.groqModel, settings.geminiModel, settings.cleanupModel, settings.titleModel, settings.claudeCleanupModel, settings.claudeTitleModel],
   );
 
   const field = { color: c.fg, fontSize: 15, borderWidth: 1, borderColor: c.outline, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: c.surface } as const;
@@ -97,14 +99,16 @@ export function DictationSettings() {
   const claude = text === "anthropic";
   const cleanupField = claude ? "claudeCleanupModel" : "cleanupModel";
   const titleField = claude ? "claudeTitleModel" : "titleModel";
+  const stt = transcribeTarget(settings).provider;
+  const sttField = stt === "groq" ? "groqModel" : stt === "gemini" ? "geminiModel" : "transcribeModel";
   const heading = (label: string) => <Text style={{ color: c.fg, fontSize: 15, fontWeight: "600", marginTop: 12 }}>{label}</Text>;
-  const chip = (p: TextProvider) => {
-    const on = text === p;
+  /** Auswahl-Chip; `group` „text“ oder „stt“ ergibt die Testkennung `dictation-<group>-<anbieter>`. */
+  const chip = (group: "text" | "stt", p: ApiProvider, on: boolean, patch: Partial<Settings>) => {
     return (
       <Pressable
         key={p}
-        onPress={() => void saveDictationSettings({ ...settings, ...models, textProvider: p })}
-        testID={`dictation-text-${p}`}
+        onPress={() => void saveDictationSettings({ ...settings, ...models, ...patch })}
+        testID={`dictation-${group}-${p}`}
         accessibilityRole="radio"
         accessibilityState={{ selected: on }}
         style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderColor: on ? c.primary : c.outline, backgroundColor: on ? c.primary : "transparent" }}
@@ -119,11 +123,14 @@ export function DictationSettings() {
     <View style={{ gap: 8 }}>
       <Text style={{ color: c.muted, fontSize: 13, marginTop: 16 }}>{D.section}</Text>
       {heading(D.transcribeSection)}
-      <KeyRow provider="openai" value={keys.openai} />
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }} accessibilityRole="radiogroup" accessibilityLabel={D.transcribeSection}>
+        {TRANSCRIBE_PROVIDERS.map((p) => chip("stt", p, stt === p, { transcribeProvider: p }))}
+      </View>
+      <KeyRow key={stt} provider={stt} value={keys[stt]} />
       <Text style={{ color: c.fg, fontSize: 15, marginTop: 8 }}>{D.modelTranscribe}</Text>
       <TextInput
-        value={models.transcribeModel}
-        onChangeText={(v) => setModels((m) => ({ ...m, transcribeModel: v }))}
+        value={models[sttField]}
+        onChangeText={(v) => setModels((m) => ({ ...m, [sttField]: v }))}
         onEndEditing={saveModels}
         autoCapitalize="none"
         autoCorrect={false}
@@ -134,10 +141,10 @@ export function DictationSettings() {
       {heading(D.textSection)}
       <Text style={{ color: c.muted, fontSize: 13 }}>{D.textSectionHint}</Text>
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }} accessibilityRole="radiogroup" accessibilityLabel={D.textProvider}>
-        {chip("openai")}
-        {chip("anthropic")}
+        {chip("text", "openai", text === "openai", { textProvider: "openai" })}
+        {chip("text", "anthropic", text === "anthropic", { textProvider: "anthropic" })}
       </View>
-      {claude && <KeyRow provider="anthropic" value={keys.anthropic} />}
+      {text !== stt && <KeyRow key={text} provider={text} value={keys[text]} />}
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
         <View style={{ flex: 1 }}>
@@ -174,7 +181,7 @@ export function DictationSettings() {
         style={field}
         testID="dictation-model-title"
       />
-      <Text style={{ color: c.muted, fontSize: 13, marginTop: 8 }}>{claude ? D.keyHintFor(PROVIDER_LABEL.openai, PROVIDER_LABEL.anthropic) : D.keyHint}</Text>
+      <Text style={{ color: c.muted, fontSize: 13, marginTop: 8 }}>{stt === "openai" && text === "openai" ? D.keyHint : D.keyHintFor(PROVIDER_LABEL[stt], PROVIDER_LABEL[text])}</Text>
     </View>
   );
 }
