@@ -419,6 +419,6 @@ Wunsch vom 15.11.2026: Der Android-Job brauchte 9½ bis 11½ Minuten, Gradle dav
 
 Messung auf `ci-check`:
 
-- Lokal vorab: zwei Neubauten des C++-Teils, beim zweiten 154 von 154 ccache-Treffern, 4:36 statt 1:42 min.
+- Lokal vorab: zwei Neubauten des C++-Teils, beim zweiten 154 von 154 ccache-Treffern, 1:42 statt 4:36 min.
 - Zweiter Lauf mit warmem Cache: 356 von 962 Tasks aus dem Gradle-Cache, 154 von 154 ccache-Treffern, Gradle 5:28 min, Android-Job 6:32 min. Bis zum Release sind es damit etwa 7 statt 13 bis 14 Minuten.
 - Der erste Lauf auf `main` ist noch einmal langsamer, weil die Caches je Zweig gelten. Nach 7 Tagen ohne Lauf löscht GitHub einen Cache.
