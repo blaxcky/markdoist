@@ -66,9 +66,9 @@ jobs:
       CCACHE_DIR: /home/runner/.ccache
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      # VORÜBERGEHEND: Fehlersuche, warum ccache zwischen Läufen nicht trifft
-      CCACHE_DEBUG: "1"
-      CCACHE_DEBUGDIR: /home/runner/ccache-debug
+      # Gradle installiert das NDK in jedem Lauf neu; mit dem Standard (Änderungsdatum des Compilers) gäbe es
+      # nie einen Treffer. Die Versionsausgabe des Compilers bleibt gleich.
+      CCACHE_COMPILERCHECK: "%compiler% -v"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -118,12 +118,6 @@ jobs:
       - name: ccache-Statistik
         if: always()
         run: ccache --show-stats
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: ccache-debug
-          path: /home/runner/ccache-debug/**/*.ccache-input-text
-          retention-days: 2
       - name: APK prüfen und benennen
         env:
           CERT: ${{ vars.MARKDOIST_CERT_SHA256 }}
