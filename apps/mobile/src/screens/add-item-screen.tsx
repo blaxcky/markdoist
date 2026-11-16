@@ -7,7 +7,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { createDevItemFromText, dictationErrorText, suggestDevTitle, T, type Outcome } from "@markdoist/app";
 import { devIndex } from "@markdoist/core";
 import { CaptureSheet } from "../components/capture-sheet";
-import { DictateBar } from "../components/dictate-bar";
+import { DictatePanel, DictatePill, dictatePanelActive } from "../components/dictate-panel";
 import { useDictation } from "../dictation/use-dictation";
 import { suggestTitleAuto } from "../dictation/title";
 import { useRepo, useRepoState } from "../repo";
@@ -47,8 +47,9 @@ export function AddItemScreen() {
     ctx: () => ({ list: list?.task.fields.title }),
     // Diktiert: Der Eintrag entsteht ohne weiteren Tipp (4.10).
     onResult: (r) => void addDev(r.text, !r.cleaned && r.cleanupError ? `${T.dev.created} · ${T.dictation.notCleaned}` : T.dev.created).then((o) => o.status !== "ok" && notify(o, T.dev.addItem)),
-    onError: (kind, detail) => {
-      notify({ status: "error", message: dictationErrorText(kind, detail) });
+    onError: (kind, detail, canRetry) => {
+      // Wiederholbare Fehler zeigt die Aufnahmekarte selbst; ein Toast läge unten über ihren Knöpfen.
+      if (!canRetry) notify({ status: "error", message: dictationErrorText(kind, detail) });
       if (kind === "nokey" || kind === "nomodel") nav.navigate("Settings");
     },
   });
@@ -66,18 +67,21 @@ export function AddItemScreen() {
       setText((cur) => cur || t);
     });
   };
+  const canDictate = !!(dev && list && !list.readOnly);
   return (
     <CaptureSheet
       value={text}
       onChangeText={setText}
-      placeholder={dev ? T.dev.composePlaceholder : T.lists.addItem}
+      placeholder={dev ? T.dev.composeShort : T.lists.addItem}
       onSubmit={add}
       ready={!!text.trim()}
       keepOpen
       paragraphs={dev}
-      extra={
-        dev && list && !list.readOnly ? (
-          <DictateBar state={dictation.state} onStart={() => void dictation.start()} onStop={() => void dictation.stop()} onCancel={() => void dictation.cancel()} onRetry={() => void dictation.retry()} />
+      heading={dev ? { title: T.dev.composeTitle, context: list?.task.fields.title, hint: T.dev.composeAuto } : undefined}
+      chips={canDictate ? <DictatePill onStart={() => void dictation.start()} /> : undefined}
+      panel={
+        canDictate && dictatePanelActive(dictation.state) ? (
+          <DictatePanel state={dictation.state} onStop={() => void dictation.stop()} onCancel={() => void dictation.cancel()} onRetry={() => void dictation.retry()} />
         ) : undefined
       }
       submitLabel={dev ? T.dev.file : T.lists.addItem}

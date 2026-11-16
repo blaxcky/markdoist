@@ -35,6 +35,13 @@ export const light = {
   ideaBg: "#F1EBFB",
   ideaFg: "#6B3FB0",
   work: "#C76A00",
+  // Eingabeblatt (4.10): gefüllte Knöpfe mit weißer Schrift (Kontrast ≥ 4,5:1), Text auf primaryContainer,
+  // Eingabefeld und Aufnahmekarte
+  primaryStrong: "#C8402F",
+  onPrimaryContainer: "#B23A2E",
+  field: "#FBF9F7",
+  recBg: "#FFF4EF",
+  recBorder: "#F3D2C7",
 };
 
 export const dark: typeof light = {
@@ -69,6 +76,11 @@ export const dark: typeof light = {
   ideaBg: "#2C2440",
   ideaFg: "#C9B0F5",
   work: "#F0A24A",
+  primaryStrong: "#C8402F",
+  onPrimaryContainer: "#FFB4A8",
+  field: "#1F1F1F",
+  recBg: "#33231F",
+  recBorder: "#4D312B",
 };
 
 export type Theme = typeof light;

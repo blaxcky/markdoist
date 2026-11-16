@@ -1,7 +1,8 @@
 // Eingabeblatt der Erfassung (4.1): Blatt über der Liste, Titelzeile, darunter Chips und Plus-Knopf über der Tastatur.
 // Gemeinsam für neue Aufgaben, neue Listen und Listeneinträge (4.6); läuft als kopfloses transparentModal.
+// Mit `heading` gegliedert (Programmier-Eintrag, 4.10): Kopfzeile, gerahmtes Feld, abgetrennte Aktionsleiste.
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AppState, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import { AppState, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import Animated, { Easing, SlideInDown, interpolate, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,9 +27,16 @@ interface Props {
   paragraphs?: boolean;
   submitLabel: string;
   testID: { input: string; submit: string };
+  /**
+   * Gegliedertes Blatt (Programmier-Eintrag, 4.10): Kopfzeile mit Überschrift und Liste, gerahmtes Feld mit
+   * Hinweis darunter, abgetrennte Aktionsleiste mit beschriftetem Senden-Knopf.
+   */
+  heading?: { title: string; context?: string; hint?: string };
+  /** Ersetzt Hinweis und Aktionsleiste, solange etwas anderes läuft (Aufnahme). Nur mit `heading`. */
+  panel?: ReactNode;
 }
 
-export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready, keepOpen, extra, chips, accessibilityLabel, paragraphs, submitLabel, testID }: Props) {
+export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready, keepOpen, extra, chips, accessibilityLabel, paragraphs, submitLabel, testID, heading, panel }: Props) {
   const c = useTheme();
   const nav = useNavigation();
   // Ohne Tastatur Abstand zur Gestenleiste halten (randlose Darstellung).
@@ -66,6 +74,19 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
       <Pressable style={{ flex: 1 }} onPress={close} accessibilityLabel="Schließen" testID="sheet-close" />
       <Animated.View entering={SlideInDown.duration(200)} style={{ backgroundColor: c.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 8, paddingBottom: 12 + (keyboard ? 0 : insets.bottom) }}>
         <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: c.outline, marginBottom: 4 }} />
+        {heading ? (
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, paddingHorizontal: 18, paddingTop: 8, paddingBottom: 12 }}>
+            <Text accessibilityRole="header" style={{ color: c.fg, fontSize: 17, fontWeight: "600" }}>
+              {heading.title}
+            </Text>
+            {heading.context ? (
+              <Text numberOfLines={1} style={{ flexShrink: 1, color: c.muted, fontSize: 13, backgroundColor: c.badge, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: "hidden" }} testID="sheet-context">
+                {heading.context}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        <View style={heading ? { paddingHorizontal: 12 } : undefined}>
         <TextInput
           autoFocus
           placeholder={placeholder}
@@ -80,11 +101,40 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
           submitBehavior={paragraphs ? "newline" : "submit"}
           cursorColor={c.primary}
           selectionColor={`${c.primary}55`}
-          style={paragraphs ? { color: c.fg, fontSize: 17, lineHeight: 24, paddingHorizontal: 18, paddingVertical: 10, minHeight: 3 * 24 + 20, maxHeight: 8 * 24 + 20, textAlignVertical: "top" } : { color: c.fg, fontSize: 20, lineHeight: 26, paddingHorizontal: 18, paddingVertical: 10, maxHeight: 5 * 26 + 20, textAlignVertical: "top" }}
+          style={
+            heading
+              ? { color: c.fg, fontSize: 17, lineHeight: 24, paddingHorizontal: 14, paddingVertical: 12, minHeight: (panel ? 2 : 3) * 24 + 24, maxHeight: 8 * 24 + 24, textAlignVertical: "top", borderWidth: 1, borderColor: c.outline, borderRadius: 14, backgroundColor: c.field }
+              : paragraphs
+                ? { color: c.fg, fontSize: 17, lineHeight: 24, paddingHorizontal: 18, paddingVertical: 10, minHeight: 3 * 24 + 20, maxHeight: 8 * 24 + 20, textAlignVertical: "top" }
+                : { color: c.fg, fontSize: 20, lineHeight: 26, paddingHorizontal: 18, paddingVertical: 10, maxHeight: 5 * 26 + 20, textAlignVertical: "top" }
+          }
           testID={testID.input}
-          accessibilityLabel={accessibilityLabel}
+          accessibilityLabel={accessibilityLabel ?? (heading ? placeholder : undefined)}
         />
+        {heading?.hint && !panel ? <Text style={{ color: c.muted, fontSize: 13, marginTop: 8, marginHorizontal: 4 }}>{heading.hint}</Text> : null}
+        </View>
         {extra}
+        {heading && panel ? (
+          <View style={{ marginTop: 12, marginHorizontal: 12 }}>{panel}</View>
+        ) : heading ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12, paddingTop: 10, paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: c.outline }}>
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>{chips}</View>
+            <Pressable
+              onPress={onSubmit}
+              disabled={!ready}
+              testID={testID.submit}
+              accessibilityLabel={submitLabel}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !ready }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 8, height: 44, paddingLeft: 14, paddingRight: 18, borderRadius: 12, backgroundColor: ready ? c.primaryStrong : c.surfaceHigh }}
+            >
+              <Animated.View style={plusStyle}>
+                <PlusIcon color={ready ? c.onPrimary : c.muted} size={16} weight={2.4} />
+              </Animated.View>
+              <Text style={{ color: ready ? c.onPrimary : c.muted, fontSize: 15, fontWeight: "600" }}>{submitLabel}</Text>
+            </Pressable>
+          </View>
+        ) : (
         <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 12, paddingRight: 10, paddingTop: 6, gap: 8 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={{ gap: 8, paddingRight: 8 }} style={{ flex: 1 }}>
             {chips}
@@ -105,6 +155,7 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
             </Pressable>
           </Animated.View>
         </View>
+        )}
       </Animated.View>
     </KeyboardAvoidingView>
   );

@@ -435,6 +435,9 @@ export const T_DICTATION = {
   dictate: "Diktieren",
   record: "Notiz diktieren",
   recording: "Aufnahme",
+  recordingNow: "Aufnahme läuft",
+  /** Hinweis in der Aufnahmekarte des Eingabeblatts (4.10) */
+  filesOwnItem: "„Fertig“ legt einen eigenen Eintrag an.",
   starting: "Mikrofon startet …",
   stop: "Fertig",
   cancel: "Abbrechen",

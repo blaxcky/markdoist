@@ -60,7 +60,9 @@ function deleteFile(uri: string | null) {
  * vorher verging fast eine Sekunde, unter anderem weil die Berechtigungsabfrage jedes Mal eine
  * Systemseite öffnete).
  */
-export function useDictation(opts: { enabled: boolean; ctx: () => DictationContext; onResult: (r: DictationResult) => void; onError: (kind: DictationErrorKind, detail?: string) => void }) {
+export function useDictation(opts: { enabled: boolean; ctx: () => DictationContext; onResult: (r: DictationResult) => void; /** `canRetry`: Die Aufnahme liegt noch vor; die Leiste bzw. Karte zeigt den Fehler mit „Erneut versuchen“. */
+  onError: (kind: DictationErrorKind, detail?: string, canRetry?: boolean) => void;
+}) {
   const { enabled } = opts;
   const recorder = useAudioRecorder(OPTIONS);
   const [state, setState] = useState<DictationState>({ phase: "idle", ms: 0, canRetry: false });
@@ -163,8 +165,9 @@ export function useDictation(opts: { enabled: boolean; ctx: () => DictationConte
         pendingUri.current = null;
         deleteFile(uri);
       }
-      setState((s) => ({ phase: "error", ms: s.ms, error: kind, detail, canRetry: keep && kind !== "nokey" }));
-      cb.current.onError(kind, detail);
+      const canRetry = keep && kind !== "nokey";
+      setState((s) => ({ phase: "error", ms: s.ms, error: kind, detail, canRetry }));
+      cb.current.onError(kind, detail, canRetry);
     }
   }, []);
 

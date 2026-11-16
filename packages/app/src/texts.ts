@@ -51,6 +51,10 @@ export const T = {
     filters: { all: "Alle", bug: "Bugs", feature: "Features", idea: "Ideen" } satisfies Record<DevTypeFilter, string>,
     composePlaceholder: "Was ist dir aufgefallen? Titel und Art ergänzt Markdoist.",
     composeHint: "Strg+Enter legt ab",
+    // Eingabeblatt am Handy (4.10): Überschrift, kurzer Platzhalter, Hinweis unter dem Feld
+    composeTitle: "Neuer Eintrag",
+    composeShort: "Was ist dir aufgefallen?",
+    composeAuto: "Titel und Art ergänzt Markdoist.",
     file: "Ablegen",
     created: "Eintrag angelegt",
     allDone: (n: number) => `Alle erledigten (${n})`,

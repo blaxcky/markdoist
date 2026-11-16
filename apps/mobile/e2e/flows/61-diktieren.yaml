@@ -97,11 +97,23 @@ appId: de.markdoist.aufgaben
 - back
 - tapOn:
     id: fab-add-dev-item
+# Gegliedertes Blatt: Überschrift, Liste als Chip, Diktieren in der Aktionsleiste.
+- assertVisible: "Neuer Eintrag"
+- assertVisible:
+    id: sheet-context
+    text: "Diktat"
 - tapOn:
     id: dictate
+# Die Aufnahmekarte ersetzt die Aktionsleiste: Laufzeit steht für sich, „Ablegen“ ist ausgeblendet.
 - extendedWaitUntil:
-    visible: "Aufnahme 0:0[2-9]"
+    visible:
+      id: dictate-time
+      text: "0:0[2-9]"
     timeout: 8000
+- assertVisible:
+    id: dictate-recording
+- assertNotVisible:
+    id: add-item-send
 - tapOn:
     id: dictate-stop
 - extendedWaitUntil:
@@ -110,6 +122,10 @@ appId: de.markdoist.aufgaben
     timeout: 30000
 - tapOn:
     id: dictate-cancel
+- extendedWaitUntil:
+    visible:
+      id: add-item-send
+    timeout: 3000
 - tapOn:
     id: sheet-close
 # Board → Übersicht mit unterer Leiste
