@@ -150,6 +150,12 @@ appId: de.markdoist.aufgaben
     id: nav-menu
 - tapOn:
     id: nav-settings
+# Diktieren hat eine eigene Seite; die Übersicht zeigt eine Zeile mit Zustand.
+- assertVisible:
+    id: dictation-status-pill
+    text: "Bereit"
+- tapOn:
+    id: open-dictation
 - scrollUntilVisible:
     element:
       id: dictation-key-remove
@@ -236,9 +242,25 @@ appId: de.markdoist.aufgaben
       id: dictation-gemini-key-masked
       text: "AI…9012"
     timeout: 4000
-- assertVisible:
-    id: dictation-model-transcribe
-    text: "gemini-3.5-transcribe"
+# Modellnamen stehen unter „Erweitert“.
+- scrollUntilVisible:
+    element:
+      id: dictation-advanced
+    direction: DOWN
+    timeout: 8000
+- tapOn:
+    id: dictation-advanced
+- scrollUntilVisible:
+    element:
+      id: dictation-model-transcribe
+      text: "gemini-3.5-transcribe"
+    direction: DOWN
+    timeout: 8000
+- scrollUntilVisible:
+    element:
+      id: dictation-gemini-key-check
+    direction: UP
+    timeout: 8000
 - tapOn:
     id: dictation-gemini-key-check
 - scrollUntilVisible:
@@ -273,7 +295,9 @@ appId: de.markdoist.aufgaben
 - assertNotVisible:
     id: dictation-model-transcribe
 - scrollUntilVisible:
-    element: ".*Aufnahmen verlassen das Gerät nicht.*"
+    element:
+      id: dataflow-recordings
+      text: ".*Bleiben auf dem Gerät.*"
     direction: DOWN
     timeout: 8000
 - scrollUntilVisible:
@@ -285,4 +309,8 @@ appId: de.markdoist.aufgaben
     id: dictation-stt-openai
 - assertVisible:
     id: dictation-key
+- back
+- assertVisible:
+    id: dictation-status-pill
+    text: "Schlüssel fehlt"
 - back

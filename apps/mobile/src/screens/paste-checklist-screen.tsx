@@ -60,7 +60,7 @@ export function PasteChecklistScreen() {
       setError(checklistErrorText(e));
       if (e instanceof DictationError && e.kind === "nokey") {
         notify({ status: "error", message: checklistErrorText(e) });
-        nav.navigate("Settings");
+        nav.navigate("Dictation");
       }
     } finally {
       if (ctrl.current === mine) {

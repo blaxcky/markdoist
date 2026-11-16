@@ -1,7 +1,8 @@
-// Einstellungen „Diktieren“ (4.9, 4.10, 4.12): API-Schlüssel je Anbieter (nur maskiert sichtbar), Modelle,
-// Bereinigung und Titelvorschlag an/aus, Anbieter für Erkennung (OpenAI, Groq, Gemini) und Text (OpenAI oder Claude).
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, Switch, Text, TextInput, View } from "react-native";
+// Seite „Diktieren“ (4.9, 4.10, 4.12): Anbieter für Erkennung (auf dem Gerät, OpenAI, Groq, Gemini) und Text
+// (OpenAI oder Claude) als Auswahllisten, die nötigen API-Schlüssel (nur maskiert sichtbar) in einer Karte,
+// Bereinigung und Titelvorschlag an/aus, eine Übersicht, was das Gerät verlässt, und die Modellnamen unter „Erweitert“.
+import { useEffect, useState, type ReactNode } from "react";
+import { ActivityIndicator, Text, TextInput, View } from "react-native";
 import {
   checkApiKey,
   formatMB,
@@ -21,40 +22,40 @@ import {
 import { cancelDownload, downloadModel, localAvailable, removeModel, useLocalModel } from "../dictation/local";
 import { useTheme } from "../theme";
 import { clearApiKey, saveDictationSettings, setApiKey, useDictationConfig } from "../dictation/store";
+import { Card, CardFooter, Divider, IconTile, Pill, RadioRow, Row, Section, SmallButton, SwitchRow } from "./settings-ui";
+import { CheckIcon, ChevronIcon, LinesIcon, MicIcon } from "./icons";
 
 const D = T.dictation;
+const P = D.page;
 
 /** Testkennungen: OpenAI behält die bisherigen (`dictation-key…`), andere Anbieter `dictation-<anbieter>-key…`. */
 const tid = (p: ApiProvider, suffix: string) => (p === "openai" ? `dictation-key${suffix}` : `dictation-${p}-key${suffix}`);
 
-function KeyRow({ provider, value }: { provider: ApiProvider; value: string | null }) {
+function KeyRow({ provider, value, usage, first }: { provider: ApiProvider; value: string | null; usage: string; first: boolean }) {
   const c = useTheme();
   const [input, setInput] = useState("");
-  const [status, setStatus] = useState<{ text: string; error?: boolean } | null>(null);
+  const [status, setStatus] = useState<{ text: string; error?: boolean; ok?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
-  const field = { color: c.fg, fontSize: 15, borderWidth: 1, borderColor: c.outline, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: c.surface } as const;
-  const btn = (label: string, onPress: () => void, testID: string, disabled?: boolean) => (
-    <Pressable onPress={onPress} disabled={disabled} testID={testID} style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: c.outline, opacity: disabled ? 0.4 : 1 }}>
-      <Text style={{ color: c.fg }}>{label}</Text>
-    </Pressable>
-  );
   const check = async () => {
     if (!value) return;
     setBusy(true);
     const r = await checkApiKey(provider, { fetch: fetch as unknown as FetchLike, key: value });
     setBusy(false);
-    setStatus(r.ok ? { text: D.keyOk } : { text: D.errors[r.kind], error: true });
+    setStatus(r.ok ? { text: D.keyOk, ok: true } : { text: D.errors[r.kind], error: true });
   };
   return (
-    <>
-      <Text style={{ color: c.fg, fontSize: 15 }}>{D.keyLabelFor(PROVIDER_LABEL[provider])}</Text>
+    <View style={{ paddingVertical: 14, paddingHorizontal: 16, gap: 10, borderTopWidth: first ? 0 : 1, borderTopColor: c.divider }}>
+      <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+        <Text style={{ color: c.fg, fontSize: 16, flex: 1 }}>{D.providerNames[provider]}</Text>
+        <Text style={{ color: c.muted, fontSize: 12 }}>{usage}</Text>
+      </View>
       {value ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <Text style={{ color: c.fg, fontSize: 15, fontFamily: "monospace", flexGrow: 1 }} testID={tid(provider, "-masked")}>
+          <Text style={{ color: c.fg, fontSize: 14, fontFamily: "monospace", flexGrow: 1 }} testID={tid(provider, "-masked")}>
             {maskKey(value)}
           </Text>
-          {btn(D.keyCheck, () => void check(), tid(provider, "-check"), busy)}
-          {btn(D.keyRemove, () => void clearApiKey(provider).then(() => setStatus({ text: D.keyRemoved })), tid(provider, "-remove"))}
+          <SmallButton label={D.keyCheck} onPress={() => void check()} testID={tid(provider, "-check")} disabled={busy} />
+          <SmallButton label={D.keyRemove} onPress={() => void clearApiKey(provider).then(() => setStatus({ text: D.keyRemoved }))} testID={tid(provider, "-remove")} danger />
         </View>
       ) : (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -66,75 +67,103 @@ function KeyRow({ provider, value }: { provider: ApiProvider; value: string | nu
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
-            style={[field, { flex: 1 }]}
+            accessibilityLabel={D.keyLabelFor(PROVIDER_LABEL[provider])}
+            style={{ flex: 1, minHeight: 44, color: c.fg, fontSize: 15, fontFamily: "monospace", borderWidth: 1, borderColor: c.outline, borderRadius: 12, paddingHorizontal: 14, backgroundColor: c.field }}
             testID={tid(provider, "")}
           />
-          {btn(
-            D.keySave,
-            () =>
+          <SmallButton
+            label={D.keySave}
+            filled
+            onPress={() =>
               void setApiKey(input, provider).then(() => {
                 setInput("");
                 setStatus({ text: D.keySaved });
-              }),
-            tid(provider, "-save"),
-            !input.trim(),
-          )}
+              })
+            }
+            testID={tid(provider, "-save")}
+            disabled={!input.trim()}
+          />
         </View>
       )}
       {busy && <ActivityIndicator color={c.primary} size="small" style={{ alignSelf: "flex-start" }} />}
       {status && (
-        <Text style={{ color: status.error ? c.danger : c.muted, fontSize: 13 }} testID={provider === "openai" ? "dictation-status" : `dictation-${provider}-status`}>
+        <Text style={{ color: status.error ? c.danger : status.ok ? c.onDoneContainer : c.muted, fontSize: 13 }} testID={provider === "openai" ? "dictation-status" : `dictation-${provider}-status`}>
           {status.text}
         </Text>
       )}
-    </>
+    </View>
   );
 }
 
-/** Lokales Modell (4.12): herunterladen mit Fortschritt, abbrechen, löschen. */
-function LocalModelRow() {
+/** Lokales Modell (4.12): herunterladen mit Fortschritt, abbrechen, löschen. Steht unter „Auf dem Gerät“. */
+function LocalModelPanel() {
   const c = useTheme();
   const L = D.local;
   const m = useLocalModel();
   if (!m) return null;
-  const btn = (label: string, onPress: () => void, testID: string, primary?: boolean) => (
-    <Pressable
-      onPress={onPress}
-      testID={testID}
-      style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 8, borderWidth: 1, borderColor: primary ? c.primary : c.outline, backgroundColor: primary ? c.primary : "transparent", alignSelf: "flex-start" }}
-    >
-      <Text style={{ color: primary ? c.onPrimary : c.fg }}>{label}</Text>
-    </Pressable>
-  );
   const pct = m.state === "downloading" ? Math.floor((m.received / Math.max(1, m.total)) * 100) : 0;
   return (
-    <View style={{ gap: 8 }} testID="local-model">
+    <CardFooter inset={74} testID="local-model">
       {m.state === "ready" && (
         <>
-          <Text style={{ color: c.fg, fontSize: 15 }} testID="local-model-state">
-            {L.ready(LOCAL_MODEL_NAME)}
-          </Text>
-          {btn(L.remove, () => void removeModel(), "local-model-remove")}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: c.doneContainer, alignItems: "center", justifyContent: "center" }}>
+              <CheckIcon color={c.onDoneContainer} size={12} weight={2.4} />
+            </View>
+            <View style={{ flex: 1, gap: 1 }}>
+              <Text style={{ color: c.fg, fontSize: 15, fontWeight: "500" }} testID="local-model-state">
+                {P.localReady}
+              </Text>
+              <Text style={{ color: c.muted, fontSize: 13 }}>
+                {LOCAL_MODEL_NAME} · {formatMB(modelBytes())}
+              </Text>
+            </View>
+          </View>
+          <SmallButton label={L.remove} onPress={() => void removeModel()} testID="local-model-remove" />
         </>
       )}
       {m.state === "downloading" && (
         <>
-          <View style={{ height: 6, borderRadius: 3, backgroundColor: c.outline, overflow: "hidden" }} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: pct }}>
-            <View style={{ width: `${pct}%`, height: 6, backgroundColor: c.primary }} />
-          </View>
-          <Text style={{ color: c.fg, fontSize: 15 }} testID="local-model-state">
+          <Text style={{ color: c.fg, fontSize: 15, fontWeight: "500" }} testID="local-model-state">
             {L.downloading(pct)}
           </Text>
-          {btn(L.cancel, cancelDownload, "local-model-cancel")}
+          <View style={{ height: 6, borderRadius: 3, backgroundColor: c.outline, overflow: "hidden" }} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: pct }}>
+            <View style={{ width: `${pct}%`, height: 6, backgroundColor: c.primaryStrong }} />
+          </View>
+          <SmallButton label={L.cancel} onPress={cancelDownload} testID="local-model-cancel" />
         </>
       )}
-      {(m.state === "missing" || m.state === "error") && btn(L.download(formatMB(modelBytes())), () => void downloadModel(), "local-model-download", true)}
+      {(m.state === "missing" || m.state === "error") && (
+        <>
+          <Text style={{ color: c.fg, fontSize: 14, lineHeight: 20 }}>{P.localMissing}</Text>
+          <SmallButton label={L.download(formatMB(modelBytes()))} filled onPress={() => void downloadModel()} testID="local-model-download" />
+        </>
+      )}
       {m.state === "error" && (
         <Text style={{ color: c.danger, fontSize: 13 }} testID="local-model-error">
           {L.failed}: {m.message}
         </Text>
       )}
-      <Text style={{ color: c.muted, fontSize: 13 }}>{L.hint}</Text>
+      <Text style={{ color: c.muted, fontSize: 12, lineHeight: 17 }}>{P.localSource}</Text>
+    </CardFooter>
+  );
+}
+
+/** Zeile der Karte „Was das Gerät verlässt“ */
+function FlowRow({ icon, label, dest, sub, local, testID }: { icon: (color: string) => ReactNode; label: string; dest: string; sub: string; local?: boolean; testID?: string }) {
+  const c = useTheme();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 14, paddingVertical: 14, paddingHorizontal: 16 }}>
+      <IconTile size={40} bg={local ? c.doneContainer : c.badge} fg={local ? c.onDoneContainer : c.fg}>
+        {icon}
+      </IconTile>
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text style={{ color: c.muted, fontSize: 13 }}>{label}</Text>
+        <Text style={{ color: c.fg, fontSize: 16, fontWeight: "500" }} testID={testID}>
+          {dest}
+        </Text>
+        <Text style={{ color: c.muted, fontSize: 13, lineHeight: 18 }}>{sub}</Text>
+      </View>
     </View>
   );
 }
@@ -142,6 +171,7 @@ function LocalModelRow() {
 export function DictationSettings() {
   const c = useTheme();
   const { keys, settings, loaded } = useDictationConfig();
+  const [advanced, setAdvanced] = useState(false);
   const pick = () => ({
     transcribeModel: settings.transcribeModel,
     groqModel: settings.groqModel,
@@ -157,8 +187,8 @@ export function DictationSettings() {
     [settings.transcribeModel, settings.groqModel, settings.geminiModel, settings.cleanupModel, settings.titleModel, settings.claudeCleanupModel, settings.claudeTitleModel],
   );
 
-  const field = { color: c.fg, fontSize: 15, borderWidth: 1, borderColor: c.outline, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: c.surface } as const;
-  const saveModels = () => void saveDictationSettings({ ...settings, ...models });
+  const save = (patch: Partial<Settings>) => void saveDictationSettings({ ...settings, ...models, ...patch });
+  const saveModels = () => save({});
   const text = textModels(settings).provider;
   const claude = text === "anthropic";
   const cleanupField = claude ? "claudeCleanupModel" : "cleanupModel";
@@ -168,88 +198,150 @@ export function DictationSettings() {
   const picked = transcribeTarget(settings).provider;
   const stt: TranscribeProvider = picked === "local" && !canLocal ? "openai" : picked;
   const sttKey: ApiProvider | null = stt === "local" ? null : stt;
-  const sttField = stt === "groq" ? "groqModel" : stt === "gemini" ? "geminiModel" : "transcribeModel";
-  const heading = (label: string) => <Text style={{ color: c.fg, fontSize: 15, fontWeight: "600", marginTop: 12 }}>{label}</Text>;
-  /** Auswahl-Chip; `group` „text“ oder „stt“ ergibt die Testkennung `dictation-<group>-<anbieter>`. */
-  const chip = (group: "text" | "stt", p: ApiProvider | "local", on: boolean, patch: Partial<Settings>) => {
-    return (
-      <Pressable
-        key={p}
-        onPress={() => void saveDictationSettings({ ...settings, ...models, ...patch })}
-        testID={`dictation-${group}-${p}`}
-        accessibilityRole="radio"
-        accessibilityState={{ selected: on }}
-        style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderColor: on ? c.primary : c.outline, backgroundColor: on ? c.primary : "transparent" }}
-      >
-        <Text style={{ color: on ? c.onPrimary : c.fg }}>{D.providerNames[p]}</Text>
-      </Pressable>
-    );
-  };
+  const modelField = (p: Exclude<TranscribeProvider, "local">) => (p === "groq" ? "groqModel" : p === "gemini" ? "geminiModel" : "transcribeModel");
+  const field = { minHeight: 44, color: c.fg, fontSize: 14, fontFamily: "monospace", borderWidth: 1, borderColor: c.outline, borderRadius: 12, paddingHorizontal: 14, backgroundColor: c.field } as const;
+  const fieldLabel = { color: c.muted, fontSize: 13 } as const;
 
   if (!loaded) return null;
+  const keyRows: { p: ApiProvider; usage: string }[] = [];
+  if (sttKey) keyRows.push({ p: sttKey, usage: sttKey === text ? P.keyFor.both : P.keyFor.stt });
+  if (text !== sttKey) keyRows.push({ p: text, usage: P.keyFor.text });
+  const sttProviders = TRANSCRIBE_PROVIDERS.filter((p) => p !== "local" || canLocal);
+
   return (
-    <View style={{ gap: 8 }}>
-      <Text style={{ color: c.muted, fontSize: 13, marginTop: 16 }}>{D.section}</Text>
-      {heading(D.transcribeSection)}
-      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }} accessibilityRole="radiogroup" accessibilityLabel={D.transcribeSection}>
-        {TRANSCRIBE_PROVIDERS.filter((p) => p !== "local" || canLocal).map((p) => chip("stt", p, stt === p, { transcribeProvider: p }))}
-      </View>
-      {sttKey ? <KeyRow key={sttKey} provider={sttKey} value={keys[sttKey]} /> : <LocalModelRow />}
-      {sttKey && <Text style={{ color: c.fg, fontSize: 15, marginTop: 8 }}>{D.modelTranscribe}</Text>}
-      {sttKey && <TextInput
-        value={models[sttField]}
-        onChangeText={(v) => setModels((m) => ({ ...m, [sttField]: v }))}
-        onEndEditing={saveModels}
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={field}
-        testID="dictation-model-transcribe"
-      />}
+    <View style={{ gap: 22 }}>
+      <Section title={D.transcribeSection} hint={P.transcribeHint}>
+        <Card role="radiogroup" label={D.transcribeSection}>
+          {sttProviders.map((p, i) => (
+            <RadioRow
+              key={p}
+              first={i === 0}
+              title={D.providerNames[p]}
+              sub={p === "local" ? P.localSub : models[modelField(p)]}
+              mono={p !== "local"}
+              selected={stt === p}
+              onPress={() => save({ transcribeProvider: p })}
+              testID={`dictation-stt-${p}`}
+              tag={p === "local" ? <Pill label={P.tagOffline} tone="ok" /> : !keys[p] ? <Pill label={P.tagNoKey} /> : undefined}
+            />
+          ))}
+          {stt === "local" && <LocalModelPanel />}
+        </Card>
+      </Section>
 
-      {heading(D.textSection)}
-      <Text style={{ color: c.muted, fontSize: 13 }}>{D.textSectionHint}</Text>
-      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }} accessibilityRole="radiogroup" accessibilityLabel={D.textProvider}>
-        {chip("text", "openai", text === "openai", { textProvider: "openai" })}
-        {chip("text", "anthropic", text === "anthropic", { textProvider: "anthropic" })}
-      </View>
-      {text !== sttKey && <KeyRow key={text} provider={text} value={keys[text]} />}
+      <Section title={D.textSection} hint={D.textSectionHint}>
+        <Card role="radiogroup" label={D.textProvider}>
+          {(["openai", "anthropic"] as const).map((p, i) => {
+            const a = p === "anthropic" ? models.claudeCleanupModel : models.cleanupModel;
+            const b = p === "anthropic" ? models.claudeTitleModel : models.titleModel;
+            return (
+              <RadioRow
+                key={p}
+                first={i === 0}
+                title={D.providerNames[p]}
+                sub={a === b ? a : `${a} · ${b}`}
+                mono
+                selected={text === p}
+                onPress={() => save({ textProvider: p })}
+                testID={`dictation-text-${p}`}
+                tag={!keys[p] ? <Pill label={P.tagNoKey} /> : undefined}
+              />
+            );
+          })}
+        </Card>
+      </Section>
 
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: c.fg, fontSize: 15 }}>{D.cleanup}</Text>
-          <Text style={{ color: c.muted, fontSize: 13 }}>{D.cleanupHint}</Text>
-        </View>
-        <Switch value={settings.cleanup} onValueChange={(v) => void saveDictationSettings({ ...settings, ...models, cleanup: v })} trackColor={{ true: c.primary }} testID="dictation-cleanup" />
-      </View>
-      <Text style={{ color: c.fg, fontSize: 15 }}>{D.modelCleanup}</Text>
-      <TextInput
-        value={models[cleanupField]}
-        onChangeText={(v) => setModels((m) => ({ ...m, [cleanupField]: v }))}
-        onEndEditing={saveModels}
-        autoCapitalize="none"
-        autoCorrect={false}
-        editable={settings.cleanup}
-        style={[field, { opacity: settings.cleanup ? 1 : 0.5 }]}
-        testID="dictation-model-cleanup"
-      />
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: c.fg, fontSize: 15 }}>{D.autoTitle}</Text>
-          <Text style={{ color: c.muted, fontSize: 13 }}>{claude ? D.autoTitleHintFor(PROVIDER_LABEL.anthropic) : D.autoTitleHint}</Text>
-        </View>
-        <Switch value={settings.autoTitle} onValueChange={(v) => void saveDictationSettings({ ...settings, ...models, autoTitle: v })} trackColor={{ true: c.primary }} testID="dictation-auto-title" />
-      </View>
-      <Text style={{ color: c.fg, fontSize: 15 }}>{D.modelTitle}</Text>
-      <TextInput
-        value={models[titleField]}
-        onChangeText={(v) => setModels((m) => ({ ...m, [titleField]: v }))}
-        onEndEditing={saveModels}
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={field}
-        testID="dictation-model-title"
-      />
-      <Text style={{ color: c.muted, fontSize: 13, marginTop: 8 }}>{sttKey === null ? D.keyHintLocal(PROVIDER_LABEL[text]) : sttKey === "openai" && text === "openai" ? D.keyHint : D.keyHintFor(PROVIDER_LABEL[sttKey], PROVIDER_LABEL[text])}</Text>
+      <Section title={P.keys}>
+        <Card>
+          {keyRows.map(({ p, usage }, i) => (
+            <KeyRow key={p} provider={p} value={keys[p]} usage={usage} first={i === 0} />
+          ))}
+          <CardFooter>
+            <Text style={{ color: c.muted, fontSize: 13, lineHeight: 18 }}>{P.keysSafe}</Text>
+          </CardFooter>
+        </Card>
+      </Section>
+
+      <Section title={P.after}>
+        <Card>
+          <SwitchRow title={D.cleanup} hint={D.cleanupHint} value={settings.cleanup} onChange={(v) => save({ cleanup: v })} testID="dictation-cleanup" />
+          <Divider inset={16} />
+          <SwitchRow title={D.autoTitle} hint={P.autoTitleHint} value={settings.autoTitle} onChange={(v) => save({ autoTitle: v })} testID="dictation-auto-title" />
+        </Card>
+      </Section>
+
+      <Section title={P.dataFlow}>
+        <Card testID="dictation-dataflow">
+          <FlowRow
+            icon={(col) => <MicIcon color={col} size={18} />}
+            label={P.recordings}
+            dest={sttKey ? P.goesTo(D.providerNames[sttKey]) : P.stays}
+            sub={sttKey ? P.recordingsCloud : P.recordingsLocal}
+            local={!sttKey}
+            testID="dataflow-recordings"
+          />
+          <Divider inset={70} />
+          <FlowRow icon={(col) => <LinesIcon color={col} size={16} />} label={P.texts} dest={P.goesTo(D.providerNames[text])} sub={P.textsSent(settings.cleanup)} testID="dataflow-texts" />
+        </Card>
+      </Section>
+
+      <Section title={P.advanced}>
+        <Card>
+          <Row
+            title={P.models}
+            sub={P.modelsHint}
+            onPress={() => setAdvanced((v) => !v)}
+            testID="dictation-advanced"
+            trailing={<ChevronIcon color={c.muted} size={16} dir={advanced ? "down" : "right"} />}
+          />
+          {advanced && (
+            <View style={{ borderTopWidth: 1, borderTopColor: c.divider, padding: 16, gap: 14 }}>
+              {sttKey && (
+                <View style={{ gap: 6 }}>
+                  <Text style={fieldLabel}>{P.modelFor(P.modelTranscribe, PROVIDER_LABEL[sttKey])}</Text>
+                  <TextInput
+                    value={models[modelField(sttKey)]}
+                    onChangeText={(v) => setModels((m) => ({ ...m, [modelField(sttKey)]: v }))}
+                    onEndEditing={saveModels}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    accessibilityLabel={D.modelTranscribe}
+                    style={field}
+                    testID="dictation-model-transcribe"
+                  />
+                </View>
+              )}
+              <View style={{ gap: 6, opacity: settings.cleanup ? 1 : 0.5 }}>
+                <Text style={fieldLabel}>{P.modelFor(P.modelCleanup, PROVIDER_LABEL[text])}</Text>
+                <TextInput
+                  value={models[cleanupField]}
+                  onChangeText={(v) => setModels((m) => ({ ...m, [cleanupField]: v }))}
+                  onEndEditing={saveModels}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={settings.cleanup}
+                  accessibilityLabel={D.modelCleanup}
+                  style={field}
+                  testID="dictation-model-cleanup"
+                />
+              </View>
+              <View style={{ gap: 6 }}>
+                <Text style={fieldLabel}>{P.modelFor(P.modelTitle, PROVIDER_LABEL[text])}</Text>
+                <TextInput
+                  value={models[titleField]}
+                  onChangeText={(v) => setModels((m) => ({ ...m, [titleField]: v }))}
+                  onEndEditing={saveModels}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  accessibilityLabel={D.modelTitle}
+                  style={field}
+                  testID="dictation-model-title"
+                />
+              </View>
+            </View>
+          )}
+        </Card>
+      </Section>
     </View>
   );
 }

@@ -50,7 +50,7 @@ export function AddItemScreen() {
     onError: (kind, detail, canRetry) => {
       // Wiederholbare Fehler zeigt die Aufnahmekarte selbst; ein Toast läge unten über ihren Knöpfen.
       if (!canRetry) notify({ status: "error", message: dictationErrorText(kind, detail) });
-      if (kind === "nokey" || kind === "nomodel") nav.navigate("Settings");
+      if (kind === "nokey" || kind === "nomodel") nav.navigate("Dictation");
     },
   });
 

@@ -227,7 +227,7 @@ export function DetailScreen() {
     onResult: (r) => onDictated.current(r),
     onError: (kind, detail) => {
       notify({ status: "error", message: dictationErrorText(kind, detail) });
-      if (kind === "nokey" || kind === "nomodel") nav.navigate("Settings");
+      if (kind === "nokey" || kind === "nomodel") nav.navigate("Dictation");
     },
   });
 
@@ -518,7 +518,7 @@ export function DetailScreen() {
                       .then(() => suggestDevTitle(repo, ref, suggestTitleForced, true))
                       .then((o) => {
                         notify(o, T.dev.suggestTitle);
-                        if (o.status === "blocked" && o.message === T.dictation.titleNoKey) nav.navigate("Settings");
+                        if (o.status === "blocked" && o.message === T.dictation.titleNoKey) nav.navigate("Dictation");
                       })
                       .finally(() => setSuggesting(false));
                   }}

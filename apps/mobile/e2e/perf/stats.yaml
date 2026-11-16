@@ -9,7 +9,15 @@ appId: de.markdoist.aufgaben
     id: nav-menu
 - tapOn:
     id: nav-settings
+# Die Messwerte stehen eingeklappt unter „Über“.
+- scrollUntilVisible:
+    element:
+      id: scan-stats
+    direction: DOWN
+    timeout: 180000
+- tapOn:
+    id: scan-stats
 - extendedWaitUntil:
     visible:
       id: last-scan
-    timeout: 180000
+    timeout: 10000

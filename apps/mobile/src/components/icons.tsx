@@ -142,6 +142,17 @@ export function BinIcon({ color, size = 18 }: P) {
   );
 }
 
+/** Ordner: Reiter oben links, darunter der Körper. */
+export function FolderIcon({ color, size = 18 }: P) {
+  const b = stroke(size);
+  return (
+    <View style={{ width: size, height: size, justifyContent: "center" }}>
+      <View style={{ width: size * 0.4, height: size * 0.16, marginLeft: size * 0.06, borderWidth: b, borderBottomWidth: 0, borderColor: color, borderTopLeftRadius: size * 0.08, borderTopRightRadius: size * 0.08 }} />
+      <View style={{ width: size * 0.9, height: size * 0.6, marginLeft: size * 0.05, borderWidth: b, borderColor: color, borderRadius: size * 0.1, borderTopLeftRadius: 0 }} />
+    </View>
+  );
+}
+
 /** Papierkorb: Eimer mit Deckel und zwei Rillen, anders als die Mülltonne der Müllabfuhr. */
 export function TrashIcon({ color, size = 18 }: P) {
   const b = stroke(size);

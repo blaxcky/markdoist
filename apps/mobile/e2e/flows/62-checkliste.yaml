@@ -70,6 +70,8 @@ appId: de.markdoist.aufgaben
     id: nav-menu
 - tapOn:
     id: nav-settings
+- tapOn:
+    id: open-dictation
 - scrollUntilVisible:
     element:
       id: dictation-key-remove
@@ -81,4 +83,5 @@ appId: de.markdoist.aufgaben
     visible:
       id: dictation-key
     timeout: 4000
+- back
 - back
