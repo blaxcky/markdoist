@@ -3,6 +3,8 @@ name: Release
 on:
   push:
     branches: [main]
+  # Nur zum Messen der Bauzeit auf Nebenzweigen; ein Release entsteht dabei nicht (siehe Job release).
+  workflow_dispatch:
 
 # Eine repositoryweite Gruppe; kein Abbruch, alle wartenden Läufe bleiben in der Warteschlange.
 concurrency:
@@ -53,12 +55,20 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test:tz
 
+  # Android und RPM warten nicht auf die Tests; der Job release braucht alle drei.
   android:
-    needs: [meta, test]
+    needs: [meta]
     runs-on: ubuntu-latest
     env:
       MARKDOIST_VERSION: ${{ needs.meta.outputs.version }}
       MARKDOIST_VERSION_CODE: ${{ needs.meta.outputs.version_code }}
+      # C++-Teile (reanimated, worklets, screens, …) über ccache; CMake liest die Launcher aus der Umgebung.
+      CCACHE_DIR: /home/runner/.ccache
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      # Gradle installiert das NDK in jedem Lauf neu; mit dem Standard (Änderungsdatum des Compilers) gäbe es
+      # nie einen Treffer. Die Versionsausgabe des Compilers bleibt gleich.
+      CCACHE_COMPILERCHECK: "%compiler% -v"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -73,6 +83,19 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          # Auch Testläufe auf Nebenzweigen (workflow_dispatch) füllen den Cache ihres Zweigs.
+          cache-read-only: false
+      - uses: actions/cache@v6
+        with:
+          path: /home/runner/.ccache
+          key: ccache-android-${{ github.sha }}-${{ github.run_attempt }}
+          restore-keys: ccache-android-
+      - name: ccache
+        run: |
+          sudo apt-get update && sudo apt-get install -y ccache
+          ccache --max-size=500M
+          ccache --zero-stats
       - run: pnpm install --frozen-lockfile
       - name: Prebuild
         run: pnpm --filter mobile exec expo prebuild --platform android --clean --no-install
@@ -90,7 +113,11 @@ jobs:
           MARKDOIST_KEY_ALIAS: ${{ secrets.MARKDOIST_KEY_ALIAS }}
           MARKDOIST_KEY_PASSWORD: ${{ secrets.MARKDOIST_KEY_PASSWORD }}
         # Nur arm64-v8a: deckt aktuelle Handys ab und spart drei der vier nativen Builds.
-        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+        # --build-cache: unveränderte Module (Kotlin, Java, Ressourcen) kommen aus dem Gradle-Cache.
+        run: ./gradlew assembleRelease --no-daemon --build-cache -PreactNativeArchitectures=arm64-v8a
+      - name: ccache-Statistik
+        if: always()
+        run: ccache --show-stats
       - name: APK prüfen und benennen
         env:
           CERT: ${{ vars.MARKDOIST_CERT_SHA256 }}
@@ -115,7 +142,7 @@ jobs:
           if-no-files-found: error
 
   rpm:
-    needs: [meta, test]
+    needs: [meta]
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.meta.outputs.version }}
@@ -146,7 +173,9 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [meta, android, rpm]
+    needs: [meta, test, android, rpm]
+    # Manuelle Testläufe bauen nur, ohne Release.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write

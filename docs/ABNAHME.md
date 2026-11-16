@@ -407,3 +407,18 @@ Wunsch vom 15.11.2026: Parakeet wurde bisher erst nach „Fertig“ geladen, das
 - **Echte Messung in Electron** (Parakeet, deutsche Test-WAV als Mikrofon, 4,5 s Aufnahme, erstes Diktat nach dem Start): Der Eintrag erschien in zwei Läufen 2,2 s nach „Fertig“, vorher 5,8 s. Der Text war unverändert richtig.
 - **Android auf Genymotion** (Release-Build x86_64, 7,2 s Aufnahme): Das Log zeigt „Modell geladen in 5026 ms“ während der Aufnahme und danach nur „Erkannt in 3253 ms“, ohne erneutes Laden. Echte Sprache wurde auch hier nicht geprüft, siehe Schritt 4.
 - **Prüfstand:** `pnpm lint`, `pnpm typecheck` und `pnpm test` grün.
+
+## CI: Android schneller bauen (16.11.2026)
+
+Wunsch vom 15.11.2026: Der Android-Job brauchte 9½ bis 11½ Minuten, Gradle davon 8½ bis 10½ („962 actionable tasks: 962 executed“, nichts aus einem Cache). Änderungen in `.github/workflows/release.yml`:
+
+- Android und RPM warten nicht mehr auf den Test-Job; `release` braucht weiterhin `test`, `android` und `rpm`.
+- Gradle mit `--build-cache`; `setup-gradle` speichert den Cache (`cache-read-only: false`, damit auch Messläufe auf Nebenzweigen ihn füllen).
+- ccache für den C++-Teil (reanimated, worklets, screens, gesture-handler, expo-modules-core, App) über `CMAKE_C/CXX_COMPILER_LAUNCHER`, eigener Cache mit 500 MB. Gradle installiert das NDK in jedem Lauf neu. Mit dem Standard von ccache (Änderungsdatum des Compilers) gab es deshalb 0 Treffer, jetzt prüft ccache den Compiler über `%compiler% -v`.
+- `workflow_dispatch` für Messläufe; ohne Push entsteht kein Release.
+
+Messung auf `ci-check`:
+
+- Lokal vorab: zwei Neubauten des C++-Teils, beim zweiten 154 von 154 ccache-Treffern, 4:36 statt 1:42 min.
+- Zweiter Lauf mit warmem Cache: 356 von 962 Tasks aus dem Gradle-Cache, 154 von 154 ccache-Treffern, Gradle 5:28 min, Android-Job 6:32 min. Bis zum Release sind es damit etwa 7 statt 13 bis 14 Minuten.
+- Der erste Lauf auf `main` ist noch einmal langsamer, weil die Caches je Zweig gelten. Nach 7 Tagen ohne Lauf löscht GitHub einen Cache.
