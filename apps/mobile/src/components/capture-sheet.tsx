@@ -50,6 +50,11 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
     nav.goBack();
   };
   useEffect(() => {
+    // Erscheint die Tastatur nicht (Hardware-Tastatur, Feld ohne Fokus), braucht das Blatt den Abstand zur Leiste,
+    // sonst liegt der Senden-Knopf unter der Navigationsleiste.
+    const fallback = setTimeout(() => {
+      if (!Keyboard.isVisible()) setKeyboard(false);
+    }, 700);
     const show = Keyboard.addListener("keyboardDidShow", () => setKeyboard(true));
     const hide = Keyboard.addListener("keyboardDidHide", () => {
       setKeyboard(false);
@@ -58,6 +63,7 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
       if (Platform.OS === "android" && AppState.currentState === "active" && TextInput.State.currentlyFocusedInput()) close();
     });
     return () => {
+      clearTimeout(fallback);
       show.remove();
       hide.remove();
     };
