@@ -1,6 +1,6 @@
 // Lokale Erkennung am Handy (4.12): Modell laden, Stand für die Einstellungen, Erkennung einer Aufnahme.
 import { useEffect, useState } from "react";
-import { DictationError, LOCAL_MODEL, modelBytes, type LocalModelState } from "@markdoist/app";
+import { DictationError, LEGACY_MODEL_IDS, LOCAL_MODEL, modelBytes, type LocalModelState } from "@markdoist/app";
 import LocalStt from "../../modules/local-stt/src/LocalSttModule";
 
 /** Gibt es auf diesem Gerät eine lokale Erkennung (natives Modul und Bibliothek für die Architektur)? */
@@ -19,8 +19,22 @@ const set = (s: LocalModelState) => {
   listeners.forEach((l) => l(s));
 };
 
+// Ordner früherer Modelle einmal je Start löschen (sonst blieben z. B. 640 MB von v3 liegen). Läuft vor jedem anderen
+// Zugriff, weil `remove` im nativen Modul auch einen Download abbricht und das geladene Modell freigibt.
+let legacyRemoved: Promise<void> | null = null;
+function removeLegacy(): Promise<void> {
+  legacyRemoved ??= (async () => {
+    for (const id of LEGACY_MODEL_IDS) {
+      if (id === LOCAL_MODEL.id) continue;
+      await LocalStt?.remove(id).catch(() => undefined);
+    }
+  })();
+  return legacyRemoved;
+}
+
 export async function modelReady(): Promise<boolean> {
   if (!LocalStt) return false;
+  await removeLegacy();
   try {
     return await LocalStt.isComplete(LOCAL_MODEL.id, LOCAL_MODEL.files);
   } catch {
@@ -39,6 +53,7 @@ export async function downloadModel(): Promise<LocalModelState> {
   if (!LocalStt || current?.state === "downloading") return modelState();
   const total = modelBytes();
   set({ state: "downloading", received: 0, total });
+  await removeLegacy();
   const sub = LocalStt.addListener("onProgress", (p) => set({ state: "downloading", received: p.received, total: p.total }));
   try {
     await LocalStt.download(LOCAL_MODEL.id, LOCAL_MODEL.baseUrl, LOCAL_MODEL.files);

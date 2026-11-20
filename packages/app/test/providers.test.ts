@@ -117,6 +117,6 @@ describe("Erkennung bei Groq und Gemini (4.12)", () => {
     await expect(runDictation({ fetch, key: "", settings: local, ctx })).rejects.toMatchObject({ kind: "nomodel" });
     await expect(runDictation({ fetch, key: "", settings: local, ctx, localTranscribe: async () => "  " })).rejects.toMatchObject({ kind: "empty" });
     await expect(runDictation({ fetch, key: "", settings: local, ctx, localTranscribe: async () => Promise.reject(new Error("onnx kaputt")) })).rejects.toMatchObject({ kind: "server", message: "onnx kaputt" });
-    expect(transcribeTarget(parseDictationSettings({ transcribeProvider: "local" }))).toEqual({ provider: "local", model: "parakeet-tdt-0.6b-v3-int8" });
+    expect(transcribeTarget(parseDictationSettings({ transcribeProvider: "local" }))).toEqual({ provider: "local", model: "parakeet-ultra-int8" });
   });
 });

@@ -33,7 +33,7 @@ class ModelFile : Record {
 }
 
 /**
- * Lokale Erkennung (Plan 4.12): Parakeet TDT 0.6B v3 über sherpa-onnx. Lädt das Modell ins App-Verzeichnis
+ * Lokale Erkennung (Plan 4.12): Parakeet Ultra (nachtrainiertes Parakeet TDT 0.6B v3) über sherpa-onnx. Lädt das Modell ins App-Verzeichnis
  * (nie in den Aufgabenordner), dekodiert die m4a-Aufnahme zu 16 kHz mono und erkennt sie. Ablauflogik und
  * Texte liegen in TypeScript.
  */

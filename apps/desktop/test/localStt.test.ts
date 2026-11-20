@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -64,6 +64,18 @@ describe("Lokales Modell am Desktop (4.12)", () => {
     seen.length = 0;
     await store.download();
     expect(seen).toEqual([]);
+  });
+
+  it("löscht beim ersten Blick den Ordner eines früheren Modells, das aktuelle bleibt", async () => {
+    const root = await tmp();
+    await mkdir(join(root, "parakeet-tdt-0.6b-v3-int8"), { recursive: true });
+    await writeFile(join(root, "parakeet-tdt-0.6b-v3-int8", "encoder.int8.onnx"), "alt");
+    await mkdir(join(root, "fremd"), { recursive: true });
+    const store = new LocalModelStore(root, serve(), model, ["parakeet-tdt-0.6b-v3-int8", "test-model", "../fremd"]);
+    expect(await store.download()).toEqual({ state: "ready" });
+    // Eine Kennung mit Pfadteilen und das aktuelle Modell werden nie gelöscht.
+    expect((await readdir(root)).sort()).toEqual(["fremd", "test-model"]);
+    expect(await store.state()).toEqual({ state: "ready" });
   });
 
   it("falsche Prüfsumme: Fehler, keine Datei bleibt liegen", async () => {

@@ -463,7 +463,7 @@ export const T_DICTATION = {
     ready: (name: string) => `${name} ist bereit`,
     remove: "Modell löschen",
     failed: "Download fehlgeschlagen",
-    hint: "Die Erkennung läuft ohne Netz auf diesem Gerät. Das Modell (NVIDIA Parakeet TDT 0.6B v3, CC BY 4.0) wird einmalig von Hugging Face geladen.",
+    hint: "Die Erkennung läuft ohne Netz auf diesem Gerät. Das Modell (Parakeet Ultra von Moondream, auf Basis von NVIDIA Parakeet TDT 0.6B v3, CC BY 4.0) wird einmalig von Hugging Face geladen.",
   },
   /** Hinweis bei lokaler Erkennung (4.12) */
   keyHintLocal: (text: string) =>

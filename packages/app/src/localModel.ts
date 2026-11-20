@@ -1,6 +1,6 @@
-// Lokale Erkennung (4.12): NVIDIA Parakeet TDT 0.6B v3 (int8) für sherpa-onnx. Das Modell steckt nicht in der
-// App; „Modell herunterladen“ lädt die vier Dateien einzeln und prüft sie über SHA-256. Feste Revision, damit
-// sich die Dateien unter der Adresse nie ändern.
+// Lokale Erkennung (4.12): Parakeet Ultra (Moondream, nachtrainiertes NVIDIA Parakeet TDT 0.6B v3) als int8 für
+// sherpa-onnx. Das Modell steckt nicht in der App; „Modell herunterladen“ lädt die vier Dateien einzeln und prüft sie
+// über SHA-256. Feste Revision, damit sich die Dateien unter der Adresse nie ändern.
 
 export interface ModelFile {
   name: string;
@@ -16,17 +16,20 @@ export interface LocalModelInfo {
 }
 
 export const LOCAL_MODEL: LocalModelInfo = {
-  id: "parakeet-tdt-0.6b-v3-int8",
-  baseUrl: "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/ed5d745623472f97cfc2e6c2916ee248798fc5a8",
+  id: "parakeet-ultra-int8",
+  baseUrl: "https://huggingface.co/leogaudin/sherpa-onnx-nemo-parakeet-ultra-int8/resolve/f7bc472677ff70be95cdb0ef9df509fee6f5ec0b",
   files: [
-    { name: "encoder.int8.onnx", size: 652_282_294, sha256: "1afbe69c1ffdabee94755f42e4daf1d93549131a3da11356bda84fcef0f2c479" },
-    { name: "decoder.int8.onnx", size: 11_845_274, sha256: "0222a86147299d4dee90edf95b6d13827edb42ad8b7c9cf0b2582f030937c0b5" },
-    { name: "joiner.int8.onnx", size: 6_355_277, sha256: "cbd02f3696e9944970111fb439d9c3fd365a80374565f13f2b9c7007d253fc98" },
+    { name: "encoder.int8.onnx", size: 652_282_340, sha256: "8bd3b8dc07056def6dfd19910e9f90c9e1a4e7e20901f58bdfe2a570a8081a2a" },
+    { name: "decoder.int8.onnx", size: 11_845_275, sha256: "94373c6405c8149d1c9d1e9862514e0e3e88dab1c7de18fac9d5df9c6ba5efdd" },
+    { name: "joiner.int8.onnx", size: 6_355_277, sha256: "8a71aaccfdba3d451775507a889afd2257d2e754463fd81095a8c8f290f924c2" },
     { name: "tokens.txt", size: 93_939, sha256: "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d" },
   ],
 };
 
-export const LOCAL_MODEL_NAME = "NVIDIA Parakeet TDT 0.6B v3";
+export const LOCAL_MODEL_NAME = "Parakeet Ultra";
+
+/** Ordner früherer Modelle, die die App beim ersten Blick auf das Modell löscht (bis 20.11.2026: Parakeet TDT 0.6B v3). */
+export const LEGACY_MODEL_IDS: readonly string[] = ["parakeet-tdt-0.6b-v3-int8"];
 
 /** Gesamtgröße in Bytes */
 export function modelBytes(m: LocalModelInfo = LOCAL_MODEL): number {

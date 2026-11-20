@@ -5,7 +5,7 @@ import { createWriteStream } from "node:fs";
 import { mkdir, rename, rm, stat } from "node:fs/promises";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
-import { LOCAL_MODEL, LOCAL_SAMPLE_RATE, modelBytes, sherpaConfig, type LocalModelInfo, type LocalModelState } from "@markdoist/app";
+import { LEGACY_MODEL_IDS, LOCAL_MODEL, LOCAL_SAMPLE_RATE, modelBytes, sherpaConfig, type LocalModelInfo, type LocalModelState } from "@markdoist/app";
 
 /** Teil der Erkennung, den der Dienst braucht (für Tests ersetzbar). */
 export interface SttEngine {
@@ -20,12 +20,25 @@ export class LocalModelStore {
   private ctrl: AbortController | null = null;
   private progress: { received: number; total: number } | null = null;
   private lastError: string | null = null;
+  private legacyRemoved: Promise<void> | null = null;
 
   constructor(
     private readonly root: string,
     private readonly fetchFn: typeof globalThis.fetch = globalThis.fetch,
     readonly model: LocalModelInfo = LOCAL_MODEL,
+    private readonly legacyIds: readonly string[] = LEGACY_MODEL_IDS,
   ) {}
+
+  /** Löscht einmal je Start die Ordner früherer Modelle (sonst blieben z. B. 640 MB von v3 liegen). */
+  private removeLegacy(): Promise<void> {
+    this.legacyRemoved ??= (async () => {
+      for (const id of this.legacyIds) {
+        if (id === this.model.id || !/^[A-Za-z0-9._-]+$/.test(id)) continue;
+        await rm(join(this.root, id), { recursive: true, force: true }).catch(() => undefined);
+      }
+    })();
+    return this.legacyRemoved;
+  }
 
   dir(): string {
     return join(this.root, this.model.id);
@@ -43,6 +56,7 @@ export class LocalModelStore {
   }
 
   async state(): Promise<LocalModelState> {
+    await this.removeLegacy();
     if (this.progress) return { state: "downloading", ...this.progress };
     if (await this.complete()) return { state: "ready" };
     if (this.lastError) return { state: "error", message: this.lastError };

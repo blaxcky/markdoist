@@ -422,3 +422,24 @@ Messung auf `ci-check`:
 - Lokal vorab: zwei Neubauten des C++-Teils, beim zweiten 154 von 154 ccache-Treffern, 1:42 statt 4:36 min.
 - Zweiter Lauf mit warmem Cache: 356 von 962 Tasks aus dem Gradle-Cache, 154 von 154 ccache-Treffern, Gradle 5:28 min, Android-Job 6:32 min. Bis zum Release sind es damit etwa 7 statt 13 bis 14 Minuten.
 - Der erste Lauf auf `main` ist noch einmal langsamer, weil die Caches je Zweig gelten. Nach 7 Tagen ohne Lauf löscht GitHub einen Cache.
+
+## Lokale Erkennung: Parakeet Ultra statt v3 (20.11.2026)
+
+PLAN1 4.12, Abschnitt „Modell“. Parakeet Ultra (Moondream, nachtrainiertes Parakeet TDT 0.6B v3) ersetzt v3, im sherpa-onnx-Export `leogaudin/sherpa-onnx-nemo-parakeet-ultra-int8` mit der festen Revision `f7bc472`.
+
+- **Download geprüft:** Die vier Dateien (652 + 12 + 6 MB, dazu `tokens.txt`) von der festen Revision geladen. Die selbst berechneten SHA-256 stimmen mit `SHA256SUMS` des Repos und mit den LFS-Angaben von Hugging Face überein. Decoder und Joiner sind byte-gleich mit zwei anderen Exporten (chrmongeau, tpmaerk), `tokens.txt` ist byte-gleich mit dem von v3.
+- **Vergleich mit v3:** `sherpa-onnx-node` 2.0.1 mit der Konfiguration aus `sherpaConfig` (80 Merkmale, Greedy, 4 Threads), auf diesem Laptop:
+  - 30 deutsche Hörbuch-Sätze aus MLS (Testteil, 10 Sprecher): **10,3 % statt 14,4 % Wortfehler** (101 statt 141 von 981 Wörtern). Am deutlichsten bei undeutlichen Sprechern; bei einem Satz brach v3 in Fantasiewörter aus, Ultra erkannte ihn fehlerfrei.
+  - Test-WAV des Modell-Repos („Alles hat ein Ende, nur die Wurst hat zwei.“): beide fehlerfrei.
+  - Fünf Programmier-Sätze aus espeak-ng (Roboterstimme, daher hohe Fehlerraten): 22 % statt 29 %. Einmal hörte Ultra früher auf („… als macht von.“ statt „… als Markdown-Datei einbauen.“), v3 lieferte dort Unsinn.
+  - Geschwindigkeit gleich: v3 23,6-fach, Ultra 23,8-fach Echtzeit. Laden 1,9 s bzw. 1,5 s.
+- **Aufräumen:** `apps/desktop/test/localStt.test.ts` prüft, dass der Ordner `parakeet-tdt-0.6b-v3-int8` verschwindet, das aktuelle Modell bleibt und eine Kennung mit Pfadteilen nichts löscht.
+- **Prüfstand:** `pnpm typecheck`, ESLint der geänderten Dateien und `pnpm test` (5670 Tests) grün.
+- **Desktop-E2E:** „Programmieren: Diktieren …“ grün.
+- **Echter Lauf in Electron** (einmaliges Playwright-Skript, eigener Datenordner, nicht eingecheckt):
+  - Ein vorab angelegter Ordner `models/parakeet-tdt-0.6b-v3-int8` war nach dem Öffnen der Diktier-Einstellungen weg.
+  - „Modell herunterladen“ lud Ultra mit den Werten aus `LOCAL_MODEL` in 110 s von Hugging Face, bis „Parakeet Ultra ist bereit“. Im Modellordner lagen danach genau die vier Dateien.
+  - Die Test-WAV des Repos als Mikrofon (`--use-file-for-fake-audio-capture`), 4,5 s Aufnahme, Bereinigung und Titel aus, im Board „Markdoist“: Der Eintrag „Alles hat ein Ende, nur die Wurst hat zwei, alles hat ein Ende, …“ entstand 0,3 s nach „Fertig“. Die Wiederholung kommt daher, dass Chromium die 2,8 s lange WAV in Schleife abspielt. Das Modell war schon während der Aufnahme vorgeladen.
+- **Nicht geprüft:**
+  - Android nicht im Emulator gestartet. Das AAR hat dieselbe sherpa-Version 2.0.1, die Ultra am Desktop geladen hat. Das native Modul ist unverändert.
+  - Keine eigenen Diktate mit echter Stimme. Die Fachbegriff-Sätze kamen nur aus espeak-ng.
