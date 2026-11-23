@@ -221,9 +221,13 @@ export function DetailScreen() {
   bodyNow.current = body;
   const dictCtx = useRef<DictationContext>({});
   const onDictated = useRef<(r: DictationResult) => void>(() => {});
+  // Ziel des laufenden Diktats (4.13): beim Start festgelegt, gilt auch für „Erneut versuchen“.
+  const [dictTarget, setDictTarget] = useState<"title" | "note">("note");
+  const dictTargetNow = useRef<"title" | "note">("note");
   const dictation = useDictation({
-    enabled: !!view && view.task.fields.isDevItem && !view.readOnly,
-    ctx: () => dictCtx.current,
+    // Programmier-Einträge und normale Aufgaben (4.13), keine Listen
+    enabled: !!view && !view.readOnly && !view.task.fields.isList && !view.task.fields.isDevList,
+    ctx: () => ({ ...dictCtx.current, target: dictTargetNow.current }),
     onResult: (r) => onDictated.current(r),
     onError: (kind, detail) => {
       notify({ status: "error", message: dictationErrorText(kind, detail) });
@@ -304,21 +308,36 @@ export function DetailScreen() {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void flush(), 1500);
   };
-  dictCtx.current = { list: devListTitle, title: f.title };
+  // Normale Aufgabe: Titel und Beschreibung lassen sich diktieren (4.13).
+  const normalTask = !plain;
+  const canDictate = !ro && (f.isDevItem || normalTask);
+  dictCtx.current = { list: devListTitle, title: f.title, kind: f.isDevItem ? "dev" : "task" };
   onDictated.current = (r) => {
+    // Diktierter Titel: ersetzt den bisherigen, so wie erkannt; Rückgängig wie jede Titeländerung.
+    if (dictTargetNow.current === "title") {
+      setTitle(r.text);
+      act({ type: "setTitle", title: r.text }, T.dictation.titleDictated);
+      return;
+    }
     onBody(appendDictation(bodyNow.current, r.text));
     setShowNote(true);
     setTab("edit");
     if (!r.cleaned && r.cleanupError) notify({ status: "ok", message: T.dictation.notCleaned });
   };
-  const startDictation = () => {
-    setShowNote(true);
-    setTab("edit");
+  const startDictation = (target: "title" | "note" = "note") => {
+    dictTargetNow.current = target;
+    setDictTarget(target);
+    if (target === "note") {
+      setShowNote(true);
+      setTab("edit");
+    }
     void dictation.start();
   };
-  // Aufnahme, Fortschritt oder wiederholbarer Fehler belegen die ganze Zeile.
-  const dictBusy = f.isDevItem && dictation.state.phase !== "idle" && !(dictation.state.phase === "error" && !dictation.state.canRetry);
-  const dictateBar = <DictateBar state={dictation.state} onStart={startDictation} onStop={() => void dictation.stop()} onCancel={() => void dictation.cancel()} onRetry={() => void dictation.retry()} />;
+  // Aufnahme, Fortschritt oder wiederholbarer Fehler belegen die ganze Zeile: beim Titel unter der Titelzeile, sonst in der Beschreibungskarte.
+  const dictActive = canDictate && dictation.state.phase !== "idle" && !(dictation.state.phase === "error" && !dictation.state.canRetry);
+  const dictBusy = dictActive && dictTarget === "note";
+  const titleDictBusy = dictActive && dictTarget === "title";
+  const dictateBar = <DictateBar state={dictation.state} onStart={() => startDictation("note")} onStop={() => void dictation.stop()} onCancel={() => void dictation.cancel()} onRetry={() => void dictation.retry()} />;
 
   const tz = systemClock().timeZone;
   const dateParts = (field: "due" | "scheduled") => {
@@ -485,7 +504,20 @@ export function DetailScreen() {
               testID="field-title"
               accessibilityLabel={T.fields.title}
             />
+            {normalTask && !ro && !dictActive && (
+              <Pressable
+                onPress={() => startDictation("title")}
+                testID="dictate-title"
+                accessibilityRole="button"
+                accessibilityLabel={T.dictation.recordTitle}
+                hitSlop={6}
+                style={{ width: 40, height: 44, marginRight: -8, alignItems: "center", justifyContent: "center" }}
+              >
+                <MicIcon color={c.muted} size={18} />
+              </Pressable>
+            )}
           </View>
+          {titleDictBusy && dictateBar}
           {view.diagnostics.map((d, i) => (
             <Text key={i} selectable style={{ color: d.severity === "error" ? c.danger : d.severity === "info" ? c.muted : c.warn, fontSize: 13, paddingLeft: 64, paddingRight: 16, paddingBottom: 10 }}>
               {d.message}
@@ -576,7 +608,7 @@ export function DetailScreen() {
               !list && !s && <AddChip key="rec" c={c} disabled={ro} icon={<RepeatIcon color={c.muted} size={14} />} label="Wiederholen" onPress={() => nav.navigate("Recurrence", { ref })} testID="edit-recurrence" />,
               !noteVisible && <AddChip key="note" c={c} icon={<LinesIcon color={c.muted} size={13} />} label="Beschreibung" onPress={() => { setShowNote(true); setTimeout(() => editor.current?.focus(), 50); }} testID="show-note" />,
               !noteVisible && !ro && <AddChip key="check" c={c} icon={<PlusIcon color={c.muted} size={11} />} label="Checkliste" onPress={addChecklistItem} testID="add-checklist" />,
-              !noteVisible && !ro && f.isDevItem && <AddChip key="dictate" c={c} icon={<MicIcon color={c.muted} size={13} />} label={T.dictation.dictate} onPress={startDictation} testID="dictate-chip" />,
+              !noteVisible && canDictate && !dictActive && <AddChip key="dictate" c={c} icon={<MicIcon color={c.muted} size={13} />} label={T.dictation.dictate} onPress={() => startDictation("note")} testID="dictate-chip" />,
             ].filter(Boolean);
             return chips.length ? (
               <>
@@ -736,7 +768,7 @@ export function DetailScreen() {
                   <PlusIcon color={c.primary} size={12} />
                   <Text style={{ color: c.primary, fontSize: 14, fontWeight: "500" }}>Checklistenpunkt</Text>
                 </Pressable>
-                {f.isDevItem && dictateBar}
+                {canDictate && !titleDictBusy && dictateBar}
               </View>
             ))}
           </View>

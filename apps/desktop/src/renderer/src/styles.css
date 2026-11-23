@@ -1259,6 +1259,20 @@ kbd {
 .quick-add .qa-desc {
   font-size: 13px;
 }
+/* Feld mit Mikrofon (4.13); ein laufendes Diktat steht in eigener Zeile darunter */
+.quick-add .qa-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+.quick-add .qa-row > textarea {
+  flex: 1;
+  min-width: 0;
+}
+.quick-add .qa-row > .dictate-bar {
+  flex-basis: 100%;
+}
 .quick-add .qa-title::placeholder,
 .quick-add .qa-desc::placeholder {
   color: var(--fg-faint);
@@ -1351,8 +1365,17 @@ kbd {
 }
 .detail-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 8px;
+}
+.detail-title > .icon-btn.small {
+  margin-top: 4px;
+}
+/* Laufendes Titeldiktat (4.13): eigene Zeile unter dem Titel statt neben ihm */
+.detail-title > .dictate-bar {
+  flex-basis: 100%;
+  padding-left: 28px;
 }
 .check.big {
   width: 20px;

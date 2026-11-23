@@ -207,6 +207,14 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
   const tabNow = useRef(tab);
   tabNow.current = tab;
   const [dictAppend, setDictAppend] = useState<{ seq: number; text: string } | null>(null);
+  // Titel und Beschreibung haben je ein Mikrofon (4.13); solange eines läuft, ist das andere ausgeblendet.
+  const [dictBusy, setDictBusy] = useState<"title" | "note" | null>(null);
+  const busyFor = (target: "title" | "note") => (busy: boolean) => setDictBusy((x) => (busy ? target : x === target ? null : x));
+  // Diktierter Titel (4.13): ersetzt den bisherigen, wie er erkannt wurde; Rückgängig wie bei jeder Titeländerung.
+  const onTitleDictated = (r: DictationResult) => {
+    setTitle(r.text);
+    void act({ type: "setTitle", title: r.text }, T.dictation.titleDictated);
+  };
   const onDictated = (r: DictationResult) => {
     // Im Editor anhängen, damit auch ein fokussierter Editor den Text übernimmt; in der Vorschau direkt speichern.
     if (tabNow.current === "edit" && !ro) setDictAppend((a) => ({ seq: (a?.seq ?? 0) + 1, text: r.text }));
@@ -343,6 +351,8 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
   const checkLabel = s ? `Vorkommen ${occ} erledigen` : f.status === "done" ? T.actions.reopen : startDevWorkAction(view) ? T.dev.startWork : T.actions.complete;
   const folderName = repo.folder.split("/").filter(Boolean).pop() ?? repo.folder;
   // Programmieren (4.8): Liste des Eintrags in der Kopfzeile
+  // Normale Aufgabe: weder Liste noch Programmier-Liste oder -Eintrag (4.13)
+  const normalTask = !f.isList && !f.isDevList && !f.isDevItem;
   const devListTitle = f.isDevItem ? devIndex(repo.getState().index).lists.find((l) => l.task.fields.id === f.devList)?.task.fields.title : undefined;
   const devCrumb = f.isDevItem ? `${T.views.dev} · ${devListTitle ?? T.dev.orphans}` : T.views.dev;
   // Ganzen Eintrag für die KI kopieren, mit ungespeichertem Titel und Notiz-Entwurf.
@@ -444,6 +454,17 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
                 aria-label={T.fields.title}
                 data-testid="field-title"
               />
+              {normalTask && !ro && dictBusy !== "note" && (
+                <DictateButton
+                  key={ref}
+                  testId="dictate-title"
+                  label={T.dictation.recordTitle}
+                  ctx={() => ({ kind: "task", target: "title" })}
+                  onResult={onTitleDictated}
+                  onBusy={busyFor("title")}
+                  onError={(kind) => onOutcome({ status: "error", message: T.dictation.errors[kind] })}
+                />
+              )}
             </div>
             {f.isDevItem && (
               <div className="dev-meta" data-testid="dev-meta">
@@ -737,11 +758,12 @@ export function Detail({ repo, view, today, draftText, draftConflict, focusField
             <div className="desc-head">
               <IconDescription size={16} />
               <span className="desc-label">Beschreibung</span>
-              {f.isDevItem && !ro && (
+              {(f.isDevItem || normalTask) && !ro && dictBusy !== "title" && (
                 <DictateButton
                   key={ref}
-                  ctx={() => ({ list: devListTitle, title })}
+                  ctx={() => ({ list: devListTitle, title, kind: f.isDevItem ? "dev" : "task" })}
                   onResult={onDictated}
+                  onBusy={busyFor("note")}
                   onError={(kind) => onOutcome({ status: "error", message: T.dictation.errors[kind] })}
                 />
               )}

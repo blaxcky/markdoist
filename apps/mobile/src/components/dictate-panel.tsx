@@ -46,7 +46,8 @@ function RecDot() {
   );
 }
 
-export function DictatePanel({ state, onStop, onCancel, onRetry }: { state: DictationState; onStop(): void; onCancel(): void; onRetry(): void }) {
+/** `hint`: Hinweis während der Aufnahme; Standard ist der des Boards (eigener Eintrag), `null` lässt ihn weg. */
+export function DictatePanel({ state, onStop, onCancel, onRetry, hint: recHint = T.dictation.filesOwnItem }: { state: DictationState; onStop(): void; onCancel(): void; onRetry(): void; hint?: string | null }) {
   const c = useTheme();
   const D = T.dictation;
   const recording = state.phase === "recording";
@@ -90,7 +91,7 @@ export function DictatePanel({ state, onStop, onCancel, onRetry }: { state: Dict
         </Text>
       </>
     );
-    hint = D.filesOwnItem;
+    hint = recHint;
     actions = (
       <>
         {button(D.cancel, onCancel, "dictate-cancel")}

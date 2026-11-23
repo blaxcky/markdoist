@@ -8,6 +8,8 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 28.10.2026 (M9):** Müllabfuhr mit ICS-Import (4.7), Serien mit fester Terminliste (5.7) und die kompaktere untere Leiste am Handy (4.5). Abnahmenotiz in `docs/ABNAHME.md`.
 
+**Umgesetzt am 23.11.2026:** Diktieren bei normalen Aufgaben, in der Erfassung und im Detail: Titel genau wie erkannt, Beschreibung bereinigt (4.13).
+
 **Umgesetzt am 13.11.2026:** „Checkliste einfügen“: unformatierten Text per KI als Einträge an eine Liste anhängen (4.11).
 
 **Umgesetzt am 15.11.2026:** Claude als Text-Anbieter für Bereinigung, Titelvorschlag und „Checkliste einfügen“ (4.12, Schritt 1), Erkennung über Groq und Gemini (Schritt 2), lokale Erkennung am Desktop (Schritt 3) und auf Android (Schritt 4).
@@ -672,8 +674,8 @@ Wunsch vom 07.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben [F];
   - **Diktat als Daten [V, 23.11.2026]:** Das Diktat geht in `<diktat>…</diktat>` markiert an das Textmodell. Die Anweisungen sagen ausdrücklich, dass es sich nie an das Modell richtet und nicht ausgeführt, beantwortet oder ergänzt wird, mit einem Beispiel. Claude antwortet nach dem Schema `{ bereinigter_text }`. Anlass: Haiku hatte eine diktierte Feature-Notiz wie eine Anfrage beantwortet („Das ist gut machbar. Ich würde …“).
   - **Prüfung der Bereinigung [V, 23.11.2026]:** Höchstens 1,5-fache Länge plus 100 Zeichen und kein neuer Codeblock; ab 8 Wörtern müssen außerdem mindestens 30 % der Wörter schon im Diktat stehen (der Fehlfall lag bei 23 %, eine richtige Bereinigung bei 93 %; kurze, umgangssprachliche Diktate werden so nicht fälschlich abgelehnt). Sonst gilt die Bereinigung als gescheitert und der Rohtext wird eingefügt (siehe Fehler). Gilt für OpenAI und Claude.
   - Beide Modellnamen stehen in den Einstellungen und sind änderbar.
-- **Netz [F]:** Das ist die einzige Netzfunktion der App (seit 10.11.2026 zusammen mit dem Titelvorschlag aus 4.10, seit 13.11.2026 mit „Checkliste einfügen“ aus 4.11). Sie läuft nur mit hinterlegtem Schlüssel und nur auf Knopfdruck. An OpenAI gehen die Aufnahme sowie Listen- und Eintragstitel; der Einstellungstext sagt das.
-- **Ort [F]:** nur im Detail von Programmier-Einträgen, nicht schreibgeschützt.
+- **Netz [F]:** Das ist die einzige Netzfunktion der App (seit 10.11.2026 zusammen mit dem Titelvorschlag aus 4.10, seit 13.11.2026 mit „Checkliste einfügen“ aus 4.11). Sie läuft nur mit hinterlegtem Schlüssel und nur auf Knopfdruck. An OpenAI gehen die Aufnahme sowie Listen- und Eintragstitel; der Einstellungstext sagt das. Seit 4.13 gilt das auch für die Titel normaler Aufgaben.
+- **Ort [F]:** im Detail von Programmier-Einträgen, nicht schreibgeschützt. Seit 23.11.2026 auch bei normalen Aufgaben und in ihrer Erfassung (4.13).
   - Android: Chip „Diktieren“ neben „Beschreibung“ und „Checkliste“, in der offenen Beschreibungskarte der Knopf „Diktieren“ neben „Checklistenpunkt“.
   - Desktop: Mikrofon-Knopf im Kopf der Beschreibung.
 - **Einfügen [F]:** Der Text wird am Ende der Notiz angehängt, mit einer Leerzeile Abstand, wenn schon Text da ist. Er läuft über den normalen Entwurfs- und Speicherpfad (7.6); Konfliktschutz und Rückgängig gelten wie beim Tippen. Am Desktop hängt der Editor den Text auch dann an, wenn er gerade den Fokus hat.
@@ -699,7 +701,7 @@ Wunsch vom 07.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben [F];
 - **Upload am Handy [V, 08.11.2026]:** Die Aufnahme geht nativ über `File.upload` von `expo-file-system` (multipart) hinaus, nicht über React Natives `fetch` mit `FormData`: Dieser Weg scheiterte am Gerät reproduzierbar mit „Network request failed“. Die Bereinigung bleibt bei `fetch` (nur JSON). Netz-, Zeit- und Serverfehler zeigen die technische Ursache in Klammern.
 - **Aufnahmeformat [V]:** Android m4a/AAC mono mit 64 kbit/s (10 min ≈ 5 MB). Desktop WebM/Opus mit 48 kbit/s. Grenze der API: 25 MB. Die Android-Aufnahme liegt im Cache und wird nach Erfolg oder Abbruch gelöscht.
 - **Mikrofon am Desktop [V]:** Electron erlaubt `media` nur für das eigene Fenster und nur Audio; andere Berechtigungsanfragen werden abgelehnt.
-- **Nicht vorgesehen:** Diktieren bei normalen Aufgaben, in Listen oder bei der Erfassung normaler Aufgaben, Einfügen an der Cursorposition, Live-Mitschrift während des Sprechens. (Diktieren beim Anlegen eines Programmier-Eintrags kommt mit 4.10, andere Anbieter und lokale Erkennung mit 4.12.)
+- **Nicht vorgesehen:** Diktieren in Listen, Einfügen an der Cursorposition, Live-Mitschrift während des Sprechens. (Diktieren beim Anlegen eines Programmier-Eintrags kommt mit 4.10, andere Anbieter und lokale Erkennung mit 4.12, Diktieren bei normalen Aufgaben und ihrer Erfassung mit 4.13.)
 
 ### 4.10 Programmieren als Board [F]/[V]
 
@@ -787,6 +789,32 @@ Wunsch vom 15.11.2026: Der OpenAI-Zugang fällt vielleicht weg. Entscheidungen m
 - **Einstellungen [V, Schritt 2]:** Im Abschnitt „Spracherkennung“ die Wahl OpenAI, Groq oder „Gemini (Google)“ (Desktop Auswahlliste, Android Chips), darunter Schlüssel und Modell des gewählten Anbieters. Liegen Erkennung und Text beim selben Anbieter, erscheint dessen Schlüssel nur einmal. Der Diktierknopf prüft den Schlüssel des Erkennungs-Anbieters; der Hinweis ohne Schlüssel lautet jetzt „Für das Diktieren einen API-Schlüssel in den Einstellungen hinterlegen“.
 - **Reihenfolge der Umsetzung [F]:** erst Claude, dann Groq und Gemini, dann die lokale Erkennung am Desktop, zuletzt auf Android. Jeder Schritt wird einzeln ausgeliefert.
 - **Nicht vorgesehen [F]:** Mistral, ElevenLabs, eigener Server, ein zweites lokales Modell (Whisper), Live-Mitschrift.
+
+### 4.13 Diktieren bei normalen Aufgaben [F]/[V]
+
+Wunsch vom 23.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben [F]; Umsetzung [V].
+
+- **Zweck [F]:** Auch normale Aufgaben lassen sich diktieren, Titel und Beschreibung.
+  - **Titel:** genau so, wie die Erkennung ihn liefert, ohne Bereinigung durch das Textmodell. Das gilt auch, wenn „Text bereinigen“ eingeschaltet ist. Geändert wird nur der Leerraum: Zeilenumbrüche und mehrfache Leerzeichen werden ein Leerzeichen, wie beim Tippen ins Titelfeld. Satzzeichen der Erkennung bleiben stehen, auch ein Schlusspunkt.
+  - **Beschreibung:** bereinigt wie in 4.9 (Diktat als Daten, Prüfung der Bereinigung, Rohtext mit „Nicht bereinigt eingefügt“, wenn sie scheitert).
+- **Orte [F]:**
+  - Erfassung (4.1): Android Chip mit Mikrofon („Titel diktieren“, aus Platzgründen nur als Symbol [V]) neben „Beschreibung“ und „Bearbeiten“, dazu ein Mikrofon rechts im aufgeklappten Beschreibungsfeld. Desktop je ein Mikrofon rechts neben Titel und Beschreibung.
+  - Detail einer normalen Aufgabe, nicht schreibgeschützt: Mikrofon rechts in der Titelzeile; für die Beschreibung der Chip bzw. Knopf „Diktieren“ wie bei Programmier-Einträgen (4.9).
+  - Nicht bei Listen (4.6) und Programmier-Listen. Programmier-Einträge behalten das Diktat der Notiz, aber kein Titelmikrofon; ihren Titel schlägt die KI vor (4.10).
+- **Einfügen [F]:**
+  - Titel in der Erfassung: Ist das Feld leer, steht der Text allein darin, sonst wird er mit einem Leerzeichen angehängt. Die Aufgabe wird nicht automatisch angelegt; erfasst wird wie immer auf Knopfdruck.
+  - Titel im Detail: Der diktierte Titel ersetzt den bisherigen (`setTitle`, nur das Feld, keine Umbenennung der Datei). Rückgängig geht wie bei jeder Titeländerung [V: ohne eigenen Hinweis, wie „Titel geändert“].
+  - Beschreibung: angehängt mit Leerzeile (4.9). In der Erfassung klappt das Beschreibungsfeld dabei auf.
+- **Bedienung [V]:**
+  - Ablauf, Fehler, „Erneut versuchen“ und Abbruch wie 4.9. Das Ziel (Titel oder Beschreibung) wird beim Start festgelegt und gilt auch für „Erneut versuchen“.
+  - Je Ansicht läuft höchstens ein Diktat; solange eines läuft, ist das andere Mikrofon ausgeblendet.
+  - Android Erfassung: Während Aufnahme und Erkennung ersetzt die Aufnahmekarte aus 4.10 die Chipzeile; beim Titel mit dem Hinweis „Der Titel kommt genau so, wie er erkannt wird.“
+  - Android Detail: Ein Titeldiktat zeigt seine Leiste direkt unter der Titelzeile, ein Diktat der Beschreibung wie bisher in der Beschreibungskarte. Desktop: Die Leiste steht in eigener Zeile unter dem jeweiligen Feld.
+- **Erkennung und Bereinigung [V]:**
+  - Hilfe für die Erkennung: „Diktierte Notiz zu einer Aufgabe.“ mit dem Aufgabentitel bzw. „Diktierter Titel einer Aufgabe.“ ohne den alten Titel. Bei Gemini entsprechend als Vokabular.
+  - Die Anweisungen der Bereinigung sprechen bei normalen Aufgaben nicht von Softwareentwicklung; Schutzregeln, Beispiel und Prüfung bleiben gleich. Als Kontext steht „Aufgabe: <Titel>“.
+  - Der Kontext (`kind: task`, `target: title | note`) reist am Desktop im bestehenden IPC-Aufruf mit; der Main-Prozess übernimmt nur bekannte Werte.
+- **Netz [F]:** wie 4.9 und 4.12. Für einen Titel geht nichts an das Textmodell.
 
 ## 5. Wiederholungen
 
@@ -1159,7 +1187,7 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | AK-46 | ICS-Import (4.7) mit einer anonymisierten Nachbildung der Vorlage (CRLF, `SUMMARY;LANGUAGE=de`, doppelte Leerzeichen, 10 Termine in 4 Arten): legt 4 Dateien mit zusammen 10 Terminen an, `inbox: false`, Abstand −7, Namen aus der Vorschau. Derselbe Import erneut: 0 Schreibvorgänge. Eine Folgedatei mit neuen UIDs, zusätzlichen Terminen und einem verlegten Termin ergänzt, entfernt nur den verlegten, ungelösten Zukunftstermin und setzt eine ausgeschöpfte wie eine von Hand beendete Serie in derselben Revision fort; vergangene, erledigte und übersprungene Daten bleiben. Die Adresse aus `LOCATION` steht in keiner Datei. Eine seit der Vorschau geänderte Datei wird nicht überschrieben. |
 | AK-47 | Android-Leiste (4.5): genau fünf Reiter (Eingang, Heute, Geplant, Alle, ⋯ Mehr; bis 09.11.2026 vier ohne Geplant). Mehr öffnet das Blatt mit Erledigt, Listen und, nur wenn eine Müllabfuhr-Serie existiert, Müllabfuhr; jeder Eintrag öffnet seine Übersicht, die Pille liegt dann auf „Mehr“, Zurück führt zur letzten Hauptansicht. Alle bisherigen Maestro-Flows laufen über den neuen Weg grün. |
 | AK-48 | Programmieren (4.8): Eine neue Programmier-Liste hat `kind: dev-list`, `inbox: false` und keine Termine. Ein Eintrag hat `kind: dev-item` und `dev_list` mit der ID der Liste. Beide erscheinen in keiner Aufgaben- oder Listenansicht, aber in der Suche. Notiz, Erledigen und Undo funktionieren wie bei Aufgaben; der Kreis setzt einen offenen Eintrag erst auf `status: in-progress` (halb gefüllt), erst der zweite Klick erledigt ihn. „Erledigte entfernen“ und „Liste löschen“ legen genau die betroffenen Dateien in den Papierkorb. Einträge ohne vorhandene Liste stehen unter „Ohne Liste“. Übersicht und Einträge lassen sich sortieren, die Übersicht wie Listen filtern. Am Desktop legt das Kopier-Symbol im Detail eines Eintrags „Titel, Leerzeile, Notiz“ in die Zwischenablage; normale Aufgaben haben es nicht. |
-| AK-49 | Diktieren (4.9): Nur Programmier-Einträge haben den Diktierknopf. Ohne Schlüssel erscheint der Hinweis und die Einstellungen öffnen sich. Der Schlüssel ist nach dem Speichern nur maskiert sichtbar und steht weder im Aufgabenordner noch im Klartext in den Desktop-Einstellungen. Aufnahme → „Fertig“ schickt das Audio mit dem eingestellten Erkennungsmodell und Deutsch an `/audio/transcriptions` und den Rohtext an `/responses`; der bereinigte Text wird mit Leerzeile an die Notiz angehängt und gespeichert. Scheitert die Bereinigung, kommt der Rohtext; scheitert die Erkennung, bietet „Erneut versuchen“ dieselbe Aufnahme noch einmal an. |
+| AK-49 | Diktieren (4.9): Programmier-Einträge und seit 4.13 normale Aufgaben haben den Diktierknopf, Listen nicht. Ohne Schlüssel erscheint der Hinweis und die Einstellungen öffnen sich. Der Schlüssel ist nach dem Speichern nur maskiert sichtbar und steht weder im Aufgabenordner noch im Klartext in den Desktop-Einstellungen. Aufnahme → „Fertig“ schickt das Audio mit dem eingestellten Erkennungsmodell und Deutsch an `/audio/transcriptions` und den Rohtext an `/responses`; der bereinigte Text wird mit Leerzeile an die Notiz angehängt und gespeichert. Scheitert die Bereinigung, kommt der Rohtext; scheitert die Erkennung, bietet „Erneut versuchen“ dieselbe Aufnahme noch einmal an. |
 | AK-50 | Android: Zurück bei offener Tastatur schließt das Eingabeblatt (Erfassung, Listeneintrag, Neue Liste) in einem Schritt, ohne zu erfassen und ohne die Ansicht darunter zu verlassen. Blendet man die Beschreibung wieder aus, bleibt das Blatt offen. |
 | AK-51 | Geplant (4.2a): Offene Aufgaben mit Termin stehen gruppiert nach dem früheren Datum, verstrichene unter „Früher“, dann „Heute“, „Morgen“ und je Tag „Do 15.10.“; Aufgaben ohne Termin, Erledigte, Listen und Programmier-Einträge fehlen. Desktop: Seitenleiste und Ctrl+3; Android: Reiter „Geplant“. |
 | AK-52 | Heute (4.2), Uhr 12.10.: A `scheduled` 01.10. ohne `due`, B `scheduled` 05.10. mit `due` 20.10., C `scheduled` 08.10. mit `due` 15.10. stehen unter „Früher eingeplant“ in der Reihenfolge C, B, A. D `scheduled` heute ohne `due` und E `scheduled` heute mit `due` 14.10. stehen unter „Heute eingeplant“ als E, D. |
@@ -1167,6 +1195,7 @@ Jeder Meilenstein endet mit grünen automatisierten Tests und einer kurzen Abnah
 | AK-54 | Anlegen (4.10): Ein Text ohne Titel ergibt sofort eine Datei mit `kind: dev-item`, vorläufigem Titel aus den ersten Wörtern und `title_pending: true`. Mit gestellter KI-Antwort ersetzt der Titel den vorläufigen, `dev_type` ist gesetzt und `title_pending` fehlt. Ohne Schlüssel oder Netz bleibt der vorläufige Titel ohne Fehlermeldung und wird beim nächsten Öffnen der Liste mit Schlüssel nachgeholt. Ein von Hand geänderter Titel wird nie von der KI überschrieben. Diktieren im Eingabeblatt legt nach „Fertig“ den Eintrag ohne weiteren Tipp an. |
 | AK-55 | Checkliste einfügen (4.11): In einer Liste mit „- [ ] Zahnbürste“ ergibt der Text „Hi, kannst du noch 2 Milch, Brot (Vollkorn) und Eier mitbringen? Ach ja und Spüli“ bei gestellter KI-Antwort genau die Zeilen „- [ ] 2 Milch“, „- [ ] Brot (Vollkorn)“, „- [ ] Eier“, „- [ ] Spüli“ hinter dem letzten Eintrag, in einem Schreibvorgang; ein Rückgängig stellt die Datei byte-genau wieder her. Ohne Schlüssel öffnen sich die Einstellungen, bei 401 erscheint „Checkliste nicht eingefügt: API-Schlüssel ungültig“; in beiden Fällen bleibt der Text im Feld und die Datei unverändert. |
 | AK-56 | Anbieter (4.12): Mit Claude als Text-Anbieter geht der Rohtext an `/v1/messages` mit `claude-haiku-5-5`; der bereinigte Text wird angehängt, der Titelvorschlag setzt Titel und Art, „Checkliste einfügen“ fügt die Einträge ein. Eine Ablehnung ergibt den Rohtext. Mit Groq bzw. Gemini geht die Aufnahme an den jeweiligen Endpunkt. Mit „Auf dem Gerät“ und heruntergeladenem Modell erkennt die App einen deutschen Satz ohne Netz; ohne Modell erscheint der Hinweis und die Einstellungen öffnen sich. Alte Einstellungen ergeben OpenAI für beides. Jeder Schlüssel ist nur maskiert sichtbar. |
+| AK-57 | Diktieren bei normalen Aufgaben (4.13): Mit gestellter Erkennung „äh also der Knopf soll äh rot sein“ ergibt „Titel diktieren“ in der Erfassung genau diesen Text im Titelfeld, ohne Anfrage an das Textmodell, auch bei eingeschalteter Bereinigung; die Beschreibung wird zu „Der Knopf soll rot sein.“. Angelegt wird erst auf Knopfdruck. Im Detail ersetzt das Titelmikrofon den Titel in der Datei, ein Rückgängig stellt die Datei byte-genau wieder her; das Beschreibungsmikrofon hängt den bereinigten Text mit Leerzeile an. Listen haben kein Mikrofon. |
 
 ## 10. Build-Plan
 

@@ -28,7 +28,25 @@ async function toPcm(blob: Blob): Promise<ArrayBuffer> {
   return out.buffer;
 }
 
-export function DictateButton({ ctx, onResult, onError, testId = "dictate", label }: { ctx: () => DictationContext; onResult(r: DictationResult): void; onError(kind: DictationErrorKind): void; testId?: string; label?: string }) {
+/**
+ * `onBusy`: meldet, ob Aufnahme, Übertragung oder ein wiederholbarer Fehler läuft. `dictation:phase` geht an
+ * alle Knöpfe; eine Ansicht mit mehreren Knöpfen (Titel und Beschreibung, 4.13) blendet die anderen solange aus.
+ */
+export function DictateButton({
+  ctx,
+  onResult,
+  onError,
+  onBusy,
+  testId = "dictate",
+  label,
+}: {
+  ctx: () => DictationContext;
+  onResult(r: DictationResult): void;
+  onError(kind: DictationErrorKind): void;
+  onBusy?(busy: boolean): void;
+  testId?: string;
+  label?: string;
+}) {
   const D = T.dictation;
   const [phase, setPhase] = useState<Phase>("idle");
   const [ms, setMs] = useState(0);
@@ -40,8 +58,11 @@ export function DictateButton({ ctx, onResult, onError, testId = "dictate", labe
   const gen = useRef(0);
   const cancelled = useRef(false);
   const localStt = useRef(false);
-  const cb = useRef({ ctx, onResult, onError });
-  cb.current = { ctx, onResult, onError };
+  const cb = useRef({ ctx, onResult, onError, onBusy });
+  cb.current = { ctx, onResult, onError, onBusy };
+  const busy = phase !== "idle";
+  useEffect(() => cb.current.onBusy?.(busy), [busy]);
+  useEffect(() => () => cb.current.onBusy?.(false), []);
 
   const stopTick = () => {
     if (tick.current) clearInterval(tick.current);

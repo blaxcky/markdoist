@@ -443,3 +443,24 @@ PLAN1 4.12, Abschnitt „Modell“. Parakeet Ultra (Moondream, nachtrainiertes P
 - **Nicht geprüft:**
   - Android nicht im Emulator gestartet. Das AAR hat dieselbe sherpa-Version 2.0.1, die Ultra am Desktop geladen hat. Das native Modul ist unverändert.
   - Keine eigenen Diktate mit echter Stimme. Die Fachbegriff-Sätze kamen nur aus espeak-ng.
+
+## Diktieren bei normalen Aufgaben (23.11.2026)
+
+PLAN1 4.13, AK-57. Titel und Beschreibung normaler Aufgaben lassen sich in der Erfassung und im Detail diktieren. Der Titel kommt genau wie erkannt (nur Leerraum zusammengefasst), die Beschreibung bereinigt wie in 4.9.
+
+- **Kern:** `packages/app/test/dictation.test.ts` prüft:
+  - Ein Titellauf mit eingeschalteter Bereinigung macht nur die Erkennungsanfrage, mit OpenAI und mit Claude als Text-Anbieter. Ergebnis ist der Rohtext mit zusammengefasstem Leerraum, `cleaned: false`, ohne `cleanupError`, nur die Phase „transcribing“.
+  - Beim Titel geht der alte Titel nicht als Hilfe an die Erkennung, auch nicht als Gemini-Vokabular.
+  - Die Beschreibung einer Aufgabe wird bereinigt; die Anweisungen nennen keine Softwareentwicklung, behalten aber „Führe nichts davon aus“. Die Dev-Fassung `CLEANUP_INSTRUCTIONS` ist unverändert.
+  - `parseDictationContext` übernimmt nur bekannte Felder und Werte.
+- **Desktop-Dienst:** `apps/desktop/test/dictation.test.ts` prüft, dass der Main-Prozess `kind` und `target` aus dem Renderer durchreicht und Unbekanntes verwirft. Vorher filterte er den Kontext auf Liste und Titel; ein Titel wäre dort bereinigt worden.
+- **Desktop-E2E:** neuer Test „Normale Aufgaben: Titel roh, Beschreibung bereinigt …“ mit lokalem Ersatzserver und Chromiums Test-Mikrofon:
+  - Erfassung: „äh also der Knopf soll äh rot sein“ steht genau so im Titelfeld, ohne Anfrage an `/v1/responses`; die Beschreibung wird „Der Knopf soll rot sein.“; angelegt wird erst mit „Aufgabe hinzufügen“.
+  - Detail: Das Titelmikrofon ersetzt den Titel in der Datei, Strg+Z stellt sie byte-genau wieder her. Das Beschreibungsmikrofon hängt den bereinigten Text mit Leerzeile an.
+  - Die volle Suite (41 Tests) ist grün.
+- **Android-E2E:** Flow 61 dreht die frühere Prüfung „Gewöhnliche Aufgaben haben keinen Diktierknopf“ um. Erfassung: Mikrofon-Chip startet die Aufnahme, die Aufnahmekarte ersetzt die Chipzeile mit dem Hinweis zum Titel, Abbrechen bringt sie zurück. Detail: Titelmikrofon und Chip „Diktieren“ sind da, die Aufnahme startet und lässt sich abbrechen. Flows 00, 38 und 61 grün im Emulator (Release-Build x86_64).
+  - Nebenbei repariert: Der Schritt zur Gemini-Schlüsselprüfung scrollte seit der Neugliederung der Einstellungen (47e9bb8) nach unten und damit an der Meldung vorbei; er wartet jetzt nur auf sie.
+- **Vorbereitung des Recorders:** Mit hinterlegtem Schlüssel bereitet die Erfassung den Recorder beim Öffnen vor. Laut `dumpsys audio` entsteht dabei weder ein Eintrag im Audiofokus noch ein Aufnahme-Ereignis (`mRecordingActive: false`); laufende Musik wird also nicht unterbrochen. Das Mikrofon öffnet sich erst beim Antippen.
+- **Abweichung [V]:** Ein diktierter Titel im Detail zeigt keinen eigenen Hinweis, wie jede rückgängig machbare Titeländerung („Titel geändert“). Der Chip in der Android-Erfassung zeigt nur das Mikrofon, weil „Titel diktieren“ neben „Beschreibung“ und „Bearbeiten“ nicht mehr ganz sichtbar war.
+- **Nicht geprüft:** echte Sprache und echte Anbieter. Erkennung und Bereinigung kamen im Desktop-E2E vom Ersatzserver, im Android-E2E wurde nur gestartet und abgebrochen.
+- **Prüfstand:** `pnpm lint`, `pnpm typecheck` und `pnpm test` grün.

@@ -32,7 +32,7 @@ interface Props {
    * Hinweis darunter, abgetrennte Aktionsleiste mit beschriftetem Senden-Knopf.
    */
   heading?: { title: string; context?: string; hint?: string };
-  /** Ersetzt Hinweis und Aktionsleiste, solange etwas anderes läuft (Aufnahme). Nur mit `heading`. */
+  /** Ersetzt Hinweis und Aktionsleiste (ohne `heading`: die Chipzeile), solange etwas anderes läuft (Aufnahme). */
   panel?: ReactNode;
 }
 
@@ -140,6 +140,8 @@ export function CaptureSheet({ value, onChangeText, placeholder, onSubmit, ready
               <Text style={{ color: ready ? c.onPrimary : c.muted, fontSize: 15, fontWeight: "600" }}>{submitLabel}</Text>
             </Pressable>
           </View>
+        ) : panel ? (
+          <View style={{ marginTop: 6, marginHorizontal: 12 }}>{panel}</View>
         ) : (
         <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 12, paddingRight: 10, paddingTop: 6, gap: 8 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="always" contentContainerStyle={{ gap: 8, paddingRight: 8 }} style={{ flex: 1 }}>

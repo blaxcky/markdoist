@@ -1045,6 +1045,102 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
   }
 });
 
+test("Normale Aufgaben: Titel roh, Beschreibung bereinigt diktieren, in Erfassung und Detail (4.13, AK-57)", async () => {
+  test.setTimeout(90_000);
+  // Lokaler Ersatz für die OpenAI-API; das Mikrofon liefert Chromiums Testton.
+  const seen: { path: string; body: string }[] = [];
+  const server = createServer((req, res) => {
+    let body = "";
+    req.setEncoding("latin1");
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      seen.push({ path: req.url ?? "", body });
+      res.setHeader("Content-Type", "application/json");
+      if (req.url === "/v1/audio/transcriptions") return void res.end(JSON.stringify({ text: "äh also der Knopf soll äh rot sein" }));
+      if (req.url === "/v1/responses") return void res.end(JSON.stringify({ output: [{ type: "message", content: [{ type: "output_text", text: "Der Knopf soll rot sein." }] }] }));
+      res.end(JSON.stringify({ data: [] }));
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as AddressInfo).port;
+  const record = async (testId: string) => {
+    await page.getByTestId(testId).click();
+    await expect(page.getByTestId("dictate-state")).toContainText("Aufnahme");
+    await page.waitForTimeout(800);
+    await page.getByTestId("dictate-stop").click();
+    await expect(page.getByTestId("dictate-bar")).toHaveCount(0);
+  };
+  try {
+    await app.close();
+    app = await electron.launch({
+      args: [join(appDir, "out/main/index.js"), "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
+      env: {
+        ...process.env,
+        ...hide,
+        MARKDOIST_FOLDER: folder,
+        MARKDOIST_DATA_DIR: join(base, "data"),
+        MARKDOIST_TEST_NOW: "2026-10-12T10:00",
+        MARKDOIST_TEST_TZ: "Europe/Berlin",
+        MARKDOIST_OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`,
+      },
+    });
+    page = await app.firstWindow();
+    await page.getByTestId("list").waitFor();
+    await page.getByTestId("user-menu").click();
+    await page.getByTestId("menu-dictation").click();
+    await page.getByTestId("dictation-key").fill("sk-test-e2e-aufgabe-1234");
+    await page.getByTestId("dictation-key-save").click();
+    await expect(page.getByTestId("dictation-key-masked")).toHaveText("sk-…1234");
+    await page.getByTestId("dictation-settings-close").click();
+
+    // Erfassung: Der Titel kommt genau so, wie erkannt, ohne Anfrage an das Textmodell.
+    await page.getByTestId("capture-button").click();
+    let mark = seen.length;
+    await record("capture-dictate-title");
+    await expect(page.getByTestId("capture-title")).toHaveValue("äh also der Knopf soll äh rot sein");
+    expect(seen.slice(mark).map((x) => x.path)).toEqual(["/v1/audio/transcriptions"]);
+    expect(seen[mark]!.body).toContain("Diktierter Titel einer Aufgabe.");
+    // Die Beschreibung wird bereinigt, ohne Bezug zur Softwareentwicklung.
+    mark = seen.length;
+    await record("capture-dictate-note");
+    await expect(page.getByTestId("capture-note")).toHaveValue("Der Knopf soll rot sein.\n");
+    expect(seen.slice(mark).map((x) => x.path)).toEqual(["/v1/audio/transcriptions", "/v1/responses"]);
+    expect(seen[mark + 1]!.body).not.toContain("Softwareentwicklung");
+    // Erfasst wird erst auf Knopfdruck.
+    await page.getByTestId("capture-submit").click();
+    await page.getByTestId("nav-inbox").click();
+    await expect(row("äh also der Knopf soll äh rot sein")).toBeVisible();
+    const created = (await readdir(folder)).find((n) => n.startsWith("äh also der Knopf"))!;
+    expect(await file(created)).toContain("title: äh also der Knopf soll äh rot sein\n");
+    expect(await file(created)).toMatch(/---\nDer Knopf soll rot sein\.\n$/);
+
+    // Detail: Das Titelmikrofon ersetzt den Titel, rückgängig wie jede Titeländerung.
+    const before = await file("Zahnarzt.md");
+    await page.getByTestId("nav-today").click();
+    await row("Zahnarzttermin vereinbaren").click();
+    await record("dictate-title");
+    await expect(page.getByTestId("field-title")).toHaveValue("äh also der Knopf soll äh rot sein");
+    await expect.poll(() => file("Zahnarzt.md")).toContain("title: äh also der Knopf soll äh rot sein\n");
+    await page.getByTestId("detail").locator(".desc-label").click();
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => file("Zahnarzt.md")).toBe(before);
+    await expect(page.getByTestId("field-title")).toHaveValue("Zahnarzttermin vereinbaren");
+    // Das Beschreibungsmikrofon hängt den bereinigten Text an.
+    await record("dictate");
+    await expect(page.locator(".cm-content")).toHaveText(/Praxis anrufen\.\s*Der Knopf soll rot sein\./);
+    await expect.poll(() => file("Zahnarzt.md")).toMatch(/---\nPraxis anrufen\.\n\nDer Knopf soll rot sein\.\n$/);
+    await page.getByTestId("detail").getByRole("button", { name: "Schließen", exact: true }).click();
+
+    // Listen haben kein Mikrofon.
+    await page.getByTestId("nav-lists").click();
+    await page.getByText("Packliste Urlaub").first().click();
+    await expect(page.getByTestId("dictate-title")).toHaveCount(0);
+    await expect(page.getByTestId("dictate")).toHaveCount(0);
+  } finally {
+    server.close();
+  }
+});
+
 test("Listen: Checkliste aus Text einfügen, ein Rückgängig, Fehler behält den Text (4.11, AK-55)", async () => {
   // Lokaler Ersatz für die OpenAI-API.
   const seen: { auth: string; body: string }[] = [];

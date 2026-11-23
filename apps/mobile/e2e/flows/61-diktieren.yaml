@@ -1,4 +1,4 @@
-# Diktieren (4.9, 4.10, 4.12): Knopf nur bei Programmier-Einträgen und im Eingabeblatt eines Boards; ohne Schlüssel Hinweis und Einstellungen;
+# Diktieren (4.9, 4.10, 4.12, 4.13): Knopf bei Programmier-Einträgen, im Eingabeblatt eines Boards, bei normalen Aufgaben und in der Erfassung; ohne Schlüssel Hinweis und Einstellungen;
 # Schlüssel speichern (nur maskiert sichtbar) und entfernen; Aufnahme starten und abbrechen; Claude als Text-Anbieter.
 # Netz und OpenAI prüft Maestro nicht (kein echter Schlüssel im Test).
 appId: de.markdoist.aufgaben
@@ -130,21 +130,55 @@ appId: de.markdoist.aufgaben
     id: sheet-close
 # Board → Übersicht mit unterer Leiste
 - back
-# Gewöhnliche Aufgaben haben keinen Diktierknopf.
+# Normale Aufgaben (4.13): In der Erfassung „Titel diktieren“; die Aufnahmekarte ersetzt die Chipzeile.
 - tapOn:
     id: tab-inbox
-- runFlow:
-    when:
-      visible:
-        id: "row-Maestro Aufgabe"
-    commands:
-      - tapOn:
-          id: "row-Maestro Aufgabe"
-      - assertNotVisible:
-          id: dictate-chip
-      - assertNotVisible:
-          id: dictate
-      - back
+- tapOn:
+    id: fab-capture
+- tapOn:
+    id: capture-dictate
+- extendedWaitUntil:
+    visible:
+      id: dictate-time
+      text: "0:0[1-9]"
+    timeout: 8000
+- assertVisible: "Der Titel kommt genau so, wie er erkannt wird."
+- assertNotVisible:
+    id: capture-submit
+- tapOn:
+    id: dictate-cancel
+- extendedWaitUntil:
+    visible:
+      id: capture-submit
+    timeout: 3000
+- tapOn:
+    id: capture-title
+- inputText: "Maestro Diktat"
+- tapOn:
+    id: capture-submit
+# Im Detail: Mikrofon am Titel und Chip „Diktieren“ für die Beschreibung.
+- tapOn:
+    id: "row-Maestro Diktat"
+- assertVisible:
+    id: dictate-chip
+- tapOn:
+    id: dictate-title
+- extendedWaitUntil:
+    visible: "Aufnahme 0:0[1-9]"
+    timeout: 8000
+- assertNotVisible:
+    id: dictate-chip
+- tapOn:
+    id: dictate-cancel
+- extendedWaitUntil:
+    visible:
+      id: dictate-title
+    timeout: 3000
+# Aufräumen: Aufgabe löschen, das Detail schließt.
+- tapOn:
+    id: detail-menu
+- tapOn:
+    id: delete
 # Schlüssel wieder entfernen
 - tapOn:
     id: nav-menu
@@ -263,11 +297,11 @@ appId: de.markdoist.aufgaben
     timeout: 8000
 - tapOn:
     id: dictation-gemini-key-check
-- scrollUntilVisible:
-    element:
+# Die Meldung steht direkt unter „Prüfen“; nach unten zu scrollen schöbe sie aus dem Bild.
+- extendedWaitUntil:
+    visible:
       id: dictation-gemini-status
       text: "API-Schlüssel ungültig"
-    direction: DOWN
     timeout: 30000
 - tapOn:
     id: dictation-gemini-key-remove

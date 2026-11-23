@@ -8,6 +8,7 @@ import {
   checklistFromText,
   DictationError,
   maskKey,
+  parseDictationContext,
   parseDictationSettings,
   runDictation,
   suggestTitle,
@@ -214,7 +215,8 @@ export class DictationService {
         fetch: this.fetch,
         key: stt === "local" ? "" : (this.key(stt) ?? ""),
         settings,
-        ctx: { list: typeof ctx?.list === "string" ? ctx.list : undefined, title: typeof ctx?.title === "string" ? ctx.title : undefined },
+        // Aus dem Renderer: nur bekannte Felder; `target: "title"` lässt die Bereinigung aus (4.13).
+        ctx: parseDictationContext(ctx),
         baseUrl: stt === "local" ? undefined : this.baseUrls[stt],
         localTranscribe: async () => {
           if (!local || !pcm || (await local.store.state()).state !== "ready") throw new DictationError("nomodel");

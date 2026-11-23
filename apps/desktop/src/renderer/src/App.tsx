@@ -1058,6 +1058,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
         <Capture
           initial={captureAgain}
           onCancel={() => (setCapture(false), setCaptureAgain(null))}
+          onDictationError={(kind) => notify({ status: "error", message: T.dictation.errors[kind] })}
           onCapture={(title, note, edit) => {
             setCapture(false);
             setCaptureAgain(null);

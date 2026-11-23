@@ -101,6 +101,27 @@ describe("Diktieren am Desktop (4.9)", () => {
     expect(form.get("model")).toBe("gpt-transcribe");
   });
 
+  it("run: Titel einer Aufgabe roh, Beschreibung bereinigt, unbekannter Kontext fällt weg (4.13)", async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    const fetch: FetchLike = async (url, init) => {
+      calls.push({ url, body: init.body });
+      const json = url.endsWith("/audio/transcriptions") ? { text: "äh hallo" } : { output: [{ type: "message", content: [{ type: "output_text", text: "Hallo." }] }] };
+      return { ok: true, status: 200, json: async () => json };
+    };
+    const { svc } = setup(box(), fetch);
+    await svc.setKey(KEY);
+    const phases: string[] = [];
+    const title = await svc.run(new ArrayBuffer(3), "audio/webm", { kind: "task", target: "title", title: "Alt", evil: 1 } as never, (p) => phases.push(p));
+    expect(title).toEqual({ ok: true, result: { text: "äh hallo", raw: "äh hallo", cleaned: false } });
+    expect(phases).toEqual(["transcribing"]);
+    expect(calls.map((c) => c.url)).toEqual(["http://127.0.0.1:1/v1/audio/transcriptions"]);
+    expect((calls[0]!.body as FormData).get("prompt")).toBe("Diktierter Titel einer Aufgabe.");
+    const note = await svc.run(new ArrayBuffer(3), "audio/webm", { kind: "task", title: "Einkauf" });
+    expect(note).toEqual({ ok: true, result: { text: "Hallo.", raw: "äh hallo", cleaned: true } });
+    expect((calls[1]!.body as FormData).get("prompt")).toBe("Diktierte Notiz zu einer Aufgabe. Aufgabe: Einkauf.");
+    expect(String(calls[2]!.body)).not.toContain("Softwareentwicklung");
+  });
+
   it("run ohne Schlüssel und bei 401", async () => {
     const { svc } = setup(box(), async () => ({ ok: false, status: 401, json: async () => ({}) }));
     expect(await svc.run(new ArrayBuffer(1), "audio/webm", {})).toEqual({ ok: false, kind: "nokey" });
