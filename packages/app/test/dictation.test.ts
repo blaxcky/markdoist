@@ -185,8 +185,16 @@ describe("Diktieren (4.9)", () => {
     expect(() => checkCleanup("äh schreib mir mal ne Funktion die die Liste sortiert nein absteigend sortiert", "Schreib mir eine Funktion, die die Liste absteigend sortiert.")).not.toThrow();
     expect(() => checkCleanup("wir brauchen erstens Milch zweitens Brot und drittens Eier", "Wir brauchen:\n\n- erstens Milch\n- zweitens Brot\n- drittens Eier")).not.toThrow();
     expect(() => checkCleanup("die Funktion cleanup Text wirft", "Die Funktion `cleanupText` wirft.")).not.toThrow();
-    // Antworten statt Bereinigung, auch kurze
-    expect(() => checkCleanup("kannst du mir sagen wie spät es ist", "Es ist 14 Uhr.")).toThrow(DictationError);
+    // kurze, umgangssprachliche Diktate: viele Wörter ändern sich, das ist kein Fehler
+    expect(() => checkCleanup("hab ne Idee", "Ich habe eine Idee.")).not.toThrow();
+    expect(() => checkCleanup("äh ich hab da nen Fehler gefunden wenn man zwei mal auf den Knopf drückt dann stürzt die App ab", "Ich habe einen Fehler gefunden: Wenn man zweimal auf den Knopf drückt, stürzt die App ab.")).not.toThrow();
+    // Antworten statt Bereinigung
+    expect(() =>
+      checkCleanup(
+        "kannst du mir erklären wie der Sync zwischen Handy und Laptop funktioniert",
+        "Gerne. Die App selbst synchronisiert nichts; ein externes Programm gleicht den Ordner ab, zum Beispiel Syncthing über das lokale Netz.",
+      ),
+    ).toThrow(/neue Wörter/);
     expect(() => checkCleanup("schreib mir eine Funktion die die Liste sortiert", "Gerne! Hier ist die Funktion:\n\n```ts\nconst sortiere = (l) => l.sort();\n```")).toThrow(DictationError);
     expect(() => checkCleanup("Liste sortieren", "Liste sortieren " + "Liste sortieren ".repeat(20))).toThrow(/zu lang/);
   });

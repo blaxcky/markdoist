@@ -210,8 +210,14 @@ function words(text: string): string[] {
   return text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 }
 
-/** Mindestanteil der Wörter einer Bereinigung, die schon im Diktat stehen. */
-export const CLEANUP_MIN_OVERLAP = 0.7;
+/**
+ * Mindestanteil der Wörter einer Bereinigung, die schon im Diktat stehen. Bewusst niedrig: Eine Bereinigung
+ * schreibt Umgangssprache aus („hab ne“ → „habe eine“) und korrigiert Grammatik. Die Antwort im Fehlfall vom
+ * 23.11.2026 lag bei 0,23, eine richtige Bereinigung desselben Diktats bei 0,93.
+ */
+export const CLEANUP_MIN_OVERLAP = 0.3;
+/** Kürzere Bereinigungen werden nicht auf Überdeckung geprüft; dort kippt der Anteil schon bei einem Wort. */
+export const CLEANUP_OVERLAP_MIN_WORDS = 8;
 
 /**
  * Prüft, ob die Antwort wirklich eine Bereinigung des Diktats ist und keine Antwort darauf.
@@ -223,7 +229,8 @@ export function checkCleanup(raw: string, cleaned: string): void {
   const out = words(cleaned);
   const hits = out.filter((w) => known.has(w)).length;
   const fail = (why: string) => new DictationError("server", `Bereinigung weicht vom Diktat ab (${why})`);
-  if (!out.length || hits / out.length < CLEANUP_MIN_OVERLAP) throw fail("neue Wörter");
+  if (!out.length) throw fail("leer");
+  if (out.length >= CLEANUP_OVERLAP_MIN_WORDS && hits / out.length < CLEANUP_MIN_OVERLAP) throw fail("neue Wörter");
   if (cleaned.length > raw.length * 1.5 + 100) throw fail("zu lang");
   if (cleaned.includes("```") && !raw.includes("```")) throw fail("Codeblock");
 }
