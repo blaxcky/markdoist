@@ -61,7 +61,7 @@ const claudeSettings = { ...DEFAULT_DICTATION, textProvider: "anthropic" as cons
 
 describe("Claude als Text-Anbieter (4.12)", () => {
   it("Bereinigung über Claude: Modell, System, Aufwand, Schlüssel", async () => {
-    const { fetch, calls } = claudeFetch([() => reply("Der Knopf soll rot sein.")]);
+    const { fetch, calls } = claudeFetch([() => reply('{"bereinigter_text": "Der Knopf soll rot sein."}')]);
     const r = await runDictation({
       fetch: transcription(" äh der Knopf soll rot sein "),
       key: "sk-openai",
@@ -78,8 +78,8 @@ describe("Claude als Text-Anbieter (4.12)", () => {
     expect(c.headers.get("authorization")).toBe("Bearer sk-ant-test");
     expect(c.body).toMatchObject({
       model: "claude-haiku-5-5",
-      messages: [{ role: "user", content: "äh der Knopf soll rot sein" }],
-      output_config: { effort: "low" },
+      messages: [{ role: "user", content: "<diktat>\näh der Knopf soll rot sein\n</diktat>" }],
+      output_config: { effort: "low", format: { type: "json_schema", schema: { required: ["bereinigter_text"], additionalProperties: false } } },
     });
     expect(c.body!.thinking).toBeUndefined();
     expect(String(c.body!.system)).toContain(CLEANUP_INSTRUCTIONS);
@@ -114,10 +114,24 @@ describe("Claude als Text-Anbieter (4.12)", () => {
 
   it("HTTP 400: einmal die einfache Anfrage ohne output_config", async () => {
     const { fetch, calls } = claudeFetch([() => apiError(400, "effort: Extra inputs are not permitted"), () => reply("Sauber.")]);
-    const r = await runDictation({ fetch: transcription("roh"), key: "sk", settings: claudeSettings, ctx, form, text: { provider: "anthropic", key: "k", claudeFetch: fetch } });
+    const r = await runDictation({ fetch: transcription("äh sauber"), key: "sk", settings: claudeSettings, ctx, form, text: { provider: "anthropic", key: "k", claudeFetch: fetch } });
     expect(r.text).toBe("Sauber.");
-    expect(calls[0]!.body!.output_config).toEqual({ effort: "low" });
+    expect(calls[0]!.body!.output_config).toMatchObject({ effort: "low", format: { type: "json_schema" } });
     expect(calls[1]!.body!.output_config).toBeUndefined();
+    expect(calls[1]!.body!.messages).toEqual([{ role: "user", content: "<diktat>\näh sauber\n</diktat>" }]);
+  });
+
+  it("Antwortet Claude auf das Diktat statt es zu bereinigen, kommt der Rohtext (Fehlfall 23.11.2026)", async () => {
+    const raw =
+      "äh ich würde die Diktierfunktion gern aufteilen also beim Titel ein eigener Mikrofonknopf und da nur roh transkribieren ohne Bereinigung " +
+      "und in der Beschreibung ein Knopf in der Toolbar der an der Cursorposition einfügt und da vielleicht auch die Bereinigung aber beim Titel auf keinen Fall";
+    const answer =
+      "Das ist gut machbar. Ich würde die Diktierfunktion so aufteilen:\n\n**1. Titel-Diktat bei der Aufgabenerstellung**\n- Neben dem Titelfeld ein eigener Mikrofon-Button.\n" +
+      "- Modus „Roh“: Das Ergebnis wird nur transkribiert.\n\n**Technische Umsetzung**\n- Verarbeitungsmodus als Parameter, z. B. `mode: \"raw\" | \"notes\"`.\n\n" +
+      "Soll ich dir eine konkrete Komponente für Titel- und Beschreibungsfeld skizzieren, z. B. in React oder Vue?";
+    const { fetch } = claudeFetch([() => reply(JSON.stringify({ bereinigter_text: answer }))]);
+    const r = await runDictation({ fetch: transcription(raw), key: "sk", settings: claudeSettings, ctx, form, text: { provider: "anthropic", key: "k", claudeFetch: fetch } });
+    expect(r).toEqual({ text: raw, raw, cleaned: false, cleanupError: "server" });
   });
 
   it("Titel über Claude mit JSON-Schema", async () => {

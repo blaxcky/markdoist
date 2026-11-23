@@ -850,7 +850,17 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
       if (req.url === "/v1beta/models/gemini-3.5-transcribe:generateContent") return void res.end(JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text: "äh Gemini hat das erkannt" }] } }] }));
       // Claude (4.12): Messages API
       if (req.url === "/v1/messages") {
-        const text = body.includes('"json_schema"') ? JSON.stringify({ title: "Knopf rot (Claude)", type: "bug" }) : "Der Knopf ist rot (Claude).";
+        // Bereinigung: das Diktat aus der <diktat>-Hülle ohne Füllwörter, mit „(Claude)“ als Kennung.
+        const cleaned = () => {
+          // Der Server liest latin1 (wegen der Audiodateien); JSON kommt als UTF-8.
+          const said = String((JSON.parse(Buffer.from(body, "latin1").toString("utf8")) as { messages: { content: string }[] }).messages[0]!.content)
+            .replace(/<\/?diktat>/g, "")
+            .replace(/(^|\s)(äh|also)(?=\s|$)/gi, "$1")
+            .replace(/\s+/g, " ")
+            .trim();
+          return JSON.stringify({ bereinigter_text: `${said.charAt(0).toUpperCase()}${said.slice(1)} (Claude).` });
+        };
+        const text = body.includes('"bereinigter_text"') ? cleaned() : JSON.stringify({ title: "Knopf rot (Claude)", type: "bug" });
         return void res.end(
           JSON.stringify({ id: "msg_e2e", type: "message", role: "assistant", model: "claude-haiku-5-5", content: [{ type: "text", text }], stop_reason: "end_turn", stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } }),
         );
@@ -884,7 +894,7 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
           baseUrl: `http://127.0.0.1:${port}/model`,
           files: Object.entries(FAKE_MODEL).map(([name, text]) => ({ name, size: Buffer.byteLength(text), sha256: createHash("sha256").update(text).digest("hex") })),
         }),
-        MARKDOIST_TEST_LOCAL_STT_TEXT: "Lokal erkannt",
+        MARKDOIST_TEST_LOCAL_STT_TEXT: "äh lokal auf dem Gerät erkannt",
       },
     });
     page = await app.firstWindow();
@@ -985,9 +995,9 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
     const claudeCalls = seen.slice(mark).filter((x) => x.path === "/v1/messages");
     expect(claudeCalls[0]!.auth).toBe("Bearer sk-ant-e2e-geheim-5678");
     expect(claudeCalls[0]!.body).toContain('"model":"claude-haiku-5-5"');
-    const byClaude = (await readdir(folder)).find((n) => n.startsWith("Der Knopf ist rot (Claude)"))!;
+    const byClaude = (await readdir(folder)).find((n) => n.startsWith("Der Knopf soll rot sein (Claude)"))!;
     await expect.poll(() => file(byClaude)).toContain("dev_type: bug\n");
-    expect(await file(byClaude)).toMatch(/---\nDer Knopf ist rot \(Claude\)\.\n$/);
+    expect(await file(byClaude)).toMatch(/---\nDer Knopf soll rot sein \(Claude\)\.\n$/);
 
     // Erkennung über Gemini (4.12): eigener Schlüssel, Aufnahme als Base64 im JSON, Bereinigung weiter über Claude.
     await page.getByTestId("user-menu").click();
@@ -1029,7 +1039,7 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
     await expect(page.locator('[data-testid="dev-item-row"][data-text="Knopf rot (Claude)"]')).toHaveCount(3);
     // Nur Bereinigung und Titel gehen ins Netz; der erkannte Text kommt vom Gerät.
     expect(seen.slice(mark3).map((x) => x.path)).toEqual(["/v1/messages", "/v1/messages"]);
-    expect(seen[mark3]!.body).toContain('"content":"Lokal erkannt"');
+    expect(Buffer.from(seen[mark3]!.body, "latin1").toString("utf8")).toContain('"content":"<diktat>\\näh lokal auf dem Gerät erkannt\\n</diktat>"');
   } finally {
     server.close();
   }

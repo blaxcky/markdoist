@@ -669,6 +669,8 @@ Wunsch vom 07.11.2026, Festlegungen mit dem Plan vom selben Tag freigegeben [F];
   - Aufnahme in der App.
   - Erkennung mit OpenAI `gpt-transcribe` (`POST /v1/audio/transcriptions`, `languages[]=de`, Listen- und Eintragstitel als `prompt`).
   - Bereinigung mit `gpt-6.1-terra` über die Responses API (`reasoning.effort: low`).
+  - **Diktat als Daten [V, 23.11.2026]:** Das Diktat geht in `<diktat>…</diktat>` markiert an das Textmodell. Die Anweisungen sagen ausdrücklich, dass es sich nie an das Modell richtet und nicht ausgeführt, beantwortet oder ergänzt wird, mit einem Beispiel. Claude antwortet nach dem Schema `{ bereinigter_text }`. Anlass: Haiku hatte eine diktierte Feature-Notiz wie eine Anfrage beantwortet („Das ist gut machbar. Ich würde …“).
+  - **Prüfung der Bereinigung [V, 23.11.2026]:** Mindestens 70 % der Wörter der Antwort müssen schon im Diktat stehen; dazu höchstens 1,5-fache Länge plus 100 Zeichen und kein neuer Codeblock. Sonst gilt die Bereinigung als gescheitert und der Rohtext wird eingefügt (siehe Fehler). Gilt für OpenAI und Claude.
   - Beide Modellnamen stehen in den Einstellungen und sind änderbar.
 - **Netz [F]:** Das ist die einzige Netzfunktion der App (seit 10.11.2026 zusammen mit dem Titelvorschlag aus 4.10, seit 13.11.2026 mit „Checkliste einfügen“ aus 4.11). Sie läuft nur mit hinterlegtem Schlüssel und nur auf Knopfdruck. An OpenAI gehen die Aufnahme sowie Listen- und Eintragstitel; der Einstellungstext sagt das.
 - **Ort [F]:** nur im Detail von Programmier-Einträgen, nicht schreibgeschützt.
