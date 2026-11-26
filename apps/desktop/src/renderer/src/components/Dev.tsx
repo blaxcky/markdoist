@@ -1,5 +1,5 @@
 // Programmieren (4.8, 4.10): Listen je App, Einträge als eigene Dateien mit Notiz. Übersicht und Board.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { T, ageDays, createDevItemFromText, fillPendingTitles, notePlainText, startDevWorkAction, suggestDevTitle, toggleDoneAction, trashDevList, trashDoneDevItems, type CompletionPhase, type Outcome, type Repository } from "@markdoist/app";
 import { DEV_DONE_LIMIT, devBoardView, devIndex, devItemsOf, devListProgress, devListsView, type DevItemOptions, type DevType, type DevTypeFilter, type Index, type ListOptions, type TaskView } from "@markdoist/core";
 import { suggestTitleAuto } from "../bridge";
@@ -510,6 +510,8 @@ function DevCard({
   const checked = isDone !== (phase !== undefined);
   const half = f.status === "in-progress" && phase === undefined;
   const [menu, setMenu] = useState(false);
+  // Klick daneben bei offenem Menü schließt nur das Menü, öffnet aber nicht das Detail.
+  const menuWasOpen = useRef(false);
   const days = ageDays(f.dateCreated, today);
   // Ein vorläufiger Titel ist der Anfang der Notiz: Der Auszug wiederholte ihn nur.
   const plain = notePlainText(view.task.body);
@@ -526,6 +528,16 @@ function DevCard({
         onDragStart();
       }}
       onDragEnd={onDragEnd}
+      // Die ganze Karte öffnet das Detail; Haken und Aktionsmenü fangen ihre Klicks selbst ab.
+      onPointerDown={() => {
+        menuWasOpen.current = menu;
+      }}
+      onClick={() => {
+        if (menuWasOpen.current) return;
+        // Markierter Text (etwa zum Kopieren aus dem Auszug) öffnet nichts.
+        if (window.getSelection()?.toString()) return;
+        onOpen();
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         setMenu(true);
@@ -538,7 +550,7 @@ function DevCard({
         {f.devType && <DevTypeChip type={f.devType} />}
         <span className="spacer" />
         {days !== null && <span className="dev-age">{T.dev.age(days)}</span>}
-        <span className="menu-anchor">
+        <span className="menu-anchor" onClick={(e) => e.stopPropagation()}>
           <button className="icon-btn small dev-card-menu" onClick={() => setMenu((m) => !m)} data-menu-anchor title="Aktionen" aria-label="Aktionen" data-testid="dev-card-menu">
             <IconDots size={18} />
           </button>
@@ -568,12 +580,13 @@ function DevCard({
         </span>
       </div>
       <div className="dev-card-title">
-        <button className={`check prio-none${checked ? " checked" : ""}${half ? " half" : ""}${phase ? " animate" : ""}`} role="checkbox" aria-checked={half ? "mixed" : checked} aria-label={f.title} title={half ? T.actions.complete : !checked ? T.dev.startWork : undefined} onClick={onToggle} disabled={ro} data-testid="dev-item-check">
+        <button className={`check prio-none${checked ? " checked" : ""}${half ? " half" : ""}${phase ? " animate" : ""}`} role="checkbox" aria-checked={half ? "mixed" : checked} aria-label={f.title} title={half ? T.actions.complete : !checked ? T.dev.startWork : undefined} onClick={(e) => (e.stopPropagation(), onToggle())} disabled={ro} data-testid="dev-item-check">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M7.5 12.3l3 3 6-6.3" />
           </svg>
         </button>
-        <button className={`dev-card-open${f.titlePending ? " pending" : ""}`} onClick={onOpen} data-testid="dev-item-open">
+        {/* Bleibt Knopf für die Tastatur; sein Klick steigt zur Karte auf und öffnet dort. */}
+        <button className={`dev-card-open${f.titlePending ? " pending" : ""}`} data-testid="dev-item-open">
           <span className="title">{f.title}</span>
           {f.titlePending && <span className="dev-pending">{T.dev.titlePending}</span>}
         </button>

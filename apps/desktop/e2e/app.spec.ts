@@ -691,8 +691,10 @@ test("Programmieren als Board: Text ablegen, Art, Filter, Ziehen, erledigen, Lis
   await expect(check).toHaveAttribute("aria-checked", "mixed");
   await expect.poll(() => file(name)).toContain("status: in-progress");
   await expect(page.getByTestId("dev-col-work").getByTestId("dev-item-row")).toHaveCount(1);
+  // Der Haken öffnet kein Detail, ein Klick auf den Auszug schon (ganze Karte klickbar).
+  await expect(page.getByTestId("detail")).toBeHidden();
   // Im Detail ebenfalls halb; „Nicht mehr in Arbeit“ setzt ihn zurück auf Neu.
-  await bug.getByTestId("dev-item-open").click();
+  await bug.getByTestId("dev-item-note").click();
   await expect(page.locator(".detail .check.big")).toHaveAttribute("aria-checked", "mixed");
   await page.getByTestId("detail-more").click();
   await page.getByTestId("stop-work").click();

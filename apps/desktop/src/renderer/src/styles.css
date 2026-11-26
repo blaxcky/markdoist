@@ -2575,7 +2575,7 @@ button.strip-day:hover:not(:disabled) .strip-dot {
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 8px 10px 10px;
-  cursor: grab;
+  cursor: pointer;
 }
 .dev-card:hover {
   border-color: var(--fg-faint);
