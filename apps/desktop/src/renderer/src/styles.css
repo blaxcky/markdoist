@@ -771,6 +771,10 @@ button:disabled {
   align-items: center;
   gap: 3px;
 }
+/* „· ab …“ hinter der Frist: Punkt mittig zwischen beiden Angaben */
+.row .meta .date:not(.sched) + .date.sched {
+  margin-left: -4px;
+}
 .tone-overdue {
   color: var(--tone-overdue);
 }

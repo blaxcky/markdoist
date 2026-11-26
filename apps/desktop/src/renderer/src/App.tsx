@@ -219,7 +219,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
 
   const filtered = (list: TaskView[]) => sortViews(list.filter((v) => matchesFilter(v, filter, idx.today)), sort, tz);
 
-  type Section = { title: string | null; items: TaskView[]; scheduledHint?: boolean };
+  type Section = { title: string | null; items: TaskView[] };
   const sections: Section[] = useMemo(() => {
     if (query.trim()) return [{ title: `${T.views.search}: „${query}“`, items: filtered(search(idx, query, { includeDone })) }];
     switch (view) {
@@ -228,7 +228,7 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
       case "today": {
         const t = todayView(idx, tz);
         return [
-          { title: T.today.due, items: filtered(t.due), scheduledHint: true },
+          { title: T.today.due, items: filtered(t.due) },
           { title: T.today.plannedToday, items: filtered(t.plannedToday) },
           { title: T.today.plannedEarlier, items: filtered(t.plannedEarlier) },
         ];
@@ -1019,7 +1019,6 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
                           selected={v.task.ref === selected}
                           today={idx.today}
                           tz={tz}
-                          showScheduledHint={s.scheduledHint && !!v.scheduled}
                           phase={completion.phase(v.task.ref)}
                           onLeft={() => completion.left(v.task.ref)}
                           onSelect={() => openTask(v.task.ref)}

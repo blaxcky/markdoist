@@ -22,7 +22,7 @@ export type ListKind = "inbox" | "today" | "planned" | "all" | "done";
 
 type Item =
   | { type: "header"; key: string; title: string; count: number }
-  | { type: "task"; key: string; view: TaskView; scheduledHint?: boolean; first?: boolean; last?: boolean }
+  | { type: "task"; key: string; view: TaskView; first?: boolean; last?: boolean }
   | { type: "occurrence"; key: string; view: TaskView; text: string; first?: boolean; last?: boolean };
 
 /** Erste und letzte Zeile je Gruppe markieren (abgerundete Kartenecken). */
@@ -64,12 +64,11 @@ export function ListScreen({ kind }: { kind: ListKind }) {
   const subtitle = [count ? `${count} ${count === 1 ? "Aufgabe" : "Aufgaben"}` : "", unverified ? T.unverifiedShort : ""].filter(Boolean).join(" · ") || undefined;
 
   function build(): Item[] {
-    const tasks = (list: TaskView[], hint = false): Item[] =>
+    const tasks = (list: TaskView[]): Item[] =>
       sortViews(list.filter((v) => matchesFilter(v, filter, idx.today)), sort, tz).map((v) => ({
         type: "task",
         key: v.task.ref,
         view: v,
-        scheduledHint: hint && !!v.scheduled,
       }));
     switch (kind) {
       case "inbox":
@@ -77,12 +76,12 @@ export function ListScreen({ kind }: { kind: ListKind }) {
       case "today": {
         const t = todayView(idx, tz);
         const out: Item[] = [];
-        const sec = (title: string, list: TaskView[], hint = false) => {
-          const items = tasks(list, hint);
+        const sec = (title: string, list: TaskView[]) => {
+          const items = tasks(list);
           if (!items.length) return;
           out.push({ type: "header", key: `h-${title}`, title, count: items.length }, ...items);
         };
-        sec(T.today.due, t.due, true);
+        sec(T.today.due, t.due);
         sec(T.today.plannedToday, t.plannedToday);
         sec(T.today.plannedEarlier, t.plannedEarlier);
         return out;
@@ -177,7 +176,6 @@ export function ListScreen({ kind }: { kind: ListKind }) {
                 view={item.view}
                 today={idx.today}
                 tz={tz}
-                scheduledHint={item.scheduledHint}
                 first={item.first}
                 last={item.last}
                 showInbox={kind !== "inbox"}

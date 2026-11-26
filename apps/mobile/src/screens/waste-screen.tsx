@@ -176,7 +176,6 @@ export function WasteTypeScreen() {
             view={v}
             today={idx.today}
             tz={tz}
-            scheduledHint={!!v.scheduled}
             showInbox={false}
             onOpen={() => nav.navigate("Detail", { ref: v.task.ref })}
             phase={completion.phase(v.task.ref)}

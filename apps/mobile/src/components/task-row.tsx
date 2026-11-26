@@ -8,16 +8,15 @@ import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, w
 import { scheduleOnRN } from "react-native-worklets";
 import { COMPLETE_FADE_MS, T, type CompletionPhase } from "@markdoist/app";
 import { inInbox, type Temporal, type TaskView } from "@markdoist/core";
-import { dateLabel, toneColor } from "../format";
+import { dueLabel, scheduledText, toneColor } from "../format";
 import { prioColor, useTheme } from "../theme";
-import { CalendarIcon, ClockIcon, Glyph, InboxIcon } from "./icons";
+import { CalendarIcon, Glyph, InboxIcon } from "./icons";
 import { CheckCircle } from "./check-circle";
 
 interface Props {
   view: TaskView;
   today: Temporal.PlainDate;
   tz: string;
-  scheduledHint?: boolean;
   /** Lage in der Kartengruppe: abgerundete Ecken oben/unten */
   first?: boolean;
   last?: boolean;
@@ -37,7 +36,7 @@ const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 const SWIPE_OFFSET_X = 20;
 const SWIPE_FAIL_Y: [number, number] = [-10, 10];
 
-export function TaskRow({ view, today, tz, scheduledHint, first = true, last = true, showInbox = true, phase, onLeft, onOpen, onToggle, onActions }: Props) {
+export function TaskRow({ view, today, tz, first = true, last = true, showInbox = true, phase, onLeft, onOpen, onToggle, onActions }: Props) {
   const c = useTheme();
   const swipe = useRef<SwipeableMethods>(null);
   const f = view.task.fields;
@@ -64,8 +63,9 @@ export function TaskRow({ view, today, tz, scheduledHint, first = true, last = t
   const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.get() }));
   const warn = view.diagnostics.some((d) => d.severity !== "info");
   const ring = prioColor(c, f.priority);
-  const due = view.due ? dateLabel(view.due, today, tz, view.overdue) : null;
-  const sch = view.scheduled ? dateLabel(view.scheduled, today, tz) : null;
+  // Die Frist trägt Farbe und „bis“, das Planungsdatum steht grau als „ab …“ dahinter.
+  const due = view.due ? dueLabel(view.due, today, tz, view.overdue) : null;
+  const sch = view.scheduled ? scheduledText(view.scheduled, today, tz) : null;
   const meta = !!(due || sch || view.series || warn || f.status === "in-progress" || (showInbox && inInbox(view) && !done));
   const radius = { borderTopLeftRadius: first ? 12 : 0, borderTopRightRadius: first ? 12 : 0, borderBottomLeftRadius: last ? 12 : 0, borderBottomRightRadius: last ? 12 : 0 };
   return (
@@ -143,12 +143,8 @@ export function TaskRow({ view, today, tz, scheduledHint, first = true, last = t
                     </View>
                   )}
                   {sch && (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                      <ClockIcon color={c.muted} size={12} />
-                      <Text style={{ color: c.muted, fontSize: 13 }}>
-                        {scheduledHint ? "geplant " : ""}
-                        {sch.text}
-                      </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginLeft: due ? -4 : 0 }}>
+                      <Text style={{ color: c.muted, fontSize: 13 }}>{due ? `· ${sch}` : sch}</Text>
                       {view.series && !due && <Glyph color={c.muted} size={13}>↻</Glyph>}
                     </View>
                   )}

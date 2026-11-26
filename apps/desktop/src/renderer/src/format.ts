@@ -41,3 +41,16 @@ export function dateLabel(v: DateValue, today: Temporal.PlainDate, tz: string, o
   const tone: DateTone = overdue || days < 0 ? "overdue" : days === 0 ? "today" : days === 1 ? "tomorrow" : days < 7 ? "week" : "later";
   return { text, tone };
 }
+
+const lowerRelative = (text: string) => text.replace(/^(Heute|Morgen|Gestern)/, (m) => m.toLowerCase());
+
+/** Frist in der Zeile: künftig mit „bis“ („bis morgen“, „bis Donnerstag“, „bis 3. Dez“), heute und überfällig wie dateLabel. */
+export function dueLabel(v: DateValue, today: Temporal.PlainDate, tz: string, overdue = false): { text: string; tone: DateTone } {
+  const l = dateLabel(v, today, tz, overdue);
+  return l.tone === "overdue" || l.tone === "today" ? l : { ...l, text: `bis ${lowerRelative(l.text)}` };
+}
+
+/** Planungsdatum in der Zeile: „ab heute“, „ab gestern“, „ab Donnerstag“, „ab 20. Nov“; immer ohne Farbstufe. */
+export function scheduledText(v: DateValue, today: Temporal.PlainDate, tz: string): string {
+  return `ab ${lowerRelative(dateLabel(v, today, tz).text)}`;
+}

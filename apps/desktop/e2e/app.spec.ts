@@ -281,6 +281,24 @@ test("Externe Änderung wird per Watcher erkannt (7.1)", async () => {
   await expect(row("Extern angelegt")).toBeVisible({ timeout: 5000 });
 });
 
+test("Zeile: Frist mit „bis“ und Farbe, Planungsdatum grau als „ab …“ (4.2)", async () => {
+  await writeFile(
+    join(folder, "Papiermüll.md"),
+    fm(["id: 01K7C9V3QH2T8M4N6P0R5S1PAP", "format_version: 1", "title: Papiermüll", "status: open", "inbox: false", "scheduled: 2026-10-12", "due: 2026-10-22"]),
+  );
+  const paper = row("Papiermüll");
+  await expect(paper).toBeVisible({ timeout: 5000 });
+  await expect(page.getByTestId("section-1")).toContainText("Papiermüll");
+  await expect(paper.locator(".date").first()).toHaveText("bis 22. Okt");
+  await expect(paper.locator(".date.sched")).toHaveText("· ab heute");
+  // Nur die Frist trägt eine Farbstufe; das Planungsdatum bleibt grau.
+  await expect(paper.locator(".date.sched")).not.toHaveClass(/tone-/);
+  await expect(row("Bettwäsche wechseln").locator(".date.sched")).toHaveText("ab heute");
+  // Unter „Fällig“ steht die heutige Frist unverändert als „Heute“.
+  await expect(row("Zahnarzttermin vereinbaren").locator(".date").first()).toHaveText("Heute");
+  if (process.env.MARKDOIST_E2E_SHOT) await page.screenshot({ path: process.env.MARKDOIST_E2E_SHOT });
+});
+
 test("Externer Body + lokale Priorität bleiben beide erhalten (AK-10)", async () => {
   await row("Zahnarzttermin vereinbaren").click();
   const orig = await file("Zahnarzt.md");

@@ -3,8 +3,8 @@ import type { TaskView } from "@markdoist/core";
 import { COMPLETE_COLLAPSE_MS, COMPLETE_FADE_MS, T, type CompletionPhase } from "@markdoist/app";
 import { reducedMotion } from "../completion";
 import { inInbox, Temporal } from "@markdoist/core";
-import { dateLabel } from "../format";
-import { IconCalendar, IconComment, IconDots, IconInbox, IconPencil, IconRepeat, IconTime, IconTrash, IconWarning, IconDone } from "./Icons";
+import { dueLabel, scheduledText } from "../format";
+import { IconCalendar, IconComment, IconDots, IconInbox, IconPencil, IconRepeat, IconTrash, IconWarning, IconDone } from "./Icons";
 import { Menu, MenuItem } from "./Menu";
 
 interface Props {
@@ -12,7 +12,6 @@ interface Props {
   selected: boolean;
   today: Temporal.PlainDate;
   tz: string;
-  showScheduledHint?: boolean;
   /** Abhak-Ablauf: Zielzustand zeigen bzw. ausblenden und einklappen */
   phase?: CompletionPhase;
   onLeft?(): void;
@@ -24,7 +23,7 @@ interface Props {
   onDelete(): void;
 }
 
-export function TaskRow({ view, selected, today, tz, showScheduledHint, phase, onLeft, onSelect, onToggle, onEdit, onFile, onDelete }: Props) {
+export function TaskRow({ view, selected, today, tz, phase, onLeft, onSelect, onToggle, onEdit, onFile, onDelete }: Props) {
   const f = view.task.fields;
   const done = f.status === "done";
   // Während des Ablaufs zeigt der Haken den Zielzustand (gesetzt bzw. beim Wiederöffnen entfernt).
@@ -61,8 +60,9 @@ export function TaskRow({ view, selected, today, tz, showScheduledHint, phase, o
   }, [phase]);
   const warn = view.diagnostics.some((d) => d.severity !== "info");
   const [menu, setMenu] = useState(false);
-  const due = view.due ? dateLabel(view.due, today, tz, view.overdue) : null;
-  const sch = view.scheduled ? dateLabel(view.scheduled, today, tz) : null;
+  // Die Frist trägt Farbe und „bis“, das Planungsdatum steht grau als „ab …“ dahinter.
+  const due = view.due ? dueLabel(view.due, today, tz, view.overdue) : null;
+  const sch = view.scheduled ? scheduledText(view.scheduled, today, tz) : null;
   const ro = view.readOnly;
   return (
     <div
@@ -102,10 +102,8 @@ export function TaskRow({ view, selected, today, tz, showScheduledHint, phase, o
               </span>
             )}
             {sch && (
-              <span className={`date sched tone-${sch.tone === "overdue" ? "later" : sch.tone}`} title={T.fields.scheduled}>
-                <IconTime size={12} />
-                {showScheduledHint ? "geplant " : ""}
-                {sch.text}
+              <span className="date sched" title={T.fields.scheduled}>
+                {due ? `· ${sch}` : sch}
                 {view.series && !due && <IconRepeat size={12} />}
               </span>
             )}
