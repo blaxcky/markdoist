@@ -4,7 +4,10 @@ import { formatDuration, LOCAL_PCM_MIME, LOCAL_SAMPLE_RATE, MAX_RECORDING_MS, T,
 import { bridge } from "../bridge";
 import { IconMic } from "./Icons";
 
-type Phase = "idle" | "recording" | "transcribing" | "cleaning" | "error";
+type Phase = "idle" | "recording" | "transcribing" | "cleaning" | "error" | "discarded";
+
+/** So lange lässt sich eine abgebrochene Aufnahme noch zurückholen. */
+const UNDO_MS = 10_000;
 
 export const OPEN_DICTATION_SETTINGS = "markdoist:dictation-settings";
 
@@ -31,6 +34,9 @@ async function toPcm(blob: Blob): Promise<ArrayBuffer> {
 /**
  * `onBusy`: meldet, ob Aufnahme, Übertragung oder ein wiederholbarer Fehler läuft. `dictation:phase` geht an
  * alle Knöpfe; eine Ansicht mit mehreren Knöpfen (Titel und Beschreibung, 4.13) blendet die anderen solange aus.
+ *
+ * „Abbrechen“ verwirft nicht sofort: Die Aufnahme bleibt `UNDO_MS` lang liegen, „Wiederherstellen“ schickt sie
+ * wie „Fertig“. Das Mikrofon ist da schon wieder frei; der Mikrofon-Knopf in der Leiste startet eine neue Aufnahme.
  */
 export function DictateButton({
   ctx,
@@ -55,12 +61,21 @@ export function DictateButton({
   const chunks = useRef<Blob[]>([]);
   const audio = useRef<{ buf: ArrayBuffer; mime: string } | null>(null);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
+  const undo = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gen = useRef(0);
-  const cancelled = useRef(false);
+  // Aufnahme-Nummer: Nachzügler einer verworfenen Aufnahme (onstop, Dekodieren) laufen ins Leere.
+  const recId = useRef(0);
+  // Was nach dem Ende der Aufnahme passiert: senden, liegen lassen (abgebrochen) oder verwerfen.
+  const after = useRef<"send" | "hold" | "drop">("send");
+  // Dekodieren nach dem Stopp läuft noch.
+  const converting = useRef(false);
+  // Laufende oder abgebrochene Erkennung; „Wiederherstellen“ übernimmt ihr Ergebnis, statt doppelt zu senden.
+  const run = useRef<ReturnType<ReturnType<typeof bridge>["dictation"]["run"]> | null>(null);
   const localStt = useRef(false);
   const cb = useRef({ ctx, onResult, onError, onBusy });
   cb.current = { ctx, onResult, onError, onBusy };
-  const busy = phase !== "idle";
+  // Während der Rückgängig-Frist ist das Diktat nicht beschäftigt; die anderen Knöpfe kommen zurück.
+  const busy = phase !== "idle" && phase !== "discarded";
   useEffect(() => cb.current.onBusy?.(busy), [busy]);
   useEffect(() => () => cb.current.onBusy?.(false), []);
 
@@ -68,19 +83,26 @@ export function DictateButton({
     if (tick.current) clearInterval(tick.current);
     tick.current = null;
   };
-  const release = () => {
-    rec.current?.stream.getTracks().forEach((t) => t.stop());
-    rec.current = null;
+  const clearUndo = () => {
+    if (undo.current) clearTimeout(undo.current);
+    undo.current = null;
+  };
+  const release = (r: MediaRecorder) => {
+    r.stream.getTracks().forEach((t) => t.stop());
+    if (rec.current === r) rec.current = null;
   };
 
   useEffect(() => bridge().dictation.onPhase((p) => setPhase((x) => (x === "transcribing" || x === "cleaning" ? p : x))), []);
   useEffect(
     () => () => {
       gen.current++;
+      recId.current++;
+      after.current = "drop";
       stopTick();
-      cancelled.current = true;
-      if (rec.current?.state === "recording") rec.current.stop();
-      release();
+      clearUndo();
+      const r = rec.current;
+      if (r?.state === "recording") r.stop();
+      if (r) release(r);
     },
     [],
   );
@@ -91,8 +113,11 @@ export function DictateButton({
     const my = ++gen.current;
     setPhase("transcribing");
     setError(null);
-    const r = await bridge().dictation.run(a.buf, a.mime, cb.current.ctx());
+    const p = run.current ?? bridge().dictation.run(a.buf, a.mime, cb.current.ctx());
+    run.current = p;
+    const r = await p;
     if (gen.current !== my) return;
+    run.current = null;
     if (r.ok) {
       audio.current = null;
       setPhase("idle");
@@ -103,6 +128,18 @@ export function DictateButton({
       setPhase(audio.current ? "error" : "idle");
       cb.current.onError(r.kind);
     }
+  };
+
+  /** Endgültig verwerfen: nach Ablauf der Frist, bei einer neuen Aufnahme. */
+  const drop = () => {
+    clearUndo();
+    gen.current++;
+    recId.current++;
+    after.current = "drop";
+    audio.current = null;
+    run.current = null;
+    setError(null);
+    setPhase("idle");
   };
 
   const start = async () => {
@@ -126,24 +163,32 @@ export function DictateButton({
     }
     const mime = pickMime();
     const r = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 48000 } : undefined);
+    const id = ++recId.current;
     chunks.current = [];
-    cancelled.current = false;
+    after.current = "send";
     audio.current = null;
+    run.current = null;
     r.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);
     r.onstop = () => {
-      release();
-      if (cancelled.current) return;
+      release(r);
+      if (id !== recId.current || after.current === "drop") return;
       const blob = new Blob(chunks.current, { type: r.mimeType || mime || "audio/webm" });
       const local = localStt.current;
+      converting.current = true;
       void (local ? toPcm(blob) : blob.arrayBuffer())
         .then((buf) => {
+          if (id !== recId.current) return;
           audio.current = { buf, mime: local ? LOCAL_PCM_MIME : blob.type };
-          void send();
+          if (after.current === "send") void send();
         })
         .catch(() => {
+          if (id !== recId.current || after.current !== "send") return;
           setError("empty");
           setPhase("idle");
           cb.current.onError("empty");
+        })
+        .finally(() => {
+          if (id === recId.current) converting.current = false;
         });
     };
     rec.current = r;
@@ -166,22 +211,50 @@ export function DictateButton({
     rec.current?.stop();
   };
 
+  /** Abbrechen: Mikrofon sofort frei, die Aufnahme bleibt aber noch `UNDO_MS` lang zurückholbar. */
   const cancel = () => {
     gen.current++;
     stopTick();
-    cancelled.current = true;
-    if (rec.current?.state === "recording") rec.current.stop();
-    release();
-    audio.current = null;
     setError(null);
-    setPhase("idle");
+    after.current = "hold";
+    if (rec.current?.state === "recording") rec.current.stop();
+    if (!rec.current && !converting.current && !audio.current) return drop();
+    setPhase("discarded");
+    clearUndo();
+    undo.current = setTimeout(drop, UNDO_MS);
   };
 
-  if (phase === "idle")
+  /** Wiederherstellen: wie „Fertig“; wartet, falls die Aufnahme noch dekodiert wird. */
+  const restore = () => {
+    clearUndo();
+    after.current = "send";
+    if (audio.current) return void send();
+    if (rec.current || converting.current) return setPhase("transcribing");
+    setPhase("idle");
+    cb.current.onError("empty");
+  };
+
+  const mic = (onClick: () => void) => (
+    <button className="icon-btn small" onClick={onClick} title={label ?? D.record} aria-label={label ?? D.record} data-testid={testId}>
+      <IconMic size={18} />
+    </button>
+  );
+
+  if (phase === "idle") return mic(() => void start());
+  if (phase === "discarded")
     return (
-      <button className="icon-btn small" onClick={() => void start()} title={label ?? D.record} aria-label={label ?? D.record} data-testid={testId}>
-        <IconMic size={18} />
-      </button>
+      <div className="dictate-bar discarded" data-testid="dictate-bar" role="status">
+        <span className="dictate-state" data-testid="dictate-state">
+          {D.discarded}
+        </span>
+        <button className="btn primary" onClick={restore} data-testid="dictate-restore">
+          {D.restore}
+        </button>
+        {mic(() => {
+          drop();
+          void start();
+        })}
+      </div>
     );
   return (
     <div className={`dictate-bar ${phase}`} data-testid="dictate-bar" role="status">

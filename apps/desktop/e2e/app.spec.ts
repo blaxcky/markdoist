@@ -954,6 +954,36 @@ test("Programmieren: Diktieren mit Schlüssel, Erkennung, Bereinigung, Fehler, e
     await expect.poll(() => file("Farbe des Knopfs.md")).toMatch(/---\nFarbe des Knopfs\n\nDer Knopf soll rot sein\.\n\nDer Knopf soll rot sein\.\n$/);
     await expect(page.getByTestId("dictate")).toBeVisible();
 
+    // Versehentlich „Abbrechen“: Die Aufnahme bleibt kurz liegen, „Wiederherstellen“ schickt sie wie „Fertig“.
+    const copies = async () => ((await page.locator(".cm-content").textContent()) ?? "").split("Der Knopf soll rot sein.").length - 1;
+    const uploads = () => seen.filter((x) => x.path === "/v1/audio/transcriptions").length;
+    const up0 = uploads();
+    await page.getByTestId("dictate").click();
+    await expect(page.getByTestId("dictate-state")).toContainText("Aufnahme");
+    await page.waitForTimeout(800);
+    await page.getByTestId("dictate-cancel").click();
+    await expect(page.getByTestId("dictate-state")).toHaveText("Aufnahme verworfen");
+    await page.waitForTimeout(300);
+    expect(uploads()).toBe(up0);
+    await page.getByTestId("dictate-restore").click();
+    await expect.poll(copies).toBe(3);
+    await expect(page.getByTestId("dictate-bar")).toHaveCount(0);
+    expect(uploads()).toBe(up0 + 1);
+
+    // Neue Aufnahme während der Frist verwirft die abgebrochene endgültig; nur die neue kommt an.
+    await page.getByTestId("dictate").click();
+    await expect(page.getByTestId("dictate-state")).toContainText("Aufnahme");
+    await page.waitForTimeout(800);
+    await page.getByTestId("dictate-cancel").click();
+    await expect(page.getByTestId("dictate-state")).toHaveText("Aufnahme verworfen");
+    await page.getByTestId("dictate").click();
+    await expect(page.getByTestId("dictate-state")).toHaveText(/^Aufnahme \d/);
+    await page.waitForTimeout(800);
+    await page.getByTestId("dictate-stop").click();
+    await expect.poll(copies).toBe(4);
+    await expect(page.getByTestId("dictate-bar")).toHaveCount(0);
+    expect(uploads()).toBe(up0 + 2);
+
     // „Neu vorschlagen“ im Detail: Titel und Art von der KI (4.10).
     await page.getByTestId("dev-suggest-title").click();
     await expect(page.getByTestId("field-title")).toHaveValue("Knopf rot färben");

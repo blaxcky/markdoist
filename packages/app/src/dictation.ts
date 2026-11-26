@@ -578,6 +578,9 @@ export const T_DICTATION = {
   starting: "Mikrofon startet …",
   stop: "Fertig",
   cancel: "Abbrechen",
+  /** Nach „Abbrechen“ am Desktop: die Aufnahme lässt sich noch kurz zurückholen. */
+  discarded: "Aufnahme verworfen",
+  restore: "Wiederherstellen",
   transcribing: "Wird erkannt …",
   cleaning: "Wird bereinigt …",
   retry: "Erneut versuchen",
