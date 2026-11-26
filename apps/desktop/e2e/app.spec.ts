@@ -775,6 +775,73 @@ test("Programmieren: Übersicht sortieren und filtern, Einträge sortieren (4.8)
   await expect(page.getByTestId("filter-toggle")).toHaveText("Anzeige");
 });
 
+/** Maustaste Zurück bzw. Vor über das DevTools-Protokoll; Playwrights Maus kennt nur links, Mitte, rechts. */
+async function mouseNav(button: "back" | "forward") {
+  const cdp = await page.context().newCDPSession(page);
+  for (const type of ["mousePressed", "mouseReleased"] as const) await cdp.send("Input.dispatchMouseEvent", { type, x: 400, y: 300, button, clickCount: 1 });
+  await cdp.detach();
+}
+
+test("Maustasten Zurück/Vor: Programmier-Liste, Listen, Detail, gelöschte Liste (4.5)", async () => {
+  const list = (name: string, id: string) =>
+    writeFile(join(folder, `${name}.md`), fm([`id: ${id}`, "format_version: 1", `title: ${name}`, "kind: dev-list", "status: open", "inbox: false"]));
+  await list("App", "01K7DEV0000000000000000APP");
+  await list("Web", "01K7DEV0000000000000000WEB");
+  await writeFile(join(folder, "Export.md"), fm(["format_version: 1", "title: Export", "kind: dev-item", "dev_list: 01K7DEV0000000000000000APP", "status: open", "inbox: false"]));
+  await page.getByTestId("rescan").click();
+  const devRow = (t: string) => page.locator(`[data-testid="dev-list-row"][data-title="${t}"]`);
+
+  await page.getByTestId("nav-dev").click();
+  await devRow("App").click();
+  await expect(page.getByTestId("dev-title")).toHaveText("App");
+  await mouseNav("back");
+  await expect(devRow("App")).toBeVisible();
+  await mouseNav("forward");
+  await expect(page.getByTestId("dev-title")).toHaveText("App");
+
+  // Über Ansichten hinweg: Listen → Packliste, dann Schritt für Schritt zurück bis Heute.
+  await page.getByTestId("nav-lists").click();
+  await page.locator('[data-testid="list-row"][data-title="Packliste Urlaub"]').click();
+  await expect(page.getByTestId("list-title")).toHaveText("Packliste Urlaub");
+  await mouseNav("back");
+  await expect(page.getByTestId("list-title")).toHaveCount(0);
+  await expect(page.getByTestId("nav-lists")).toHaveAttribute("aria-current", "page");
+  await mouseNav("back");
+  await expect(page.getByTestId("dev-title")).toHaveText("App");
+  await mouseNav("back");
+  await expect(devRow("App")).toBeVisible();
+  await mouseNav("back");
+  await expect(page.getByTestId("nav-today")).toHaveAttribute("aria-current", "page");
+  await mouseNav("back");
+  await expect(page.getByTestId("nav-today")).toHaveAttribute("aria-current", "page");
+
+  // Ein neuer Ort nach Zurück verwirft die Vor-Einträge.
+  await mouseNav("forward");
+  await expect(devRow("App")).toBeVisible();
+  await devRow("Web").click();
+  await expect(page.getByTestId("dev-title")).toHaveText("Web");
+  await mouseNav("forward");
+  await expect(page.getByTestId("dev-title")).toHaveText("Web");
+
+  // Offenes Detail: Zurück schließt nur das Detail.
+  await mouseNav("back");
+  await devRow("App").click();
+  await page.locator('[data-testid="dev-item-row"][data-text="Export"]').click();
+  await expect(page.getByTestId("detail")).toBeVisible();
+  await mouseNav("back");
+  await expect(page.getByTestId("detail")).toHaveCount(0);
+  await expect(page.getByTestId("dev-title")).toHaveText("App");
+
+  // Gelöschte Liste wird übersprungen: aus der Übersicht führt Zurück gleich nach Heute.
+  await page.getByTestId("dev-menu").click();
+  await page.getByTestId("dev-delete-list").click();
+  await page.getByTestId("dev-confirm-delete").click();
+  await expect.poll(() => readdir(folder)).not.toContain("App.md");
+  await expect(devRow("Web")).toBeVisible();
+  await mouseNav("back");
+  await expect(page.getByTestId("nav-today")).toHaveAttribute("aria-current", "page");
+});
+
 test("Müllabfuhr: ICS importieren, Abfuhrart öffnen, Termin überspringen, erneuter Import ändert nichts (4.7)", async () => {
   // Nachbildung der Vorlage ohne echte Adresse; der Dateidialog des Hauptprozesses liefert sie direkt.
   const ics = join(__dirname, "../../../packages/app/test/fixtures/abfuhr-2026.ics");

@@ -8,6 +8,8 @@ M0–M8 sind umgesetzt und abgenommen; Version 1.0 ist veröffentlicht. Am 18.10
 
 **Umgesetzt am 28.10.2026 (M9):** Müllabfuhr mit ICS-Import (4.7), Serien mit fester Terminliste (5.7) und die kompaktere untere Leiste am Handy (4.5). Abnahmenotiz in `docs/ABNAHME.md`.
 
+**Umgesetzt am 26.11.2026:** Maustasten Zurück/Vor am Desktop (4.5).
+
 **Umgesetzt am 23.11.2026:** Diktieren bei normalen Aufgaben, in der Erfassung und im Detail: Titel genau wie erkannt, Beschreibung bereinigt (4.13).
 
 **Umgesetzt am 13.11.2026:** „Checkliste einfügen“: unformatierten Text per KI als Einträge an eine Liste anhängen (4.11).
@@ -564,6 +566,7 @@ Das Filtermodell ist ein serialisierbares Objekt. Gespeicherte eigene Listen (ge
     - Navigation und Ansichten: `N`/Ctrl+N erfassen, `/` bzw. Ctrl+F suchen, ↑/↓ bzw. `j`/`k` wählen, Enter für Details, Ctrl+1…8 für Eingang, Heute, Geplant, Alle offenen, Erledigt, Listen, Müllabfuhr und Programmieren; „Probleme“ hat kein Kürzel, weil die Ansicht nur bei Bedarf erscheint.
     - Aufgabenaktionen: Leertaste erledigt/öffnet wieder, `E` sortiert ein, `D` setzt die Frist, `S` plant ein, `P` setzt die Priorität, Entf löscht.
     - Sonstiges: Ctrl+Z macht rückgängig, F5 liest neu ein, Ctrl+Plus/Ctrl+Minus vergrößern/verkleinern die Ansicht (auch Ctrl+Mausrad), Ctrl+0 stellt die Normalgröße her.
+  - **Maustasten Zurück/Vor** (Wunsch vom 26.11.2026): führen einen Schritt zurück bzw. vor durch die besuchten Orte, etwa von einer Programmier-Liste zur Übersicht und weiter in die vorige Ansicht. Ein Ort ist die Ansicht samt geöffneter Liste, Programmier-Liste oder Abfuhrart [V]; die Suche und der Detaildialog zählen nicht als Ort: Zurück schließt zuerst ein offenes Detail, dann eine aktive Suche. Ein neuer Ort nach Zurück verwirft die Vor-Schritte, wie im Browser. Gelöschte Listen werden übersprungen, umbenannte über ihre ID nachgeführt. Unter anderen Dialogen wirken die Tasten nicht. Der Verlauf gilt für die Sitzung (höchstens 50 Orte). Kein Gegenstück am Handy; dort gibt es die Zurück-Geste.
   - In Eingabefeldern/Editoren sind Buchstaben-, Leertasten- und Entf-Aktionen deaktiviert. Ctrl+Z wirkt dort auf die Texteingabe; Aufgaben-Undo bleibt als eigener Befehl erreichbar. Fokus, Tastaturbedienung und Screenreader-Beschriftungen werden auch für Konflikt- und Wiederholungsdialoge geprüft.
   - Hell/dunkel folgt dem System, mit manueller Umschaltung.
   - Ansichtsgröße (Entscheidung 30.10.2026): Zoom des ganzen Fensters in 10-%-Schritten von 70 bis 200 %. Der Wert ist gerätelokal und steht als `zoom` in `settings.json`; beim Start wird er wieder angewandt.

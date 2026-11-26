@@ -38,7 +38,8 @@ import { Problems } from "./components/Problems";
 import { Trash } from "./components/Trash";
 import { History } from "./components/History";
 import { ListRow, Lists } from "./components/Lists";
-import { Dev, DevListRow } from "./components/Dev";
+import { Dev, DEV_ORPHANS, DevListRow } from "./components/Dev";
+import { emptyHistory, pushLocation, step, type NavHistory, type NavLocation } from "./navHistory";
 import { DateListEditor, WasteDates, WasteHead, WasteImportDialog, WasteOverview } from "./components/Waste";
 import { Menu, MenuItem } from "./components/Menu";
 import { SideGroup, SideSection, useSideOpen } from "./components/SideNav";
@@ -496,7 +497,47 @@ function Main({ repo, settings, setSettings }: { repo: Repository; settings: Set
     if (name === "dev") setOpenDev(child);
     setView(name);
   };
-  const nav = (name: ViewName, label: string, icon: React.ReactNode, count?: number, testid?: string) => (
+
+  // Maustasten Zurück/Vor (4.5): Verlauf aus Ansicht und darin geöffnetem Unterpunkt. Die übrigen `open*` bleiben
+  // beim Ansichtswechsel stehen und zählen darum nur in ihrer eigenen Ansicht.
+  const navChild = view === "lists" ? openList : view === "dev" ? openDev : view === "waste" ? openWaste : null;
+  const navHist = useRef<NavHistory>(emptyHistory());
+  useEffect(() => {
+    // Nach einem Sprung steht der Ort schon als aktueller Eintrag im Verlauf; pushLocation doppelt ihn nicht.
+    navHist.current = pushLocation(navHist.current, { view, child: navChild });
+  }, [view, navChild]);
+  useEffect(() => {
+    const isNavButton = (e: MouseEvent) => e.button === 3 || e.button === 4;
+    const onDown = (e: MouseEvent) => {
+      if (isNavButton(e)) e.preventDefault();
+    };
+    const onUp = (e: MouseEvent) => {
+      if (!isNavButton(e)) return;
+      e.preventDefault();
+      // Unter offenen Dialogen wird nicht navigiert; der Detaildialog schließt mit Zurück wie mit Escape.
+      if (capture || help || document.querySelector('[aria-modal="true"]:not([data-detail])')) return;
+      const back = e.button === 3;
+      if (back && open && selectedView) return setOpen(false);
+      if (back && query) return setQuery("");
+      const resolve = (loc: NavLocation): NavLocation | null => {
+        if (!loc.child || loc.child === DEV_ORPHANS) return loc;
+        const ref = repo.resolveRef(loc.child);
+        return ref ? { ...loc, child: ref } : null;
+      };
+      const { history, target } = step(navHist.current, back ? -1 : 1, { view, child: navChild }, resolve);
+      if (!target) return;
+      navHist.current = history;
+      goTo(target.view as ViewName, target.child);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("mouseup", onUp);
+    };
+  });
+
+  const nav =(name: ViewName, label: string, icon: React.ReactNode, count?: number, testid?: string) => (
     <button
       className={`nav${view === name && !query ? " active" : ""}${name === "problems" ? " problems" : ""}`}
       onClick={() => goTo(name)}
@@ -1120,6 +1161,7 @@ const SHORTCUTS: [string, string][] = [
   ["Ctrl+Z", "Rückgängig"],
   ["Ctrl+1 … 8", "Eingang, Heute, Geplant, Alle offenen, Erledigt, Listen, Müllabfuhr, Programmieren"],
   ["F5", "Neu einlesen"],
+  ["Maustasten Zurück / Vor", "Vorige / nächste Ansicht, Liste oder Unterliste"],
   ["Ctrl + / Ctrl − / Ctrl+0", "Ansicht größer, kleiner, Normalgröße"],
 ];
 
