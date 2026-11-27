@@ -20,7 +20,7 @@ const WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"
 export type DateTone = "overdue" | "today" | "tomorrow" | "week" | "later";
 
 /** Datumsanzeige in der Liste: „Heute“, „Morgen“, Wochentag, sonst „30. Jul“; dazu die Farbstufe. */
-export function dateLabel(v: DateValue, today: Temporal.PlainDate, tz: string, overdue = false): { text: string; tone: DateTone } {
+export function dateLabel(v: DateValue, today: Temporal.PlainDate, tz: string, overdue = false): { text: string; tone: DateTone; days: number } {
   const { date, time } =
     v.kind === "date"
       ? { date: v.date, time: null }
@@ -39,15 +39,19 @@ export function dateLabel(v: DateValue, today: Temporal.PlainDate, tz: string, o
   else text = `${date.day}. ${MONTHS[date.month - 1]}${date.year !== today.year ? ` ${date.year}` : ""}`;
   if (time) text += ` ${String(time.hour).padStart(2, "0")}:${String(time.minute).padStart(2, "0")}`;
   const tone: DateTone = overdue || days < 0 ? "overdue" : days === 0 ? "today" : days === 1 ? "tomorrow" : days < 7 ? "week" : "later";
-  return { text, tone };
+  return { text, tone, days };
 }
 
 const lowerRelative = (text: string) => text.replace(/^(Heute|Morgen|Gestern)/, (m) => m.toLowerCase());
 
-/** Frist in der Zeile: künftig mit „bis“ („bis morgen“, „bis Donnerstag“, „bis 3. Dez“), heute und überfällig wie dateLabel. */
+/**
+ * Frist in der Zeile: künftig mit „bis“ und ab übermorgen mit den verbleibenden Tagen
+ * („bis morgen“, „bis Donnerstag (6d)“, „bis 3. Dez (7d)“); heute und überfällig wie dateLabel.
+ */
 export function dueLabel(v: DateValue, today: Temporal.PlainDate, tz: string, overdue = false): { text: string; tone: DateTone } {
-  const l = dateLabel(v, today, tz, overdue);
-  return l.tone === "overdue" || l.tone === "today" ? l : { ...l, text: `bis ${lowerRelative(l.text)}` };
+  const { text, tone, days } = dateLabel(v, today, tz, overdue);
+  if (tone === "overdue" || tone === "today") return { text, tone };
+  return { text: `bis ${lowerRelative(text)}${days >= 2 ? ` (${days}d)` : ""}`, tone };
 }
 
 /** Planungsdatum in der Zeile: „ab heute“, „ab gestern“, „ab Donnerstag“, „ab 20. Nov“; immer ohne Farbstufe. */

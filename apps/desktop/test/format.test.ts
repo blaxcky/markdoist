@@ -10,8 +10,8 @@ const tz = "Europe/Berlin";
 describe("Datumsanzeige in der Zeile", () => {
   it("künftige Frist mit „bis“, Farbstufe bleibt", () => {
     expect(dueLabel(d("2026-11-27"), today, tz)).toEqual({ text: "bis morgen", tone: "tomorrow" });
-    expect(dueLabel(d("2026-11-30"), today, tz)).toEqual({ text: "bis Montag", tone: "week" });
-    expect(dueLabel(d("2026-12-03"), today, tz)).toEqual({ text: "bis 3. Dez", tone: "later" });
+    expect(dueLabel(d("2026-11-30"), today, tz)).toEqual({ text: "bis Montag (4d)", tone: "week" });
+    expect(dueLabel(d("2026-12-03"), today, tz)).toEqual({ text: "bis 3. Dez (7d)", tone: "later" });
   });
 
   it("heute fällige und überfällige Frist ohne „bis“", () => {

@@ -289,7 +289,7 @@ test("Zeile: Frist mit „bis“ und Farbe, Planungsdatum grau als „ab …“ 
   const paper = row("Papiermüll");
   await expect(paper).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId("section-1")).toContainText("Papiermüll");
-  await expect(paper.locator(".date").first()).toHaveText("bis 22. Okt");
+  await expect(paper.locator(".date").first()).toHaveText("bis 22. Okt (10d)");
   await expect(paper.locator(".date.sched")).toHaveText("· ab heute");
   // Nur die Frist trägt eine Farbstufe; das Planungsdatum bleibt grau.
   await expect(paper.locator(".date.sched")).not.toHaveClass(/tone-/);
